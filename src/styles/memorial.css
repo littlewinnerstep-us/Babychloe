@@ -962,7 +962,7 @@ select {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 95;
   background: rgba(8, 12, 14, 0.72);
   backdrop-filter: blur(6px);
   display: flex;
@@ -1473,10 +1473,10 @@ select {
 
 .world-portal-prompt {
   position: absolute;
-  bottom: 16px;
+  bottom: 62px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 12;
+  z-index: 18;
 }
 
 .world-dpad {
@@ -1896,6 +1896,47 @@ select {
   background: var(--accent);
   color: #ffffff;
   border-color: var(--accent);
+}
+
+.volume-mixer-row {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-soft);
+}
+
+.volume-slider-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.volume-slider-item input[type='range'] {
+  width: 68px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.volume-slider-label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.volume-slider-pct {
+  min-width: 29px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 /* ===========================

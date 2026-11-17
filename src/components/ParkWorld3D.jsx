@@ -16,7 +16,12 @@ import {
   Minimize2,
   Users,
 } from 'lucide-react';
-import { OFFERING_TYPES, getSpeciesEmoji } from '../data/memorialData';
+import {
+  OFFERING_TYPES,
+  getSpeciesEmoji,
+  GARDEN_NPCS_DATA,
+  ASH_NPCS_DATA,
+} from '../data/memorialData';
 import {
   hasGivenToday,
   recordGivenToday,
@@ -27,7 +32,7 @@ import {
   getPeersMap,
   getLocalChatBubble,
 } from '../utils/multiplayerEngine';
-import { drawAvatarHeadAndHair } from '../utils/avatarRenderer';
+import { drawAvatarHeadAndHair, drawWrappedSpeechBubble } from '../utils/avatarRenderer';
 import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
 import WalkToSearchBar from './WalkToSearchBar';
 import AvatarCustomizerDrawer from './AvatarCustomizerDrawer';
@@ -64,72 +69,12 @@ function loadAvatarPrefs() {
 
 const COLS_3D = [-390, -200, 200, 390];
 
-const GARDEN_NPCS_3D = [
-  {
-    id: 'npc3d-maya',
-    name: 'Maya Lin',
-    cloak: '#6b8e78',
-    hair: '#221d1b',
-    baseX: -125,
-    baseZ: 15,
-    patrol: 32,
-    speed: 0.65,
-    line: 'The reflections on the pond are so peaceful.',
-  },
-  {
-    id: 'npc3d-kenji',
-    name: 'Elder Kenji',
-    cloak: '#7b6450',
-    hair: '#dfe5ec',
-    baseX: 165,
-    baseZ: 75,
-    patrol: 0,
-    speed: 0,
-    line: 'They wait for us in the sunbeams...',
-  },
-  {
-    id: 'npc3d-hana',
-    name: 'Keeper Hana',
-    cloak: '#a47551',
-    hair: '#3b2b24',
-    baseX: -60,
-    baseZ: -215,
-    patrol: 40,
-    speed: 0.45,
-    line: 'Walk through the archway ahead to enter the Ash Room.',
-  },
-];
-
-const ASH_NPCS_3D = [
-  {
-    id: 'npc3d-sora',
-    name: 'Sora',
-    cloak: '#5b7294',
-    hair: '#1f232b',
-    baseX: -110,
-    baseZ: 40,
-    patrol: 0,
-    speed: 0,
-    line: 'The sandalwood incense is so calming.',
-  },
-  {
-    id: 'npc3d-claire',
-    name: 'Claire',
-    cloak: '#a86b7a',
-    hair: '#6e4532',
-    baseX: 195,
-    baseZ: -115,
-    patrol: 28,
-    speed: 0.5,
-    line: 'Every candle keeps a cherished memory glowing.',
-  },
-];
-
 export default function ParkWorld3D({
   memorials,
   allMemorials = [],
   activeSpecies = 'Dog',
   onSelectSpecies,
+  onOpenSpeciesGate,
   currentUser,
   characterGender,
   onChangeCharacterGender,
@@ -173,6 +118,11 @@ export default function ParkWorld3D({
   const [nearSpeciesGate, setNearSpeciesGate] = useState(false);
   const [walkMessage, setWalkMessage] = useState('');
 
+  const openSpeciesGate = () => {
+    if (onOpenSpeciesGate) onOpenSpeciesGate();
+    else setShowSpeciesGate(true);
+  };
+
   useEffect(() => {
     if (!nearbyMemorialId) {
       setInspectedId(null);
@@ -215,6 +165,9 @@ export default function ParkWorld3D({
   });
 
   const screenHitsRef = useRef([]);
+  const gateScreenHitRef = useRef(null);
+  const npcScreenHitsRef = useRef([]);
+  const npcQuoteOffsetsRef = useRef({});
   const particlesRef = useRef([]);
   const weatherParticlesRef = useRef([]);
   const lightningFlashRef = useRef(0);
@@ -471,6 +424,7 @@ export default function ParkWorld3D({
 
       if (down && (e.key === 'e' || e.key === 'E' || e.key === 'Enter')) {
         if (nearbyIdRef.current) onSelectMemorial(nearbyIdRef.current);
+        else if (nearGateRef.current) openSpeciesGate();
       }
       if (down && (e.key === 'f' || e.key === 'F')) {
         const nearby = positionedRef.current.find((m) => m.id === nearbyIdRef.current);
@@ -1094,6 +1048,9 @@ export default function ParkWorld3D({
 
       // 3. 3D Tombstones & Ash Alcoves
       const newScreenHits = [];
+      const newNpcHits = [];
+      const npcSpeechQueue = [];
+      let nextGateHit = null;
       roomMemorials.forEach((m) => {
         pushEntity(m.worldX, m.worldZ, () => {
           const isNear = m.id === nearbyIdRef.current;
@@ -1199,10 +1156,11 @@ export default function ParkWorld3D({
       });
 
       // 4. 3D Ambient NPCs
-      const npcs = room === 'tombstone' ? GARDEN_NPCS_3D : ASH_NPCS_3D;
+      const npcs = room === 'tombstone' ? GARDEN_NPCS_DATA : ASH_NPCS_DATA;
       npcs.forEach((npc, idx) => {
-        const nx = npc.baseX + (npc.patrol ? Math.sin(now * 0.001 * npc.speed + idx * 2) * npc.patrol : 0);
-        const nz = npc.baseZ;
+        const nx =
+          npc.x3d + (npc.patrol3d ? Math.sin(now * 0.001 * npc.speed3d + idx * 2) * npc.patrol3d : 0);
+        const nz = npc.z3d;
         pushEntity(nx, nz, () => {
           const headPt = draw3DBox(nx, 0, nz, 18, 30, 14, {
             top: npc.cloak,
@@ -1219,40 +1177,72 @@ export default function ParkWorld3D({
             ctx.beginPath();
             ctx.arc(head.sx, head.sy - 2 * head.scale, 8.2 * head.scale, Math.PI, 0);
             ctx.fill();
+            newNpcHits.push({
+              id: npc.id,
+              name: npc.name,
+              sx: head.sx,
+              sy: head.sy + 10 * head.scale,
+              radius: Math.max(28, 34 * head.scale),
+            });
           }
-          if (headPt && Math.hypot(p.x - nx, p.z - nz) < 95) {
-            ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
-            const bw = ctx.measureText(npc.line).width + 18;
-            ctx.fillStyle = 'rgba(20, 26, 24, 0.92)';
-            ctx.fillRect(headPt.sx - bw / 2, headPt.sy - 36, bw, 22);
-            ctx.strokeStyle = 'rgba(255, 224, 155, 0.65)';
-            ctx.strokeRect(headPt.sx - bw / 2, headPt.sy - 36, bw, 22);
-            ctx.fillStyle = '#f9f2e4';
-            ctx.textAlign = 'center';
-            ctx.fillText(npc.line, headPt.sx, headPt.sy - 21);
+          const anchor = head || headPt;
+          if (anchor && Math.hypot(p.x - nx, p.z - nz) < 118) {
+            const qList = npc.quotes || [];
+            const offset = npcQuoteOffsetsRef.current[npc.id] || 0;
+            const qIdx = (Math.floor(now / 9000) + idx + offset) % Math.max(1, qList.length);
+            npcSpeechQueue.push({
+              sx: anchor.sx,
+              sy: anchor.sy - 14 * (anchor.scale || 1),
+              speaker: npc.name,
+              text: qList[qIdx] || '',
+            });
           }
         });
       });
 
       // 2b. Species Sanctuary Gate (East side at x=460, z=0)
       pushEntity(460, 0, () => {
-        draw3DBox(460, 0, -28, 12, 82, 12, { top: '#b84242', front: '#943030', side: '#6e2020' });
-        draw3DBox(460, 0, 28, 12, 82, 12, { top: '#b84242', front: '#943030', side: '#6e2020' });
+        const leftPost = draw3DBox(460, 0, -28, 12, 82, 12, { top: '#b84242', front: '#943030', side: '#6e2020' });
+        const rightPost = draw3DBox(460, 0, 28, 12, 82, 12, { top: '#b84242', front: '#943030', side: '#6e2020' });
         const topGate = draw3DBox(460, 76, 0, 16, 12, 76, {
           top: '#e0a958',
           front: '#8f2929',
           side: '#6b1d1d',
           stroke: '#ffd57e',
         });
+        const gateCenter = project3D(460, 42, 0);
         if (topGate) {
           ctx.font = `700 ${Math.max(10, Math.round(12 * topGate.scale))}px "Plus Jakarta Sans", sans-serif`;
           const gTxt = '⛩️ Other Species Gate';
           const gw = ctx.measureText(gTxt).width + 14;
+          const labelX = topGate.sx - gw / 2;
+          const labelY = topGate.sy - 24;
           ctx.fillStyle = 'rgba(20, 16, 18, 0.88)';
-          ctx.fillRect(topGate.sx - gw / 2, topGate.sy - 24, gw, 18);
+          ctx.fillRect(labelX, labelY, gw, 18);
           ctx.fillStyle = '#ffe5ad';
           ctx.textAlign = 'center';
           ctx.fillText(gTxt, topGate.sx, topGate.sy - 11);
+
+          const baseCenter = gateCenter || topGate;
+          const xs = [labelX, labelX + gw, topGate.sx - 38 * topGate.scale, topGate.sx + 38 * topGate.scale];
+          const ys = [labelY - 6, baseCenter.sy + 48 * baseCenter.scale];
+          if (leftPost) {
+            xs.push(leftPost.sx);
+            ys.push(leftPost.sy);
+          }
+          if (rightPost) {
+            xs.push(rightPost.sx);
+            ys.push(rightPost.sy);
+          }
+          nextGateHit = {
+            minX: Math.min(...xs) - 12,
+            maxX: Math.max(...xs) + 12,
+            minY: Math.min(...ys) - 10,
+            maxY: Math.max(...ys) + 18,
+            sx: baseCenter.sx,
+            sy: baseCenter.sy,
+            radius: Math.max(54, 62 * (baseCenter.scale || 1)),
+          };
         }
       });
 
@@ -1493,6 +1483,18 @@ export default function ParkWorld3D({
       drawList.sort((a, b) => b.cz - a.cz);
       drawList.forEach((item) => item.render());
       screenHitsRef.current = newScreenHits;
+      npcScreenHitsRef.current = newNpcHits;
+      gateScreenHitRef.current = nextGateHit;
+
+      // Render wrapped NPC speech bubbles cleanly above 3D world geometry
+      npcSpeechQueue.forEach((sb) => {
+        drawWrappedSpeechBubble(ctx, sb.sx, sb.sy, {
+          speaker: sb.speaker,
+          text: sb.text,
+          maxWidth: 236,
+          viewportWidth: viewW,
+        });
+      });
 
       // 3D Floating Particles
       particlesRef.current = particlesRef.current.filter((pt) => pt.life > 0);
@@ -1640,8 +1642,10 @@ export default function ParkWorld3D({
   const handlePointerMove = (e) => {
     if (!dragRef.current.active) return;
     const dx = e.clientX - dragRef.current.startX;
-    if (Math.abs(dx) > 6) dragRef.current.moved = true;
-    camRef.current.yaw = dragRef.current.startYaw - dx * 0.0065;
+    if (Math.abs(dx) > 9) {
+      dragRef.current.moved = true;
+      camRef.current.yaw = dragRef.current.startYaw - dx * 0.0065;
+    }
   };
 
   const handlePointerUp = (e) => {
@@ -1649,14 +1653,36 @@ export default function ParkWorld3D({
     dragRef.current.active = false;
     if (wasMoved) return;
 
-    // Tap-to-walk on monument or 3D ground plane
+    // Tap-to-open Species Gate, cycle NPC speech, tap monument, or walk 3D ground plane
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
-    // Check monument hitboxes first — walk first if not nearby, open right away if nearby
+    // 1. Check Species Sanctuary Gate hit first
+    const gHit = gateScreenHitRef.current;
+    if (
+      gHit &&
+      ((clickX >= gHit.minX && clickX <= gHit.maxX && clickY >= gHit.minY && clickY <= gHit.maxY) ||
+        Math.hypot(clickX - gHit.sx, clickY - gHit.sy) < gHit.radius)
+    ) {
+      openSpeciesGate();
+      return;
+    }
+
+    // 2. Check NPC tap to hear their next quote
+    const npcHit = npcScreenHitsRef.current.find(
+      (n) => Math.hypot(clickX - n.sx, clickY - n.sy) < n.radius
+    );
+    if (npcHit) {
+      npcQuoteOffsetsRef.current[npcHit.id] = (npcQuoteOffsetsRef.current[npcHit.id] || 0) + 1;
+      setWalkMessage(`💬 Listening to ${npcHit.name}...`);
+      setTimeout(() => setWalkMessage(''), 1800);
+      return;
+    }
+
+    // 3. Check monument hitboxes — walk first if not nearby, open right away if nearby
     const hit = screenHitsRef.current.find(
       (h) => Math.hypot(clickX - h.sx, clickY - h.sy) < h.radius
     );
@@ -1745,7 +1771,7 @@ export default function ParkWorld3D({
           <button
             type="button"
             className="btn-ghost"
-            onClick={() => setShowSpeciesGate(true)}
+            onClick={openSpeciesGate}
             title="Visit another species sanctuary gate"
           >
             ⛩️ {getSpeciesEmoji(activeSpecies)} {activeSpecies} Gate
@@ -1870,7 +1896,7 @@ export default function ParkWorld3D({
             <button
               type="button"
               className="btn-primary"
-              onClick={() => setShowSpeciesGate(true)}
+              onClick={openSpeciesGate}
             >
               ⛩️ Visit Other Species Gate
             </button>
@@ -2073,7 +2099,7 @@ export default function ParkWorld3D({
           mpChatLog={mpChatLog}
           friends={friends}
           currentRoom={activeRoom}
-          hideBottomChatBar={Boolean(inspectedMemorial || showMeetupPanel)}
+          hideBottomChatBar={Boolean(inspectedMemorial || showMeetupPanel || nearSpeciesGate || nearPortal)}
           onToggleMpOnline={onToggleMpOnline}
           onToggleFriend={onToggleFriend}
           onChangeMpRoom={onChangeMpRoom}

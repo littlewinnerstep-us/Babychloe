@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import {
   INITIAL_MEMORIALS,
-  SPECIES_LIST,
+  getSpeciesEmoji,
   normalizeAndDeduplicateMemorials,
 } from './data/memorialData';
 import MonumentVisual from './components/MonumentVisual';
@@ -34,8 +34,11 @@ import ParkWorld3D from './components/ParkWorld3D';
 import VisitMemorialModal from './components/VisitMemorialModal';
 import CreateMemorialModal from './components/CreateMemorialModal';
 import AuthModal from './components/AuthModal';
+import SpeciesGateModal from './components/SpeciesGateModal';
 import {
+  DEFAULT_SOUND_VOLUMES,
   setSoundState,
+  setSoundVolumes,
   playThunderSound,
   playDogBarkAndHowl,
   playOwlHoot,
@@ -67,6 +70,16 @@ const STORAGE_FAVORITES_KEY = 'evergreen_paws_favorites_v1';
 const STORAGE_FRIENDS_KEY = 'evergreen_paws_friends_v1';
 const STORAGE_WEATHER_FX_KEY = 'evergreen_paws_weather_fx_v1';
 const STORAGE_WEATHER_SOUND_KEY = 'evergreen_paws_weather_sound_v1';
+const STORAGE_VOLUMES_KEY = 'evergreen_paws_volumes_v1';
+
+const VOLUME_CHANNELS = [
+  { key: 'master', label: 'Master', emoji: '🔊' },
+  { key: 'music', label: 'Music', emoji: '🎵' },
+  { key: 'weather', label: 'Weather', emoji: '🌧️' },
+  { key: 'thunder', label: 'Thunder', emoji: '⚡' },
+  { key: 'bark', label: 'Bark/Howl', emoji: '🐕' },
+  { key: 'owl', label: 'Owl', emoji: '🦉' },
+];
 
 const SEASONS = [
   { id: 'spring', label: '🌸 Spring' },
@@ -126,6 +139,21 @@ function loadBoolPref(key, fallback = true) {
     // ignore
   }
   return fallback;
+}
+
+function loadVolumePrefs() {
+  try {
+    const raw = localStorage.getItem(STORAGE_VOLUMES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        return { ...DEFAULT_SOUND_VOLUMES, ...parsed };
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return { ...DEFAULT_SOUND_VOLUMES };
 }
 
 function loadArrayPref(key) {
@@ -200,6 +228,8 @@ export default function App() {
     loadBoolPref(STORAGE_WEATHER_SOUND_KEY, true)
   );
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundVolumes, setSoundVolumesState] = useState(loadVolumePrefs);
+  const [showSpeciesGate, setShowSpeciesGate] = useState(false);
   const [musicUrl, setMusicUrl] = useState(loadSavedMusicUrl);
   const [musicInput, setMusicInput] = useState(loadSavedMusicUrl);
   const [showMusicModal, setShowMusicModal] = useState(false);
@@ -274,14 +304,26 @@ export default function App() {
   }, [friends]);
 
   useEffect(() => {
-    setSoundState({
-      enabled: soundEnabled,
-      weatherSoundEnabled: weatherEffectsEnabled && weatherSoundEnabled,
-      musicUrl,
-      weather: weatherEffectsEnabled ? weather : 'clear',
-      room: activeRoom,
-    });
-  }, [soundEnabled, weatherEffectsEnabled, weatherSoundEnabled, musicUrl, weather, activeRoom]);
+    try {
+      localStorage.setItem(STORAGE_VOLUMES_KEY, JSON.stringify(soundVolumes));
+    } catch {
+      // ignore
+    }
+    setSoundVolumes(soundVolumes);
+  }, [soundVolumes]);
+
+  const buildAudioState = (enabledOverride = soundEnabled, musicOverride = musicUrl) => ({
+    enabled: enabledOverride,
+    weatherSoundEnabled: weatherEffectsEnabled && weatherSoundEnabled,
+    musicUrl: musicOverride,
+    weather: weatherEffectsEnabled ? weather : 'clear',
+    room: activeRoom,
+    volumes: soundVolumes,
+  });
+
+  useEffect(() => {
+    setSoundState(buildAudioState());
+  }, [soundEnabled, weatherEffectsEnabled, weatherSoundEnabled, musicUrl, weather, activeRoom, soundVolumes]);
 
   useEffect(() => {
     if (!randomWeather) return undefined;
@@ -306,23 +348,25 @@ export default function App() {
     setAtmosphere(pickRandomAtmosphere());
   };
 
-  const handleToggleSound = () => {
-    const statePayload = (enabled) => ({
-      enabled,
-      weatherSoundEnabled: weatherEffectsEnabled && weatherSoundEnabled,
-      musicUrl,
-      weather: weatherEffectsEnabled ? weather : 'clear',
-      room: activeRoom,
+  const handleVolumeSliderChange = (channelKey, pct) => {
+    const val = Math.max(0, Math.min(1, Number(pct) / 100));
+    setSoundVolumesState((prev) => {
+      const next = { ...prev, [channelKey]: val };
+      setSoundVolumes(next);
+      return next;
     });
+  };
+
+  const handleToggleSound = () => {
     if (soundEnabled && (!isAudioUnlocked() || wasRecentlyUnlockedInGesture(350))) {
-      setSoundState(statePayload(true));
+      setSoundState(buildAudioState(true));
       unlockAudioFromGesture();
       playDogBarkAndHowl(true);
       return;
     }
     const next = !soundEnabled;
     setSoundEnabled(next);
-    setSoundState(statePayload(next));
+    setSoundState(buildAudioState(next));
     if (next) {
       unlockAudioFromGesture();
     }
@@ -331,7 +375,7 @@ export default function App() {
   const handleAudioFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setSoundState({ enabled: true, musicUrl, weather });
+    setSoundState(buildAudioState(true));
     unlockAudioFromGesture();
     const reader = new FileReader();
     reader.onload = () => {
@@ -339,7 +383,7 @@ export default function App() {
         setMusicUrl(reader.result);
         setMusicInput('Uploaded audio track');
         setSoundEnabled(true);
-        setSoundState({ enabled: true, musicUrl: reader.result, weather });
+        setSoundState(buildAudioState(true, reader.result));
       }
     };
     reader.readAsDataURL(file);
@@ -399,7 +443,7 @@ export default function App() {
           (userName && (m.ownerUsername || '').toLowerCase() === userName) ||
           (userEmail && m.ownerEmail.toLowerCase() === userEmail);
         if (!matchUser) return false;
-      } else {
+      } else if (!showOnlyFavorites) {
         if ((m.species || 'Dog') !== activeSpecies) return false;
       }
       if (showOnlyFavorites && !favorites.includes(m.id)) return false;
@@ -1165,13 +1209,7 @@ export default function App() {
                 if (!soundEnabled) {
                   setSoundEnabled(true);
                 }
-                setSoundState({
-                  enabled: true,
-                  weatherSoundEnabled: weatherEffectsEnabled && weatherSoundEnabled,
-                  musicUrl,
-                  weather: weatherEffectsEnabled ? weather : 'clear',
-                  room: activeRoom,
-                });
+                setSoundState(buildAudioState(true));
                 unlockAudioFromGesture();
                 playDogBarkAndHowl(true);
               }}
@@ -1186,13 +1224,7 @@ export default function App() {
                 if (!soundEnabled) {
                   setSoundEnabled(true);
                 }
-                setSoundState({
-                  enabled: true,
-                  weatherSoundEnabled: weatherEffectsEnabled && weatherSoundEnabled,
-                  musicUrl,
-                  weather: weatherEffectsEnabled ? weather : 'clear',
-                  room: activeRoom,
-                });
+                setSoundState(buildAudioState(true));
                 unlockAudioFromGesture();
                 playOwlHoot(true);
               }}
@@ -1209,9 +1241,32 @@ export default function App() {
               <Music size={12} /> Music Track
             </button>
           </div>
+
+          <div className="volume-mixer-row" aria-label="Sound volume controls">
+            <span className="env-label">Volumes:</span>
+            {VOLUME_CHANNELS.map((ch) => {
+              const pct = Math.round((soundVolumes[ch.key] ?? 0.5) * 100);
+              return (
+                <label key={ch.key} className="volume-slider-item" title={`${ch.label} Volume (${pct}%)`}>
+                  <span className="volume-slider-label">
+                    {ch.emoji} {ch.label}
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={pct}
+                    onChange={(e) => handleVolumeSliderChange(ch.key, e.target.value)}
+                  />
+                  <span className="volume-slider-pct">{pct}%</span>
+                </label>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Search & Filters */}
+        {/* Search, Favorites & Species Sanctuary Gate */}
         <div className="controls-row">
           <div className="search-box">
             <Search size={16} />
@@ -1231,16 +1286,14 @@ export default function App() {
             >
               💖 Favorites ({favorites.length})
             </button>
-            {SPECIES_LIST.map((sp) => (
-              <button
-                key={sp.id}
-                type="button"
-                className={`chip ${activeSpecies === sp.id ? 'active' : ''}`}
-                onClick={() => setActiveSpecies(sp.id)}
-              >
-                {sp.emoji} {sp.label}
-              </button>
-            ))}
+            <button
+              type="button"
+              className="chip"
+              onClick={() => setShowSpeciesGate(true)}
+              title="Open Species Sanctuary Gate to visit another species"
+            >
+              ⛩️ {getSpeciesEmoji(activeSpecies)} {activeSpecies} Gate
+            </button>
           </div>
         </div>
 
@@ -1285,6 +1338,7 @@ export default function App() {
             allMemorials={visibleMemorials}
             activeSpecies={activeSpecies}
             onSelectSpecies={setActiveSpecies}
+            onOpenSpeciesGate={() => setShowSpeciesGate(true)}
             currentUser={currentUser}
             characterGender={currentUser?.gender}
             onChangeCharacterGender={handleChangeCharacterGender}
@@ -1323,6 +1377,7 @@ export default function App() {
             allMemorials={visibleMemorials}
             activeSpecies={activeSpecies}
             onSelectSpecies={setActiveSpecies}
+            onOpenSpeciesGate={() => setShowSpeciesGate(true)}
             currentUser={currentUser}
             characterGender={currentUser?.gender}
             onChangeCharacterGender={handleChangeCharacterGender}
@@ -1550,7 +1605,7 @@ export default function App() {
                   const nextUrl = musicInput.trim();
                   setMusicUrl(nextUrl);
                   setSoundEnabled(true);
-                  setSoundState({ enabled: true, musicUrl: nextUrl, weather });
+                  setSoundState(buildAudioState(true, nextUrl));
                   unlockAudioFromGesture();
                   setShowMusicModal(false);
                 }}
@@ -1591,7 +1646,7 @@ export default function App() {
                   setMusicUrl('');
                   setMusicInput('');
                   setSoundEnabled(true);
-                  setSoundState({ enabled: true, musicUrl: '', weather });
+                  setSoundState(buildAudioState(true, ''));
                   unlockAudioFromGesture();
                   setShowMusicModal(false);
                 }}
@@ -1601,6 +1656,15 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {showSpeciesGate && (
+        <SpeciesGateModal
+          activeSpecies={activeSpecies}
+          allMemorials={visibleMemorials}
+          onSelectSpecies={(sp) => setActiveSpecies(sp)}
+          onClose={() => setShowSpeciesGate(false)}
+        />
       )}
     </div>
   );

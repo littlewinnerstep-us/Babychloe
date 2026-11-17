@@ -13,7 +13,12 @@ import {
   Minimize2,
   Users,
 } from 'lucide-react';
-import { OFFERING_TYPES, getSpeciesEmoji } from '../data/memorialData';
+import {
+  OFFERING_TYPES,
+  getSpeciesEmoji,
+  GARDEN_NPCS_DATA,
+  ASH_NPCS_DATA,
+} from '../data/memorialData';
 import {
   hasGivenToday,
   recordGivenToday,
@@ -24,7 +29,7 @@ import {
   getPeersMap,
   getLocalChatBubble,
 } from '../utils/multiplayerEngine';
-import { drawAvatar2D } from '../utils/avatarRenderer';
+import { drawAvatar2D, drawWrappedSpeechBubble } from '../utils/avatarRenderer';
 import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
 import WalkToSearchBar from './WalkToSearchBar';
 import AvatarCustomizerDrawer from './AvatarCustomizerDrawer';
@@ -60,96 +65,6 @@ const WORLD_BOUNDS = {
 
 const COLS_2D = [190, 395, 805, 1010];
 
-const GARDEN_NPCS = [
-  {
-    id: 'npc-maya',
-    name: 'Maya Lin',
-    cloak: '#6b8e78',
-    hair: '#221d1b',
-    x: 440,
-    y: 410,
-    baseX: 440,
-    baseY: 410,
-    patrolRadius: 34,
-    speed: 0.45,
-    sitting: false,
-    line: 'The lanterns look so gentle over the pond tonight.',
-  },
-  {
-    id: 'npc-kenji',
-    name: 'Elder Kenji',
-    cloak: '#7b6450',
-    hair: '#dfe5ec',
-    x: 785,
-    y: 385,
-    baseX: 785,
-    baseY: 385,
-    patrolRadius: 0,
-    speed: 0,
-    sitting: true,
-    line: 'They wait for us in the sunbeams...',
-  },
-  {
-    id: 'npc-hana',
-    name: 'Keeper Hana',
-    cloak: '#a47551',
-    hair: '#3b2b24',
-    x: 600,
-    y: 255,
-    baseX: 600,
-    baseY: 255,
-    patrolRadius: 50,
-    speed: 0.35,
-    sitting: false,
-    line: 'Step inside the archway ahead to visit the Ash Room.',
-  },
-];
-
-const ASH_NPCS = [
-  {
-    id: 'npc-sora',
-    name: 'Sora',
-    cloak: '#5b7294',
-    hair: '#1f232b',
-    x: 470,
-    y: 430,
-    baseX: 470,
-    baseY: 430,
-    patrolRadius: 0,
-    speed: 0,
-    sitting: true,
-    line: 'The sandalwood incense is so calming.',
-  },
-  {
-    id: 'npc-claire',
-    name: 'Claire',
-    cloak: '#a86b7a',
-    hair: '#6e4532',
-    x: 840,
-    y: 265,
-    baseX: 840,
-    baseY: 265,
-    patrolRadius: 28,
-    speed: 0.4,
-    sitting: false,
-    line: 'Bringing fresh blossoms to the alcoves feels peaceful.',
-  },
-  {
-    id: 'npc-keeper',
-    name: 'Sanctuary Keeper',
-    cloak: '#856548',
-    hair: '#d5dde4',
-    x: 690,
-    y: 360,
-    baseX: 690,
-    baseY: 360,
-    patrolRadius: 22,
-    speed: 0.3,
-    sitting: false,
-    line: 'Every candle keeps a cherished memory glowing.',
-  },
-];
-
 function drawRoundedRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -169,6 +84,7 @@ export default function ParkWorld2D({
   allMemorials = [],
   activeSpecies = 'Dog',
   onSelectSpecies,
+  onOpenSpeciesGate,
   currentUser,
   characterGender,
   onChangeCharacterGender,
@@ -210,6 +126,11 @@ export default function ParkWorld2D({
   const [nearPortal, setNearPortal] = useState(false);
   const [nearSpeciesGate, setNearSpeciesGate] = useState(false);
   const [walkMessage, setWalkMessage] = useState('');
+
+  const openSpeciesGate = () => {
+    if (onOpenSpeciesGate) onOpenSpeciesGate();
+    else setShowSpeciesGate(true);
+  };
 
   useEffect(() => {
     if (!nearbyMemorialId) {
@@ -256,6 +177,8 @@ export default function ParkWorld2D({
   const pendingOpenIdRef = useRef(null);
   const nearPortalRef = useRef(false);
   const nearGateRef = useRef(false);
+  const npcQuoteOffsetsRef = useRef({});
+  const npcPosListRef = useRef([]);
   const roomHeightRef = useRef(820);
 
   const userPets = useMemo(() => {
@@ -499,6 +422,8 @@ export default function ParkWorld2D({
       if (down && (e.key === 'e' || e.key === 'E' || e.key === 'Enter')) {
         if (nearbyIdRef.current) {
           onSelectMemorial(nearbyIdRef.current);
+        } else if (nearGateRef.current) {
+          openSpeciesGate();
         }
       }
       if (down && (e.key === 'f' || e.key === 'F')) {
@@ -1084,13 +1009,16 @@ export default function ParkWorld2D({
       // ====================
       // DRAW AMBIENT NPCs
       // ====================
-      const npcs = room === 'tombstone' ? GARDEN_NPCS : ASH_NPCS;
+      const npcs = room === 'tombstone' ? GARDEN_NPCS_DATA : ASH_NPCS_DATA;
+      const npcSpeechQueue2D = [];
+      const curNpcPositions = [];
       npcs.forEach((npc, idx) => {
-        let nx = npc.baseX;
-        let ny = npc.baseY;
-        if (npc.patrolRadius > 0) {
-          nx += Math.sin(now * 0.001 * npc.speed + idx * 2) * npc.patrolRadius;
+        let nx = npc.x2d;
+        const ny = npc.y2d;
+        if (npc.patrol2d > 0) {
+          nx += Math.sin(now * 0.001 * npc.speed2d + idx * 2) * npc.patrol2d;
         }
+        curNpcPositions.push({ id: npc.id, name: npc.name, x: nx, y: ny });
         // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.26)';
         ctx.beginPath();
@@ -1111,22 +1039,21 @@ export default function ParkWorld2D({
         ctx.arc(nx, ny - 15, 8.2, Math.PI, 0);
         ctx.fill();
 
-        // Speech bubble when player is near NPC
+        // Speech bubble queued for viewport-clamped wrapped rendering when player is near NPC
         const distToNpc = Math.hypot(p.x - nx, p.y - ny);
-        if (distToNpc < 90) {
-          ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
-          const textW = ctx.measureText(npc.line).width + 18;
-          ctx.fillStyle = 'rgba(20, 26, 24, 0.92)';
-          drawRoundedRect(ctx, nx - textW / 2, ny - 54, textW, 24, 8);
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(255, 224, 155, 0.65)';
-          ctx.lineWidth = 1;
-          ctx.stroke();
-          ctx.fillStyle = '#f9f2e4';
-          ctx.textAlign = 'center';
-          ctx.fillText(npc.line, nx, ny - 38);
+        if (distToNpc < 115) {
+          const qList = npc.quotes || [];
+          const offset = npcQuoteOffsetsRef.current[npc.id] || 0;
+          const qIdx = (Math.floor(now / 9000) + idx + offset) % Math.max(1, qList.length);
+          npcSpeechQueue2D.push({
+            x: nx - camX,
+            y: ny - camY - 26,
+            speaker: npc.name,
+            text: qList[qIdx] || '',
+          });
         }
       });
+      npcPosListRef.current = curNpcPositions;
 
       // Species Sanctuary Gate (East side at 1135, 410)
       ctx.save();
@@ -1326,6 +1253,16 @@ export default function ParkWorld2D({
 
       ctx.restore();
 
+      // Render wrapped NPC speech bubbles in viewport coordinates so text wraps and stays on-screen
+      npcSpeechQueue2D.forEach((sb) => {
+        drawWrappedSpeechBubble(ctx, sb.x, sb.y, {
+          speaker: sb.speaker,
+          text: sb.text,
+          maxWidth: 236,
+          viewportWidth: viewW,
+        });
+      });
+
       // ====================
       // 4-SEASON WEATHER & MOONSHINE OVERLAY
       // ====================
@@ -1492,7 +1429,24 @@ export default function ParkWorld2D({
     const worldX = clickX + camX;
     const worldY = clickY + camY;
 
-    // Check if user tapped directly on a monument
+    // 1. Check if user clicked/tapped the Species Sanctuary Gate (East side at 1135, 410)
+    if (worldX >= 1068 && worldX <= 1204 && worldY >= 335 && worldY <= 454) {
+      openSpeciesGate();
+      return;
+    }
+
+    // 2. Check if user tapped an NPC to hear their next quote
+    const tappedNpc = npcPosListRef.current.find(
+      (n) => Math.hypot(worldX - n.x, worldY - n.y) < 32
+    );
+    if (tappedNpc) {
+      npcQuoteOffsetsRef.current[tappedNpc.id] = (npcQuoteOffsetsRef.current[tappedNpc.id] || 0) + 1;
+      setWalkMessage(`💬 Listening to ${tappedNpc.name}...`);
+      setTimeout(() => setWalkMessage(''), 1800);
+      return;
+    }
+
+    // 3. Check if user tapped directly on a monument
     const tappedMonument = positionedMemorials.find(
       (m) => m.space === room && Math.hypot(worldX - m.worldX, worldY - m.worldY) < 48
     );
@@ -1546,7 +1500,7 @@ export default function ParkWorld2D({
           <button
             type="button"
             className="btn-ghost"
-            onClick={() => setShowSpeciesGate(true)}
+            onClick={openSpeciesGate}
             title="Visit another species sanctuary gate"
           >
             ⛩️ {getSpeciesEmoji(activeSpecies)} {activeSpecies} Gate
@@ -1641,7 +1595,7 @@ export default function ParkWorld2D({
             <button
               type="button"
               className="btn-primary"
-              onClick={() => setShowSpeciesGate(true)}
+              onClick={openSpeciesGate}
             >
               ⛩️ Visit Other Species Gate
             </button>
@@ -1845,7 +1799,7 @@ export default function ParkWorld2D({
           mpChatLog={mpChatLog}
           friends={friends}
           currentRoom={activeRoom}
-          hideBottomChatBar={Boolean(inspectedMemorial || showMeetupPanel)}
+          hideBottomChatBar={Boolean(inspectedMemorial || showMeetupPanel || nearSpeciesGate || nearPortal)}
           onToggleMpOnline={onToggleMpOnline}
           onToggleFriend={onToggleFriend}
           onChangeMpRoom={onChangeMpRoom}

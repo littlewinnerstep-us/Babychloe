@@ -27,6 +27,46 @@ let currentWeather = 'clear';
 let currentRoom = 'tombstone';
 let isAppForeground = typeof document === 'undefined' ? true : !document.hidden;
 
+export const DEFAULT_SOUND_VOLUMES = {
+  master: 1.0,
+  music: 0.65,
+  weather: 0.45,
+  thunder: 0.7,
+  bark: 0.55,
+  owl: 0.5,
+};
+
+let soundVolumes = { ...DEFAULT_SOUND_VOLUMES };
+
+function clampVol(v) {
+  const num = Number(v);
+  if (!Number.isFinite(num)) return 0;
+  return Math.max(0, Math.min(1, num));
+}
+
+function getEffectiveVol(key) {
+  return clampVol(soundVolumes.master * (soundVolumes[key] ?? 1));
+}
+
+function applyElementVolume(el, key) {
+  if (!el) return;
+  const eff = getEffectiveVol(key);
+  try {
+    el.volume = eff;
+  } catch {
+    // Some browsers make HTMLAudioElement.volume read-only
+  }
+  el.muted = eff <= 0.001;
+}
+
+function applyAllVolumes() {
+  applyElementVolume(musicEl, 'music');
+  applyElementVolume(weatherEl, 'weather');
+  applyElementVolume(barkEl, 'bark');
+  applyElementVolume(owlEl, 'owl');
+  applyElementVolume(thunderEl, 'thunder');
+}
+
 let audioUnlocked = false;
 let unlockedAtMs = 0;
 let barkPlayGen = 0;
@@ -53,24 +93,25 @@ function setPlaybackAudioSession() {
   }
 }
 
-function createMediaEl(loop, volume) {
+function createMediaEl(loop, volumeKey) {
   const el = new Audio();
   el.loop = loop;
-  el.volume = volume;
   el.playsInline = true;
   el.preload = 'auto';
   el.setAttribute('playsinline', '');
   el.setAttribute('webkit-playsinline', '');
+  applyElementVolume(el, volumeKey);
   return el;
 }
 
 function ensureElements() {
   if (typeof window === 'undefined') return;
-  if (!musicEl) musicEl = createMediaEl(true, 0.65);
-  if (!weatherEl) weatherEl = createMediaEl(true, 0.45);
-  if (!barkEl) barkEl = createMediaEl(false, 0.55);
-  if (!owlEl) owlEl = createMediaEl(false, 0.5);
-  if (!thunderEl) thunderEl = createMediaEl(false, 0.7);
+  if (!musicEl) musicEl = createMediaEl(true, 'music');
+  if (!weatherEl) weatherEl = createMediaEl(true, 'weather');
+  if (!barkEl) barkEl = createMediaEl(false, 'bark');
+  if (!owlEl) owlEl = createMediaEl(false, 'owl');
+  if (!thunderEl) thunderEl = createMediaEl(false, 'thunder');
+  applyAllVolumes();
 }
 
 function encodeWavDataUri(samples, sampleRate = SAMPLE_RATE) {
@@ -379,7 +420,7 @@ function getThunderUri() {
   return thunderUriCache;
 }
 
-function primeOneShotEl(el, uri, getGen) {
+function primeOneShotEl(el, uri, getGen, volKey) {
   if (!el || el._primed || !el.paused) return;
   el._primed = true;
   if (!el.src) el.src = uri;
@@ -394,12 +435,12 @@ function primeOneShotEl(el, uri, getGen) {
         } catch {
           // ignore
         }
-        el.muted = false;
+        applyElementVolume(el, volKey);
       }
     })
     .catch(() => {
       el._primed = false;
-      el.muted = false;
+      applyElementVolume(el, volKey);
     });
 }
 
@@ -471,8 +512,16 @@ function syncActiveAudio(fromGesture = false) {
       currentMusicSrc = targetMusic;
       musicEl.src = targetMusic;
     }
-    musicEl.muted = false;
-    if (musicEl.paused) {
+    applyElementVolume(musicEl, 'music');
+    if (getEffectiveVol('music') <= 0.001) {
+      if (!musicEl.paused) {
+        try {
+          musicEl.pause();
+        } catch {
+          // ignore
+        }
+      }
+    } else if (musicEl.paused) {
       musicEl
         .play()
         .then(() => {
@@ -499,13 +548,13 @@ function syncActiveAudio(fromGesture = false) {
   }
 
   if (weatherEl) {
-    if (shouldPlayWeatherAudio()) {
+    if (shouldPlayWeatherAudio() && getEffectiveVol('weather') > 0.001) {
       const targetWeather = getWeatherUri(currentWeather);
       if (currentWeatherSrc !== targetWeather) {
         currentWeatherSrc = targetWeather;
         weatherEl.src = targetWeather;
       }
-      weatherEl.muted = false;
+      applyElementVolume(weatherEl, 'weather');
       if (weatherEl.paused) {
         weatherEl.play().catch(() => {});
       }
@@ -538,10 +587,30 @@ export function unlockAudioFromGesture() {
   if (isSoundEnabled && isAppActive()) {
     unlockedAtMs = Date.now();
     syncActiveAudio(true);
-    primeOneShotEl(barkEl, getBarkHowlUri(), () => barkPlayGen);
-    primeOneShotEl(owlEl, getOwlHootUri(), () => owlPlayGen);
-    primeOneShotEl(thunderEl, getThunderUri(), () => thunderPlayGen);
+    primeOneShotEl(barkEl, getBarkHowlUri(), () => barkPlayGen, 'bark');
+    primeOneShotEl(owlEl, getOwlHootUri(), () => owlPlayGen, 'owl');
+    primeOneShotEl(thunderEl, getThunderUri(), () => thunderPlayGen, 'thunder');
   }
+}
+
+export function getSoundVolumes() {
+  return { ...soundVolumes };
+}
+
+export function setSoundVolumes(patch) {
+  if (!patch || typeof patch !== 'object') return getSoundVolumes();
+  const next = { ...soundVolumes };
+  Object.keys(DEFAULT_SOUND_VOLUMES).forEach((key) => {
+    if (patch[key] !== undefined) {
+      next[key] = clampVol(patch[key]);
+    }
+  });
+  soundVolumes = next;
+  applyAllVolumes();
+  if (isSoundEnabled && isAppActive()) {
+    syncActiveAudio(false);
+  }
+  return getSoundVolumes();
 }
 
 function setAppForeground(active) {
@@ -566,8 +635,8 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   const handleGestureUnlock = () => {
     isAppForeground = !document.hidden;
     if (isSoundEnabled && isAppActive()) {
-      const needsMusic = !musicEl || musicEl.paused;
-      const needsWeather = shouldPlayWeatherAudio() && (!weatherEl || weatherEl.paused);
+      const needsMusic = getEffectiveVol('music') > 0.001 && (!musicEl || musicEl.paused);
+      const needsWeather = shouldPlayWeatherAudio() && getEffectiveVol('weather') > 0.001 && (!weatherEl || weatherEl.paused);
       if (!audioUnlocked || needsMusic || needsWeather) {
         unlockAudioFromGesture();
       }
@@ -586,17 +655,32 @@ export function setSoundState({
   musicUrl = '',
   weather = 'clear',
   room = 'tombstone',
+  volumes,
 }) {
   isSoundEnabled = Boolean(enabled);
   isWeatherSoundEnabled = Boolean(weatherSoundEnabled);
   savedMusicUrl = (musicUrl || '').trim();
   currentWeather = weather;
   currentRoom = room;
+  if (volumes && typeof volumes === 'object') {
+    const next = { ...soundVolumes };
+    Object.keys(DEFAULT_SOUND_VOLUMES).forEach((key) => {
+      if (volumes[key] !== undefined) next[key] = clampVol(volumes[key]);
+    });
+    soundVolumes = next;
+  }
+  applyAllVolumes();
   syncActiveAudio(false);
 }
 
 export function playThunderSound() {
-  if (!isSoundEnabled || !isWeatherSoundEnabled || !isAppActive() || currentRoom === 'ash-room') {
+  if (
+    !isSoundEnabled ||
+    !isWeatherSoundEnabled ||
+    !isAppActive() ||
+    currentRoom === 'ash-room' ||
+    getEffectiveVol('thunder') <= 0.001
+  ) {
     return;
   }
   ensureElements();
@@ -605,7 +689,7 @@ export function playThunderSound() {
   setPlaybackAudioSession();
   thunderPlayGen += 1;
   thunderEl._primed = true;
-  thunderEl.muted = false;
+  applyElementVolume(thunderEl, 'thunder');
   const uri = getThunderUri();
   if (thunderEl.src !== uri) {
     thunderEl.src = uri;
@@ -620,6 +704,12 @@ export function playThunderSound() {
 
 export function playDogBarkAndHowl(force = false) {
   if (!isSoundEnabled || !isAppActive()) return;
+  if (getEffectiveVol('bark') <= 0.001) {
+    if (force) return;
+    nextNatureCallIsOwl = true;
+    scheduleNextNatureCall(3000 + Math.floor(Math.random() * 2500));
+    return;
+  }
   const nowMs = Date.now();
   if (!force && nowMs < nextBarkAllowedAt) return;
   nextBarkAllowedAt = nowMs + 4500;
@@ -639,7 +729,7 @@ export function playDogBarkAndHowl(force = false) {
   setPlaybackAudioSession();
   barkPlayGen += 1;
   barkEl._primed = true;
-  barkEl.muted = false;
+  applyElementVolume(barkEl, 'bark');
   const uri = getBarkHowlUri();
   if (barkEl.src !== uri) {
     barkEl.src = uri;
@@ -658,6 +748,12 @@ export function playDogBarkAndHowl(force = false) {
 
 export function playOwlHoot(force = false) {
   if (!isSoundEnabled || !isAppActive()) return;
+  if (getEffectiveVol('owl') <= 0.001) {
+    if (force) return;
+    nextNatureCallIsOwl = false;
+    scheduleNextNatureCall(3000 + Math.floor(Math.random() * 2500));
+    return;
+  }
   const nowMs = Date.now();
   if (!force && nowMs < nextOwlAllowedAt) return;
   nextOwlAllowedAt = nowMs + 3000;
@@ -677,7 +773,7 @@ export function playOwlHoot(force = false) {
   setPlaybackAudioSession();
   owlPlayGen += 1;
   owlEl._primed = true;
-  owlEl.muted = false;
+  applyElementVolume(owlEl, 'owl');
   const uri = getOwlHootUri();
   if (owlEl.src !== uri) {
     owlEl.src = uri;

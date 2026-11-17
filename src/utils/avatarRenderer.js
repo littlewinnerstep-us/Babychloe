@@ -185,3 +185,114 @@ export function drawAvatar2D(ctx, cx, cy, scale, bobOff, cAv, outlineColor = 'rg
 
   ctx.restore();
 }
+
+export function drawWrappedSpeechBubble(
+  ctx,
+  anchorX,
+  anchorY,
+  {
+    speaker = '',
+    text = '',
+    maxWidth = 228,
+    viewportWidth = 1200,
+    minTop = 8,
+    bg = 'rgba(20, 26, 24, 0.94)',
+    border = 'rgba(255, 224, 155, 0.7)',
+    textColor = '#f9f2e4',
+    speakerColor = '#ffd57e',
+  } = {}
+) {
+  if (!text) return;
+  ctx.save();
+
+  const textFont = '600 11.5px "Plus Jakarta Sans", sans-serif';
+  const speakerFont = '700 10px "Plus Jakarta Sans", sans-serif';
+  const padX = 12;
+  const padY = 8;
+  const lineHeight = 15;
+  const maxContentW = Math.max(120, Math.min(maxWidth, viewportWidth - 24) - padX * 2);
+
+  ctx.font = textFont;
+  const words = String(text).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = '';
+
+  for (let i = 0; i < words.length; i += 1) {
+    const candidate = current ? `${current} ${words[i]}` : words[i];
+    if (ctx.measureText(candidate).width <= maxContentW || !current) {
+      current = candidate;
+    } else {
+      lines.push(current);
+      current = words[i];
+    }
+  }
+  if (current) lines.push(current);
+
+  let contentW = 0;
+  lines.forEach((ln) => {
+    contentW = Math.max(contentW, ctx.measureText(ln).width);
+  });
+  if (speaker) {
+    ctx.font = speakerFont;
+    contentW = Math.max(contentW, ctx.measureText(speaker).width);
+  }
+
+  const boxW = Math.min(maxWidth, Math.ceil(contentW + padX * 2));
+  const speakerH = speaker ? 14 : 0;
+  const boxH = padY * 2 + speakerH + lines.length * lineHeight;
+
+  let bx = anchorX - boxW / 2;
+  bx = Math.max(8, Math.min(viewportWidth - boxW - 8, bx));
+  let by = anchorY - boxH - 8;
+  if (by < minTop) by = minTop;
+
+  const r = 10;
+  ctx.beginPath();
+  ctx.moveTo(bx + r, by);
+  ctx.lineTo(bx + boxW - r, by);
+  ctx.quadraticCurveTo(bx + boxW, by, bx + boxW, by + r);
+  ctx.lineTo(bx + boxW, by + boxH - r);
+  ctx.quadraticCurveTo(bx + boxW, by + boxH, bx + boxW - r, by + boxH);
+  ctx.lineTo(bx + r, by + boxH);
+  ctx.quadraticCurveTo(bx, by + boxH, bx, by + boxH - r);
+  ctx.lineTo(bx, by + r);
+  ctx.quadraticCurveTo(bx, by, bx + r, by);
+  ctx.closePath();
+
+  ctx.fillStyle = bg;
+  ctx.fill();
+  ctx.strokeStyle = border;
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  // Speech pointer triangle
+  const tipX = Math.max(bx + 12, Math.min(bx + boxW - 12, anchorX));
+  ctx.beginPath();
+  ctx.moveTo(tipX - 5, by + boxH);
+  ctx.lineTo(tipX, by + boxH + 6);
+  ctx.lineTo(tipX + 5, by + boxH);
+  ctx.closePath();
+  ctx.fillStyle = bg;
+  ctx.fill();
+
+  const textCenterX = bx + boxW / 2;
+  let curY = by + padY;
+
+  if (speaker) {
+    ctx.font = speakerFont;
+    ctx.fillStyle = speakerColor;
+    ctx.textAlign = 'center';
+    ctx.fillText(speaker, textCenterX, curY + 9);
+    curY += speakerH;
+  }
+
+  ctx.font = textFont;
+  ctx.fillStyle = textColor;
+  ctx.textAlign = 'center';
+  lines.forEach((ln) => {
+    ctx.fillText(ln, textCenterX, curY + 11);
+    curY += lineHeight;
+  });
+
+  ctx.restore();
+}
