@@ -1,6 +1,7 @@
 // Zero-setup real-time multiplayer engine using MQTT 3.1.1 over WSS dual brokers
-// plus BroadcastChannel for instant local tab sync and retained per-memorial persistence.
+// plus BroadcastChannel for instant local tab sync and retained per-memorial/account persistence.
 import { prepareMemorialForSync } from './imageCompressor';
+import { DEMO_USER } from '../data/memorialData';
 
 const BROKERS = [
   'wss://broker.emqx.io:8084/mqtt',
@@ -8,10 +9,13 @@ const BROKERS = [
 ];
 
 const TOPIC_PREFIX = 'evergreen-paws-park/v2/room/';
+const ACCOUNTS_TOPIC_PREFIX = 'evergreen-paws-park/v2/accounts/';
 const STORAGE_ROOM_KEY = 'evergreen_paws_meetup_room_v1';
 const STORAGE_NICKNAME_KEY = 'evergreen_paws_nickname_v1';
-const PEER_TIMEOUT_MS = 12000;
-const STARTER_IDS = new Set(['m1', 'm2', 'm3', 'm4', 'm5', 'm6']);
+const STORAGE_ONLINE_KEY = 'evergreen_paws_mp_online_v1';
+const STORAGE_ACCOUNTS_KEY = 'evergreen_paws_accounts_v1';
+const PEER_TIMEOUT_MS = 45000;
+const STARTER_IDS = new Set(['mem-barnaby', 'mem-mochi', 'mem-koda', 'mem-clover', 'mem-luna', 'mem-yuzu', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6']);
 
 const myPeerId = `mp_${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`;
 let seqCounter = 0;
@@ -56,6 +60,64 @@ function sanitizeRoomCode(raw) {
 
 let currentRoomCode = readInitialRoom();
 let customNickname = readInitialNickname();
+let isOnlineMode = (() => {
+  try {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_ONLINE_KEY);
+      if (saved === 'false') return false;
+    }
+  } catch {
+    // ignore
+  }
+  return true;
+})();
+
+const accountsMap = new Map(); // usernameLower -> accountObj
+
+function loadAccountsRegistry() {
+  const seedDemo = {
+    username: DEMO_USER.username || 'alex',
+    usernameLower: (DEMO_USER.username || 'alex').toLowerCase(),
+    password: DEMO_USER.password || 'demo123',
+    name: DEMO_USER.name || 'Alex Rivera',
+    email: DEMO_USER.email || 'demo@evergreenpaws.com',
+    gender: DEMO_USER.gender || 'boy',
+    avatar: null,
+  };
+  accountsMap.set(seedDemo.usernameLower, seedDemo);
+  try {
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem(STORAGE_ACCOUNTS_KEY);
+      if (raw) {
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          list.forEach((acc) => {
+            if (acc && acc.usernameLower) {
+              accountsMap.set(acc.usernameLower, acc);
+            }
+          });
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function persistAccountsRegistry() {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(
+        STORAGE_ACCOUNTS_KEY,
+        JSON.stringify(Array.from(accountsMap.values()))
+      );
+    }
+  } catch {
+    // ignore
+  }
+}
+
+loadAccountsRegistry();
 
 let callbacks = {
   onPeersChange: null,
@@ -73,6 +135,7 @@ let localMemorialsList = [];
 let lastFullSyncAt = 0;
 let broadcastChan = null;
 let pruneTimer = null;
+let heartbeatTimer = null;
 let initialized = false;
 
 let localState = {
@@ -177,6 +240,10 @@ function notifyPeersChanged() {
 
 function notifyStatusChanged() {
   if (typeof callbacks.onStatusChange === 'function') {
+    if (!isOnlineMode) {
+      callbacks.onStatusChange('offline');
+      return;
+    }
     let anyReady = false;
     sockets.forEach((s) => {
       if (s.ready) anyReady = true;
@@ -186,6 +253,7 @@ function notifyStatusChanged() {
 }
 
 function publishPacket(payloadObj) {
+  if (!isOnlineMode && payloadObj.type !== 'leave') return;
   seqCounter += 1;
   const msg = {
     ...payloadObj,
@@ -292,10 +360,29 @@ function markSeen(msgId) {
 function handleIncomingPayload(msg) {
   if (!msg || typeof msg !== 'object') return;
   if (!msg.peerId || msg.peerId === myPeerId) return;
-  if (msg.roomCode && msg.roomCode !== currentRoomCode) return;
   if (msg.msgId && markSeen(msg.msgId)) return;
 
+  if (msg.type === 'register_account' && msg.account && msg.account.usernameLower) {
+    const existing = accountsMap.get(msg.account.usernameLower);
+    if (!existing || (msg.account.updatedAt || 0) >= (existing.updatedAt || 0)) {
+      accountsMap.set(msg.account.usernameLower, msg.account);
+      persistAccountsRegistry();
+    }
+    return;
+  }
+
+  if (msg.roomCode && msg.roomCode !== currentRoomCode) return;
+
   const now = Date.now();
+
+  if (msg.type === 'sync_memorial' && msg.memorial && typeof callbacks.onSyncMemorial === 'function') {
+    if (msg.memorial.visibility !== 'private') {
+      callbacks.onSyncMemorial(msg.memorial, msg.senderName || 'Visitor');
+    }
+    return;
+  }
+
+  if (!isOnlineMode) return;
 
   if (msg.type === 'leave') {
     if (peersMap.delete(msg.peerId)) {
@@ -432,8 +519,11 @@ function processMqttBuffer(entry) {
       notifyStatusChanged();
       try {
         entry.ws.send(buildMqttSubscribe(1, currentTopic()));
-        publishPacket({ type: 'request_presence' });
-        updateLocalPresence({ ...localState, force: true });
+        entry.ws.send(buildMqttSubscribe(4, `${ACCOUNTS_TOPIC_PREFIX}+`));
+        if (isOnlineMode) {
+          publishPacket({ type: 'request_presence' });
+          updateLocalPresence({ ...localState, force: true });
+        }
         syncAllLocalMemorials(localMemorialsList, false);
       } catch {
         // ignore
@@ -566,16 +656,168 @@ export function initMultiplayer(nextCallbacks = {}) {
         }
       }
       if (changed) notifyPeersChanged();
-    }, 2500);
+    }, 3000);
+  }
+
+  // Keep player online in backgrounded/alt-tabbed browser tabs
+  if (!heartbeatTimer) {
+    heartbeatTimer = setInterval(() => {
+      if (isOnlineMode) {
+        updateLocalPresence({ ...localState, force: true });
+      }
+    }, 4000);
   }
 
   if (typeof window !== 'undefined') {
     const sendLeave = () => {
       publishPacket({ type: 'leave' });
     };
-    window.addEventListener('pagehide', sendLeave);
     window.addEventListener('beforeunload', sendLeave);
   }
+}
+
+export function isMultiplayerOnline() {
+  return isOnlineMode;
+}
+
+export function setMultiplayerOnline(nextOnline) {
+  const next = Boolean(nextOnline);
+  isOnlineMode = next;
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_ONLINE_KEY, next ? 'true' : 'false');
+    }
+  } catch {
+    // ignore
+  }
+  if (!next) {
+    publishPacket({ type: 'leave' });
+    peersMap.clear();
+    notifyPeersChanged();
+    notifyStatusChanged();
+  } else {
+    notifyStatusChanged();
+    publishPacket({ type: 'request_presence' });
+    updateLocalPresence({ ...localState, force: true });
+    syncAllLocalMemorials(localMemorialsList, true);
+  }
+  return isOnlineMode;
+}
+
+export function getRegisteredAccounts() {
+  return Array.from(accountsMap.values());
+}
+
+export function isUsernameTaken(username) {
+  const clean = String(username || '').trim().toLowerCase();
+  if (!clean) return false;
+  return accountsMap.has(clean);
+}
+
+function broadcastAccountRecord(account) {
+  seqCounter += 1;
+  const msg = {
+    type: 'register_account',
+    peerId: myPeerId,
+    msgId: `${myPeerId}_${seqCounter}`,
+    ts: Date.now(),
+    account,
+  };
+  markSeen(msg.msgId);
+  if (broadcastChan) {
+    try {
+      broadcastChan.postMessage(msg);
+    } catch {
+      // ignore
+    }
+  }
+  const pkt = buildMqttPublish(`${ACCOUNTS_TOPIC_PREFIX}${account.usernameLower}`, msg, true);
+  sockets.forEach((entry) => {
+    if (entry.ready && entry.ws && entry.ws.readyState === WebSocket.OPEN) {
+      try {
+        entry.ws.send(pkt);
+      } catch {
+        // ignore
+      }
+    }
+  });
+}
+
+export function registerAccount({ username, password, name, email = '', gender = 'girl', avatar = null }) {
+  const cleanUser = String(username || '').trim();
+  const cleanLower = cleanUser.toLowerCase();
+  if (!cleanUser || cleanUser.length < 2) {
+    return { ok: false, error: 'Username must be at least 2 characters.' };
+  }
+  if (!/^[a-zA-Z0-9._-]+$/.test(cleanUser)) {
+    return { ok: false, error: 'Username may only use letters, numbers, dots, underscores, or hyphens.' };
+  }
+  if (accountsMap.has(cleanLower)) {
+    return { ok: false, error: `Username "${cleanUser}" is already taken. Please pick another.` };
+  }
+  if (!password || String(password).length < 4) {
+    return { ok: false, error: 'Password must be at least 4 characters.' };
+  }
+
+  const cleanEmail = String(email || '').trim().toLowerCase() || `${cleanLower}@evergreenpaws.local`;
+  const account = {
+    username: cleanUser,
+    usernameLower: cleanLower,
+    password: String(password),
+    name: String(name || cleanUser).trim() || cleanUser,
+    email: cleanEmail,
+    gender: gender === 'boy' ? 'boy' : 'girl',
+    avatar: avatar || null,
+    updatedAt: Date.now(),
+  };
+
+  accountsMap.set(cleanLower, account);
+  persistAccountsRegistry();
+  broadcastAccountRecord(account);
+
+  return { ok: true, user: account };
+}
+
+export function authenticateAccount(usernameOrEmail, password) {
+  const input = String(usernameOrEmail || '').trim().toLowerCase();
+  if (!input || !password) {
+    return { ok: false, error: 'Please enter both username and password.' };
+  }
+  let found = accountsMap.get(input);
+  if (!found) {
+    for (const acc of accountsMap.values()) {
+      if ((acc.email || '').toLowerCase() === input) {
+        found = acc;
+        break;
+      }
+    }
+  }
+  if (!found) {
+    return { ok: false, error: 'Account not found. Check your username or create a new account.' };
+  }
+  if (found.password !== String(password)) {
+    return { ok: false, error: 'Incorrect password. Please try again.' };
+  }
+  return { ok: true, user: found };
+}
+
+export function updateAccountProfile(usernameOrEmail, patch) {
+  const key = String(usernameOrEmail || '').trim().toLowerCase();
+  let found = accountsMap.get(key);
+  if (!found) {
+    for (const acc of accountsMap.values()) {
+      if ((acc.email || '').toLowerCase() === key) {
+        found = acc;
+        break;
+      }
+    }
+  }
+  if (!found) return null;
+  const updated = { ...found, ...patch, updatedAt: Date.now() };
+  accountsMap.set(found.usernameLower, updated);
+  persistAccountsRegistry();
+  broadcastAccountRecord(updated);
+  return updated;
 }
 
 export function updateLocalPresence({

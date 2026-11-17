@@ -1,7 +1,69 @@
 export const DEMO_USER = {
+  username: 'alex',
+  password: 'demo123',
   email: 'demo@evergreenpaws.com',
   name: 'Alex Rivera',
+  gender: 'boy',
 };
+
+export const SPECIES_LIST = [
+  { id: 'Dog', label: 'Dog', emoji: '🐕' },
+  { id: 'Cat', label: 'Cat', emoji: '🐈' },
+  { id: 'Hamster', label: 'Hamster', emoji: '🐹' },
+  { id: 'Guinea Pig', label: 'Guinea Pig', emoji: '🐾' },
+  { id: 'Rabbit', label: 'Rabbit', emoji: '🐇' },
+  { id: 'Bird', label: 'Bird', emoji: '🦜' },
+  { id: 'Ferret', label: 'Ferret', emoji: '🦦' },
+  { id: 'Chinchilla', label: 'Chinchilla', emoji: '🐭' },
+  { id: 'Turtle', label: 'Turtle', emoji: '🐢' },
+  { id: 'Reptile', label: 'Reptile', emoji: '🦎' },
+  { id: 'Fish', label: 'Fish', emoji: '🐠' },
+  { id: 'Hedgehog', label: 'Hedgehog', emoji: '🦔' },
+  { id: 'Sugar Glider', label: 'Sugar Glider', emoji: '🐿️' },
+  { id: 'Horse', label: 'Horse', emoji: '🐎' },
+];
+
+export function getSpeciesEmoji(species) {
+  return SPECIES_LIST.find((s) => s.id === species)?.emoji || '🐾';
+}
+
+export const AVATAR_STYLES = [
+  { id: 'classic', label: 'Classic Cloak' },
+  { id: 'uniform', label: 'Keeper Uniform' },
+  { id: 'cape', label: 'Starlight Cape' },
+  { id: 'kimono', label: 'Serenity Haori' },
+  { id: 'formal', label: 'Formal Coat' },
+];
+
+export const HAIR_STYLES = [
+  { id: 'long', label: 'Long Flowing' },
+  { id: 'bob', label: 'Classic Bob' },
+  { id: 'ponytail', label: 'Ponytail / Bun' },
+  { id: 'twin', label: 'Twin Braids' },
+  { id: 'short', label: 'Short Swept' },
+  { id: 'curly', label: 'Soft Curly' },
+];
+
+export const CLOAK_OPTIONS = [
+  { id: 'sage', label: 'Forest Sage', color: '#4a7c59' },
+  { id: 'lavender', label: 'Lavender Dusk', color: '#7c6a9a' },
+  { id: 'amber', label: 'Warm Amber', color: '#c87d4b' },
+  { id: 'starlight', label: 'Starlight Navy', color: '#3b5978' },
+  { id: 'rose', label: 'Rose Quartz', color: '#b86578' },
+  { id: 'ivory', label: 'Ivory Cream', color: '#c9bca6' },
+  { id: 'slate', label: 'Royal Slate', color: '#36454f' },
+  { id: 'teal', label: 'Emerald Teal', color: '#2d7a78' },
+];
+
+export const HAIR_OPTIONS = [
+  { id: 'espresso', label: 'Espresso', color: '#2c221e' },
+  { id: 'chestnut', label: 'Chestnut', color: '#8d4a32' },
+  { id: 'honey', label: 'Honey Blonde', color: '#d8c098' },
+  { id: 'silver', label: 'Silver Mist', color: '#e2e8f0' },
+  { id: 'midnight', label: 'Midnight Blue', color: '#243b55' },
+  { id: 'sakura', label: 'Sakura Pink', color: '#e88ca5' },
+  { id: 'auburn', label: 'Auburn Red', color: '#9e3b24' },
+];
 
 export const MONUMENT_STYLES = {
   tombstone: [
@@ -182,10 +244,11 @@ export const INITIAL_MEMORIALS = [
     breed: 'Golden Retriever',
     space: 'tombstone',
     styleId: 'classic-granite',
-    locationCode: 'Plot G-01',
+    locationCode: 'Plot G-1',
     zoneName: 'Whispering Meadow',
     birthDate: '2011-04-12',
     passedDate: '2025-09-18',
+    ownerUsername: 'alex',
     ownerEmail: 'demo@evergreenpaws.com',
     ownerName: 'Alex Rivera',
     visibility: 'public',
@@ -259,10 +322,11 @@ export const INITIAL_MEMORIALS = [
     breed: 'Scottish Fold',
     space: 'ash-room',
     styleId: 'celadon-urn',
-    locationCode: 'Niche A-01',
+    locationCode: 'Niche A-1',
     zoneName: 'Hall of Serenity',
     birthDate: '2013-02-08',
     passedDate: '2026-01-22',
+    ownerUsername: 'alex',
     ownerEmail: 'demo@evergreenpaws.com',
     ownerName: 'Alex Rivera',
     visibility: 'public',
@@ -317,10 +381,11 @@ export const INITIAL_MEMORIALS = [
     breed: 'Siberian Husky',
     space: 'tombstone',
     styleId: 'moss-celtic',
-    locationCode: 'Plot G-04',
+    locationCode: 'Plot G-2',
     zoneName: 'Pinecrest Slope',
     birthDate: '2012-11-19',
     passedDate: '2025-12-04',
+    ownerUsername: 'elena',
     ownerEmail: 'elena.hart@example.com',
     ownerName: 'Elena Hart',
     visibility: 'public',
@@ -368,10 +433,11 @@ export const INITIAL_MEMORIALS = [
     breed: 'Holland Lop',
     space: 'tombstone',
     styleId: 'rose-heart',
-    locationCode: 'Plot G-08',
+    locationCode: 'Plot G-1',
     zoneName: 'Sunlit Clover Patch',
     birthDate: '2018-03-21',
     passedDate: '2026-02-14',
+    ownerUsername: 'claire',
     ownerEmail: 'claire.bennett@example.com',
     ownerName: 'Claire Bennett',
     visibility: 'public',
@@ -419,10 +485,11 @@ export const INITIAL_MEMORIALS = [
     breed: 'Tuxedo Shorthair',
     space: 'ash-room',
     styleId: 'starlight-glass',
-    locationCode: 'Niche A-04',
+    locationCode: 'Niche A-2',
     zoneName: 'Moonlight Gallery',
     birthDate: '2010-08-30',
     passedDate: '2025-11-11',
+    ownerUsername: 'sora',
     ownerEmail: 'sora.t@example.com',
     ownerName: 'Sora Takahashi',
     visibility: 'public',
@@ -470,10 +537,11 @@ export const INITIAL_MEMORIALS = [
     breed: 'Shiba Inu',
     space: 'ash-room',
     styleId: 'gilded-lotus',
-    locationCode: 'Niche B-02',
+    locationCode: 'Niche A-1',
     zoneName: 'Cedar Alcove',
     birthDate: '2014-05-03',
     passedDate: '2026-03-09',
+    ownerUsername: 'kenji',
     ownerEmail: 'kenji.m@example.com',
     ownerName: 'Kenji Mori',
     visibility: 'public',
@@ -515,3 +583,83 @@ export const INITIAL_MEMORIALS = [
     ],
   },
 ];
+
+const STARTER_ORDER = {
+  'mem-barnaby': 1,
+  'mem-mochi': 2,
+  'mem-koda': 3,
+  'mem-clover': 4,
+  'mem-luna': 5,
+  'mem-yuzu': 6,
+};
+
+function parsePlotNumber(code) {
+  const m = String(code || '').match(/(\d+)\s*$/);
+  return m ? Math.max(1, parseInt(m[1], 10)) : null;
+}
+
+function formatSequentialCode(space, num) {
+  return space === 'ash-room' ? `Niche A-${num}` : `Plot G-${num}`;
+}
+
+export function normalizeAndDeduplicateMemorials(memorials) {
+  if (!Array.isArray(memorials)) return INITIAL_MEMORIALS;
+
+  const sorted = memorials
+    .slice()
+    .sort((a, b) => {
+      const sa = STARTER_ORDER[a.id] || 9999;
+      const sb = STARTER_ORDER[b.id] || 9999;
+      if (sa !== sb) return sa - sb;
+      const ca = a.createdAt || 0;
+      const cb = b.createdAt || 0;
+      if (ca !== cb) return ca - cb;
+      return String(a.id).localeCompare(String(b.id));
+    });
+
+  const usedPerBucket = new Map();
+  const updatedById = new Map();
+
+  for (const m of sorted) {
+    const sp = m.species || 'Dog';
+    const space = m.space === 'ash-room' ? 'ash-room' : 'tombstone';
+    const bucketKey = `${sp}__${space}`;
+    if (!usedPerBucket.has(bucketKey)) {
+      usedPerBucket.set(bucketKey, new Set());
+    }
+    const used = usedPerBucket.get(bucketKey);
+
+    let num = parsePlotNumber(m.locationCode);
+    if (!num) {
+      num = 1;
+    }
+    while (used.has(num)) {
+      num += 1;
+    }
+    used.add(num);
+
+    const nextCode = formatSequentialCode(space, num);
+    updatedById.set(m.id, nextCode === m.locationCode ? m : { ...m, locationCode: nextCode });
+  }
+
+  return memorials.map((m) => updatedById.get(m.id) || m);
+}
+
+export function getNextPlotCode(memorials, species, space) {
+  const targetSpecies = species || 'Dog';
+  const targetSpace = space === 'ash-room' ? 'ash-room' : 'tombstone';
+  const used = new Set();
+
+  (memorials || []).forEach((m) => {
+    if ((m.species || 'Dog') === targetSpecies && (m.space === 'ash-room' ? 'ash-room' : 'tombstone') === targetSpace) {
+      const n = parsePlotNumber(m.locationCode);
+      if (n) used.add(n);
+    }
+  });
+
+  let nextNum = 1;
+  while (used.has(nextNum)) {
+    nextNum += 1;
+  }
+  return formatSequentialCode(targetSpace, nextNum);
+}

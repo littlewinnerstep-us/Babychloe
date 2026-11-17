@@ -29,6 +29,10 @@ export default function VisitMemorialModal({
   memorial,
   currentUser,
   initialOpenMessagePopup = false,
+  isFavorite = false,
+  onToggleFavorite,
+  isFriend = false,
+  onToggleFriend,
   onClose,
   onPerformOffering,
   onAddTribute,
@@ -185,6 +189,28 @@ export default function VisitMemorialModal({
             <p style={{ margin: '2px 0 0', fontSize: '0.84rem', color: 'var(--text-secondary)' }}>
               {memorial.species} • {memorial.breed} • Caretaker: {memorial.ownerName}
             </p>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+              {onToggleFavorite && (
+                <button
+                  type="button"
+                  className={isFavorite ? 'btn-primary' : 'btn-ghost'}
+                  style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                  onClick={() => onToggleFavorite(memorial.id)}
+                >
+                  {isFavorite ? '💖 Favorited' : '🤍 Favorite Pet'}
+                </button>
+              )}
+              {!isOwner && onToggleFriend && (
+                <button
+                  type="button"
+                  className={isFriend ? 'btn-primary' : 'btn-ghost'}
+                  style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                  onClick={() => onToggleFriend(memorial.ownerName)}
+                >
+                  {isFriend ? '🤝 Friend Added' : `🤝 Add ${memorial.ownerName.split(' ')[0]} as Friend`}
+                </button>
+              )}
+            </div>
           </div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close visit">
             <X size={18} />

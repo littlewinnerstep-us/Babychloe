@@ -1,33 +1,35 @@
 import React, { useState } from 'react';
 import { X, Upload, Sparkles } from 'lucide-react';
 import MonumentVisual from './MonumentVisual';
-import { MONUMENT_STYLES, PHOTO_PRESETS } from '../data/memorialData';
+import {
+  MONUMENT_STYLES,
+  PHOTO_PRESETS,
+  SPECIES_LIST,
+  getNextPlotCode,
+} from '../data/memorialData';
 import { compressImageFile } from '../utils/imageCompressor';
 
 export default function CreateMemorialModal({
   currentUser,
-  existingCount,
+  memorials = [],
+  defaultSpecies = 'Dog',
   onClose,
   onCreate,
 }) {
   const [space, setSpace] = useState('tombstone');
   const [styleId, setStyleId] = useState(MONUMENT_STYLES.tombstone[0].id);
   const [name, setName] = useState('');
-  const [species, setSpecies] = useState('Dog');
+  const [species, setSpecies] = useState(defaultSpecies || 'Dog');
   const [breed, setBreed] = useState('');
   const [birthDate, setBirthDate] = useState('2015-05-10');
   const [passedDate, setPassedDate] = useState(new Date().toISOString().slice(0, 10));
-  const [locationCode, setLocationCode] = useState('');
   const [photo, setPhoto] = useState(PHOTO_PRESETS[0].url);
   const [epitaph, setEpitaph] = useState('');
   const [story, setStory] = useState('');
   const [favoriteTreat, setFavoriteTreat] = useState('');
   const [visibility, setVisibility] = useState('public');
 
-  const autoCode =
-    space === 'ash-room'
-      ? `Niche B-${String(existingCount + 3).padStart(2, '0')}`
-      : `Plot G-${String(existingCount + 10).padStart(2, '0')}`;
+  const autoCode = getNextPlotCode(memorials, species, space);
 
   const handleSpaceChange = (next) => {
     setSpace(next);
@@ -50,15 +52,17 @@ export default function CreateMemorialModal({
 
     const newMemorial = {
       id: `mem-${Date.now()}`,
+      createdAt: Date.now(),
       name: cleanName,
       species,
       breed: breed.trim() || species,
       space,
       styleId,
-      locationCode: locationCode.trim() || autoCode,
-      zoneName: space === 'ash-room' ? 'Hall of Serenity' : 'Whispering Meadow',
+      locationCode: autoCode,
+      zoneName: space === 'ash-room' ? `${species} Hall of Serenity` : `${species} Meadow`,
       birthDate,
       passedDate,
+      ownerUsername: currentUser.username || currentUser.email,
       ownerEmail: currentUser.email,
       ownerName: currentUser.name,
       visibility,
@@ -222,17 +226,17 @@ export default function CreateMemorialModal({
               />
             </div>
             <div>
-              <label className="field-label">Species</label>
+              <label className="field-label">Species (Separated Sanctuary)</label>
               <select
                 className="input-control"
                 value={species}
                 onChange={(e) => setSpecies(e.target.value)}
               >
-                <option value="Dog">Dog</option>
-                <option value="Cat">Cat</option>
-                <option value="Rabbit">Rabbit</option>
-                <option value="Bird">Bird</option>
-                <option value="Small Pet">Small Pet</option>
+                {SPECIES_LIST.map((sp) => (
+                  <option key={sp.id} value={sp.id}>
+                    {sp.emoji} {sp.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -243,19 +247,20 @@ export default function CreateMemorialModal({
               <input
                 type="text"
                 className="input-control"
-                placeholder="e.g., Corgi, Calico"
+                placeholder="e.g., Corgi, Syrian Hamster, Abyssinian"
                 value={breed}
                 onChange={(e) => setBreed(e.target.value)}
               />
             </div>
             <div>
-              <label className="field-label">Plot / Niche Code</label>
+              <label className="field-label">Auto Sequential Plot / Niche</label>
               <input
                 type="text"
+                readOnly
                 className="input-control"
-                placeholder={autoCode}
-                value={locationCode}
-                onChange={(e) => setLocationCode(e.target.value)}
+                value={autoCode}
+                style={{ fontWeight: 700, opacity: 0.9, cursor: 'default' }}
+                title="Auto-generated sequential code so plots are never duplicated"
               />
             </div>
           </div>

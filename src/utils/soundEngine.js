@@ -8,11 +8,13 @@ const SAMPLE_RATE = 16000;
 let harpUriCache = null;
 const weatherUriCache = {};
 let barkHowlUriCache = null;
+let owlUriCache = null;
 let thunderUriCache = null;
 
 let musicEl = null;
 let weatherEl = null;
 let barkEl = null;
+let owlEl = null;
 let thunderEl = null;
 
 let currentMusicSrc = '';
@@ -20,14 +22,20 @@ let currentWeatherSrc = '';
 let savedMusicUrl = '';
 
 let isSoundEnabled = true;
+let isWeatherSoundEnabled = true;
 let currentWeather = 'clear';
+let currentRoom = 'tombstone';
 let isAppForeground = typeof document === 'undefined' ? true : !document.hidden;
 
 let audioUnlocked = false;
 let unlockedAtMs = 0;
 let barkPlayGen = 0;
+let owlPlayGen = 0;
 let thunderPlayGen = 0;
 let nextBarkAllowedAt = 0;
+let nextOwlAllowedAt = 0;
+let natureCallTimer = null;
+let nextNatureCallIsOwl = false;
 
 function isAppActive() {
   if (!isAppForeground) return false;
@@ -61,6 +69,7 @@ function ensureElements() {
   if (!musicEl) musicEl = createMediaEl(true, 0.65);
   if (!weatherEl) weatherEl = createMediaEl(true, 0.45);
   if (!barkEl) barkEl = createMediaEl(false, 0.55);
+  if (!owlEl) owlEl = createMediaEl(false, 0.5);
   if (!thunderEl) thunderEl = createMediaEl(false, 0.7);
 }
 
@@ -80,13 +89,13 @@ function encodeWavDataUri(samples, sampleRate = SAMPLE_RATE) {
   view.setUint32(4, 36 + dataSize, true);
   writeStr(8, 'WAVE');
   writeStr(12, 'fmt ');
-  view.setUint32(16, 16, true); // PCM chunk size
-  view.setUint16(20, 1, true); // PCM format
-  view.setUint16(22, 1, true); // Mono
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
   view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true); // Byte rate
-  view.setUint16(32, 2, true); // Block align
-  view.setUint16(34, 16, true); // Bits per sample
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
   writeStr(36, 'data');
   view.setUint32(40, dataSize, true);
 
@@ -131,7 +140,6 @@ function getHarpLoopUri() {
     }
   }
 
-  // Seamless 0.28s wrap-around echo
   const out = new Float32Array(totalSamples);
   const delaySamples = Math.floor(SAMPLE_RATE * 0.28);
   const delaySamples2 = Math.floor(SAMPLE_RATE * 0.56);
@@ -141,7 +149,6 @@ function getHarpLoopUri() {
     out[i] = dry[i] + d1 * 0.32 + d2 * 0.14;
   }
 
-  // Normalize gently to peak ~0.35
   let maxAbs = 0.001;
   for (let i = 0; i < totalSamples; i += 1) {
     const a = Math.abs(out[i]);
@@ -163,7 +170,6 @@ function getWeatherUri(weather) {
   const totalSamples = Math.floor(SAMPLE_RATE * duration);
   const raw = new Float32Array(totalSamples);
 
-  // Pink-ish noise + optional storm rumble or water droplets
   let b0 = 0;
   let b1 = 0;
   let b2 = 0;
@@ -186,12 +192,10 @@ function getWeatherUri(weather) {
       const rumbleLfo = 0.65 + 0.35 * Math.sin(2 * Math.PI * 0.5 * t);
       raw[i] = pink * 0.26 + white * 0.045 + rumble * rumbleLfo * 0.42;
     } else {
-      // 'rain'
       raw[i] = pink * 0.22 + white * 0.038;
     }
   }
 
-  // Soft rain droplet plinks
   if (weather === 'rain' || weather === 'thunderstorm') {
     const drops = weather === 'thunderstorm' ? 42 : 28;
     for (let d = 0; d < drops; d += 1) {
@@ -204,7 +208,6 @@ function getWeatherUri(weather) {
     }
   }
 
-  // Crossfade first/last 0.25s so 4s loop is click-free
   const fadeSamples = Math.floor(SAMPLE_RATE * 0.25);
   const out = new Float32Array(totalSamples);
   for (let i = 0; i < totalSamples; i += 1) {
@@ -227,7 +230,6 @@ function getBarkHowlUri() {
   const totalSamples = Math.floor(SAMPLE_RATE * duration);
   const dry = new Float32Array(totalSamples);
 
-  // Two soft far-away barks ("arf-woof") at 0.00s and 0.18s
   const barkOffsets = [
     { startSec: 0.0, durSec: 0.14, fStart: 340, fEnd: 155 },
     { startSec: 0.18, durSec: 0.15, fStart: 300, fEnd: 145 },
@@ -253,7 +255,6 @@ function getBarkHowlUri() {
     }
   }
 
-  // 2-second pause (with only soft initial bark echo), then distant howl from 2.35s - 4.15s
   const howlStart = Math.floor(2.35 * SAMPLE_RATE);
   const howlLen = Math.floor(1.8 * SAMPLE_RATE);
   let howlPhase = 0;
@@ -278,7 +279,6 @@ function getBarkHowlUri() {
     dry[howlStart + j] += tone * env * 0.25;
   }
 
-  // Distant 2-tap valley echo + single-pole lowpass warmth (~850Hz feel)
   const out = new Float32Array(totalSamples);
   const d1 = Math.floor(0.22 * SAMPLE_RATE);
   const d2 = Math.floor(0.45 * SAMPLE_RATE);
@@ -294,6 +294,55 @@ function getBarkHowlUri() {
 
   barkHowlUriCache = encodeWavDataUri(out, SAMPLE_RATE);
   return barkHowlUriCache;
+}
+
+function getOwlHootUri() {
+  if (owlUriCache) return owlUriCache;
+
+  const duration = 2.4;
+  const totalSamples = Math.floor(SAMPLE_RATE * duration);
+  const dry = new Float32Array(totalSamples);
+
+  // Soft far-away "hoo... hoo-hooo..." cadence
+  const hoots = [
+    { startSec: 0.04, durSec: 0.38, fStart: 395, fEnd: 365 },
+    { startSec: 0.68, durSec: 0.22, fStart: 390, fEnd: 375 },
+    { startSec: 1.02, durSec: 0.56, fStart: 392, fEnd: 342 },
+  ];
+
+  for (const h of hoots) {
+    const startIdx = Math.floor(h.startSec * SAMPLE_RATE);
+    const len = Math.floor(h.durSec * SAMPLE_RATE);
+    let phase = 0;
+    for (let j = 0; j < len; j += 1) {
+      const t = j / SAMPLE_RATE;
+      const ratio = j / len;
+      const freq = h.fStart + (h.fEnd - h.fStart) * ratio + Math.sin(2 * Math.PI * 4.5 * t) * 3;
+      phase += (2 * Math.PI * freq) / SAMPLE_RATE;
+
+      const attack = Math.min(1, t / 0.06);
+      const release = Math.min(1, (h.durSec - t) / 0.12);
+      const env = attack * Math.max(0, release);
+      const wave = 0.85 * Math.sin(phase) + 0.12 * Math.sin(phase * 2);
+      dry[startIdx + j] += wave * env * 0.24;
+    }
+  }
+
+  const out = new Float32Array(totalSamples);
+  const d1 = Math.floor(0.24 * SAMPLE_RATE);
+  const d2 = Math.floor(0.48 * SAMPLE_RATE);
+  let lp = 0;
+  for (let i = 0; i < totalSamples; i += 1) {
+    const wet =
+      dry[i] +
+      (i >= d1 ? dry[i - d1] * 0.32 : 0) +
+      (i >= d2 ? dry[i - d2] * 0.15 : 0);
+    lp = 0.76 * lp + 0.24 * wet;
+    out[i] = lp;
+  }
+
+  owlUriCache = encodeWavDataUri(out, SAMPLE_RATE);
+  return owlUriCache;
 }
 
 function getThunderUri() {
@@ -355,7 +404,8 @@ function primeOneShotEl(el, uri, getGen) {
 }
 
 function pauseAllAudio() {
-  [musicEl, weatherEl, barkEl, thunderEl].forEach((el) => {
+  stopNatureCallLoop();
+  [musicEl, weatherEl, barkEl, owlEl, thunderEl].forEach((el) => {
     if (el && !el.paused) {
       try {
         el.pause();
@@ -364,6 +414,46 @@ function pauseAllAudio() {
       }
     }
   });
+}
+
+function shouldPlayWeatherAudio() {
+  return (
+    isSoundEnabled &&
+    isWeatherSoundEnabled &&
+    isAppActive() &&
+    currentRoom !== 'ash-room' &&
+    (currentWeather === 'rain' || currentWeather === 'thunderstorm' || currentWeather === 'windy')
+  );
+}
+
+function stopNatureCallLoop() {
+  if (natureCallTimer) {
+    clearTimeout(natureCallTimer);
+    natureCallTimer = null;
+  }
+}
+
+function scheduleNextNatureCall(delayMs) {
+  stopNatureCallLoop();
+  if (!isSoundEnabled || !isAppActive()) return;
+  natureCallTimer = setTimeout(() => {
+    natureCallTimer = null;
+    if (!isSoundEnabled || !isAppActive()) return;
+    if (nextNatureCallIsOwl) {
+      nextNatureCallIsOwl = false;
+      playOwlHoot(false);
+    } else {
+      nextNatureCallIsOwl = true;
+      playDogBarkAndHowl(false);
+    }
+  }, delayMs);
+}
+
+function startNatureCallLoopIfIdle() {
+  if (!isSoundEnabled || !isAppActive()) return;
+  if (natureCallTimer) return;
+  const initialPause = 1800 + Math.floor(Math.random() * 2200);
+  scheduleNextNatureCall(initialPause);
 }
 
 function syncActiveAudio(fromGesture = false) {
@@ -390,7 +480,6 @@ function syncActiveAudio(fromGesture = false) {
           if (fromGesture) unlockedAtMs = Date.now();
         })
         .catch(() => {
-          // If custom external URL fails to load/play, fall back to built-in harp
           const fallbackUri = getHarpLoopUri();
           if (savedMusicUrl && currentMusicSrc !== fallbackUri) {
             currentMusicSrc = fallbackUri;
@@ -410,7 +499,7 @@ function syncActiveAudio(fromGesture = false) {
   }
 
   if (weatherEl) {
-    if (currentWeather === 'rain' || currentWeather === 'thunderstorm' || currentWeather === 'windy') {
+    if (shouldPlayWeatherAudio()) {
       const targetWeather = getWeatherUri(currentWeather);
       if (currentWeatherSrc !== targetWeather) {
         currentWeatherSrc = targetWeather;
@@ -428,6 +517,8 @@ function syncActiveAudio(fromGesture = false) {
       }
     }
   }
+
+  startNatureCallLoopIfIdle();
 }
 
 export function isAudioUnlocked() {
@@ -448,6 +539,7 @@ export function unlockAudioFromGesture() {
     unlockedAtMs = Date.now();
     syncActiveAudio(true);
     primeOneShotEl(barkEl, getBarkHowlUri(), () => barkPlayGen);
+    primeOneShotEl(owlEl, getOwlHootUri(), () => owlPlayGen);
     primeOneShotEl(thunderEl, getThunderUri(), () => thunderPlayGen);
   }
 }
@@ -471,14 +563,11 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     setAppForeground(!document.hidden);
   });
 
-  // WebKit only unlocks HTMLMediaElement on touchend, mouseup, click, keydown (never touchstart)
   const handleGestureUnlock = () => {
     isAppForeground = !document.hidden;
     if (isSoundEnabled && isAppActive()) {
       const needsMusic = !musicEl || musicEl.paused;
-      const needsWeather =
-        (currentWeather === 'rain' || currentWeather === 'thunderstorm' || currentWeather === 'windy') &&
-        (!weatherEl || weatherEl.paused);
+      const needsWeather = shouldPlayWeatherAudio() && (!weatherEl || weatherEl.paused);
       if (!audioUnlocked || needsMusic || needsWeather) {
         unlockAudioFromGesture();
       }
@@ -491,15 +580,25 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   window.addEventListener('keydown', handleGestureUnlock, { capture: true, passive: true });
 }
 
-export function setSoundState({ enabled, musicUrl = '', weather = 'clear' }) {
+export function setSoundState({
+  enabled,
+  weatherSoundEnabled = true,
+  musicUrl = '',
+  weather = 'clear',
+  room = 'tombstone',
+}) {
   isSoundEnabled = Boolean(enabled);
+  isWeatherSoundEnabled = Boolean(weatherSoundEnabled);
   savedMusicUrl = (musicUrl || '').trim();
   currentWeather = weather;
+  currentRoom = room;
   syncActiveAudio(false);
 }
 
 export function playThunderSound() {
-  if (!isSoundEnabled || !isAppActive()) return;
+  if (!isSoundEnabled || !isWeatherSoundEnabled || !isAppActive() || currentRoom === 'ash-room') {
+    return;
+  }
   ensureElements();
   if (!thunderEl) return;
 
@@ -528,6 +627,15 @@ export function playDogBarkAndHowl(force = false) {
   ensureElements();
   if (!barkEl) return;
 
+  // Never mix owl & bark/howl at the same time
+  if (owlEl && !owlEl.paused) {
+    try {
+      owlEl.pause();
+    } catch {
+      // ignore
+    }
+  }
+
   setPlaybackAudioSession();
   barkPlayGen += 1;
   barkEl._primed = true;
@@ -542,4 +650,46 @@ export function playDogBarkAndHowl(force = false) {
     // ignore
   }
   barkEl.play().catch(() => {});
+
+  nextNatureCallIsOwl = true;
+  // 4.4s clip + 2-5s silent pause before Owl Hoot
+  scheduleNextNatureCall(4400 + 2000 + Math.floor(Math.random() * 3000));
+}
+
+export function playOwlHoot(force = false) {
+  if (!isSoundEnabled || !isAppActive()) return;
+  const nowMs = Date.now();
+  if (!force && nowMs < nextOwlAllowedAt) return;
+  nextOwlAllowedAt = nowMs + 3000;
+
+  ensureElements();
+  if (!owlEl) return;
+
+  // Never mix owl & bark/howl at the same time
+  if (barkEl && !barkEl.paused) {
+    try {
+      barkEl.pause();
+    } catch {
+      // ignore
+    }
+  }
+
+  setPlaybackAudioSession();
+  owlPlayGen += 1;
+  owlEl._primed = true;
+  owlEl.muted = false;
+  const uri = getOwlHootUri();
+  if (owlEl.src !== uri) {
+    owlEl.src = uri;
+  }
+  try {
+    owlEl.currentTime = 0;
+  } catch {
+    // ignore
+  }
+  owlEl.play().catch(() => {});
+
+  nextNatureCallIsOwl = false;
+  // 2.4s clip + 2-5s silent pause before Dog Bark/Howl
+  scheduleNextNatureCall(2400 + 2000 + Math.floor(Math.random() * 3000));
 }

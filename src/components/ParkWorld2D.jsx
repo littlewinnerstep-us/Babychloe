@@ -13,7 +13,7 @@ import {
   Minimize2,
   Users,
 } from 'lucide-react';
-import { OFFERING_TYPES } from '../data/memorialData';
+import { OFFERING_TYPES, getSpeciesEmoji } from '../data/memorialData';
 import {
   hasGivenToday,
   recordGivenToday,
@@ -24,37 +24,22 @@ import {
   getPeersMap,
   getLocalChatBubble,
 } from '../utils/multiplayerEngine';
+import { drawAvatar2D } from '../utils/avatarRenderer';
 import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
+import WalkToSearchBar from './WalkToSearchBar';
+import AvatarCustomizerDrawer from './AvatarCustomizerDrawer';
+import SpeciesGateModal from './SpeciesGateModal';
 
 const AVATAR_STORAGE_KEY = 'evergreen_paws_avatar_v1';
 
-const CLOAK_OPTIONS = [
-  { id: 'sage', label: 'Sage', color: '#4a7c59' },
-  { id: 'lavender', label: 'Lavender', color: '#7c6a9a' },
-  { id: 'amber', label: 'Amber', color: '#c87d4b' },
-  { id: 'starlight', label: 'Starlight', color: '#3b5978' },
-  { id: 'rose', label: 'Rose', color: '#b86578' },
-];
-
-const HAIR_OPTIONS = [
-  { id: 'espresso', label: 'Espresso', color: '#2c221e' },
-  { id: 'chestnut', label: 'Chestnut', color: '#8d4a32' },
-  { id: 'honey', label: 'Honey', color: '#d8c098' },
-  { id: 'silver', label: 'Silver', color: '#e2e8f0' },
-];
-
-const COMPANION_OPTIONS = [
-  { id: 'dog', label: '🐕 Spirit Pup' },
-  { id: 'cat', label: '🐈 Spirit Kitty' },
-  { id: 'bunny', label: '🐇 Spirit Bunny' },
-  { id: 'none', label: 'None' },
-];
-
 const DEFAULT_AVATAR = {
   gender: 'girl',
+  avatarStyle: 'classic',
+  hairStyle: 'long',
   cloakColor: '#b86578',
   hairColor: '#2c221e',
-  companion: 'dog',
+  companion: 'none',
+  companionPetId: '',
   carryingLantern: true,
 };
 
@@ -70,34 +55,10 @@ function loadAvatarPrefs() {
 
 const WORLD_BOUNDS = {
   tombstone: { width: 1200, height: 820, portalX: 600, portalY: 90 },
-  'ash-room': { width: 1200, height: 780, portalX: 600, portalY: 735 },
+  'ash-room': { width: 1200, height: 820, portalX: 600, portalY: 735 },
 };
 
-const TOMBSTONE_SLOTS = [
-  { x: 250, y: 260 },
-  { x: 950, y: 260 },
-  { x: 220, y: 470 },
-  { x: 980, y: 470 },
-  { x: 350, y: 650 },
-  { x: 850, y: 650 },
-  { x: 430, y: 230 },
-  { x: 770, y: 230 },
-  { x: 140, y: 650 },
-  { x: 1060, y: 650 },
-];
-
-const ASH_SLOTS = [
-  { x: 230, y: 175 },
-  { x: 420, y: 175 },
-  { x: 780, y: 175 },
-  { x: 970, y: 175 },
-  { x: 185, y: 390 },
-  { x: 1015, y: 390 },
-  { x: 185, y: 585 },
-  { x: 1015, y: 585 },
-  { x: 400, y: 585 },
-  { x: 800, y: 585 },
-];
+const COLS_2D = [190, 395, 805, 1010];
 
 const GARDEN_NPCS = [
   {
@@ -205,6 +166,9 @@ function drawRoundedRect(ctx, x, y, w, h, r) {
 
 export default function ParkWorld2D({
   memorials,
+  allMemorials = [],
+  activeSpecies = 'Dog',
+  onSelectSpecies,
   currentUser,
   characterGender,
   onChangeCharacterGender,
@@ -214,10 +178,16 @@ export default function ParkWorld2D({
   activeRoom,
   mpPeers = [],
   mpStatus = 'connecting',
+  mpOnline = true,
   mpRoomCode = 'PUBLIC',
   mpNickname = 'Visitor',
   mpChatLog = [],
+  favorites = [],
+  friends = [],
   remoteWorldEvent = null,
+  onToggleMpOnline,
+  onToggleFavorite,
+  onToggleFriend,
   onSendChat,
   onSendEmote,
   onChangeMpRoom,
@@ -233,10 +203,12 @@ export default function ParkWorld2D({
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showAvatarPanel, setShowAvatarPanel] = useState(false);
   const [showMeetupPanel, setShowMeetupPanel] = useState(false);
+  const [showSpeciesGate, setShowSpeciesGate] = useState(false);
   const [nearbyMemorialId, setNearbyMemorialId] = useState(null);
   const [inspectedId, setInspectedId] = useState(null);
   const [armtipText, setArmtipText] = useState('');
   const [nearPortal, setNearPortal] = useState(false);
+  const [nearSpeciesGate, setNearSpeciesGate] = useState(false);
   const [walkMessage, setWalkMessage] = useState('');
 
   useEffect(() => {
@@ -283,6 +255,26 @@ export default function ParkWorld2D({
   const nearbyIdRef = useRef(null);
   const pendingOpenIdRef = useRef(null);
   const nearPortalRef = useRef(false);
+  const nearGateRef = useRef(false);
+  const roomHeightRef = useRef(820);
+
+  const userPets = useMemo(() => {
+    if (!currentUser) return [];
+    const uName = (currentUser.username || '').toLowerCase();
+    const uEmail = (currentUser.email || '').toLowerCase();
+    return allMemorials.filter((m) => {
+      if (uName && (m.ownerUsername || '').toLowerCase() === uName) return true;
+      if (uEmail && (m.ownerEmail || '').toLowerCase() === uEmail) return true;
+      return false;
+    });
+  }, [allMemorials, currentUser]);
+
+  const effectiveCompanion = useMemo(() => {
+    if (userPets.length === 0 || avatar.companion === 'none') return 'none';
+    const matched = userPets.find((p) => p.id === avatar.companionPetId);
+    if (matched) return getSpeciesEmoji(matched.species);
+    return getSpeciesEmoji(userPets[0].species);
+  }, [userPets, avatar.companion, avatar.companionPetId]);
 
   useEffect(() => {
     memorialsRef.current = memorials;
@@ -306,13 +298,13 @@ export default function ParkWorld2D({
   }, [onLightningStrike]);
 
   useEffect(() => {
-    avatarRef.current = avatar;
+    avatarRef.current = { ...avatar, companion: effectiveCompanion };
     try {
       localStorage.setItem(AVATAR_STORAGE_KEY, JSON.stringify(avatar));
     } catch {
       // ignore storage errors
     }
-  }, [avatar]);
+  }, [avatar, effectiveCompanion]);
 
   useEffect(() => {
     userRef.current = currentUser;
@@ -364,29 +356,28 @@ export default function ParkWorld2D({
     }
   }, [activeRoom]);
 
-  // Compute positioned memorials per room deterministically so every player sees the same plot
+  // Compute positioned memorials per room deterministically with generous spacing (>= 195px)
   const positionedMemorials = useMemo(() => {
-    const starterOrder = { m1: 1, m2: 2, m3: 3, m4: 4, m5: 5, m6: 6 };
-    const sortCanonical = (a, b) => {
-      const sa = starterOrder[a.id] || 999;
-      const sb = starterOrder[b.id] || 999;
-      if (sa !== sb) return sa - sb;
+    const sortSeq = (a, b) => {
+      const na = parseInt((a.locationCode || '').match(/(\d+)\s*$/)?.[1] || '9999', 10);
+      const nb = parseInt((b.locationCode || '').match(/(\d+)\s*$/)?.[1] || '9999', 10);
+      if (na !== nb) return na - nb;
       return String(a.id).localeCompare(String(b.id));
     };
 
-    const tombstones = memorials.filter((m) => m.space === 'tombstone').sort(sortCanonical);
-    const ashNiches = memorials.filter((m) => m.space === 'ash-room').sort(sortCanonical);
+    const tombstones = memorials.filter((m) => m.space === 'tombstone').sort(sortSeq);
+    const ashNiches = memorials.filter((m) => m.space === 'ash-room').sort(sortSeq);
 
     const map = [];
     tombstones.forEach((m, idx) => {
-      const slot = TOMBSTONE_SLOTS[idx % TOMBSTONE_SLOTS.length];
-      const extraRow = Math.floor(idx / TOMBSTONE_SLOTS.length) * 140;
-      map.push({ ...m, worldX: slot.x, worldY: Math.min(730, slot.y + extraRow) });
+      const col = COLS_2D[idx % COLS_2D.length];
+      const row = Math.floor(idx / COLS_2D.length);
+      map.push({ ...m, worldX: col, worldY: 220 + row * 195 });
     });
     ashNiches.forEach((m, idx) => {
-      const slot = ASH_SLOTS[idx % ASH_SLOTS.length];
-      const extraOffset = Math.floor(idx / ASH_SLOTS.length) * 95;
-      map.push({ ...m, worldX: slot.x, worldY: Math.min(670, slot.y + extraOffset) });
+      const col = COLS_2D[idx % COLS_2D.length];
+      const row = Math.floor(idx / COLS_2D.length);
+      map.push({ ...m, worldX: col, worldY: 200 + row * 195 });
     });
     return map;
   }, [memorials]);
@@ -394,7 +385,10 @@ export default function ParkWorld2D({
   const positionedRef = useRef(positionedMemorials);
   useEffect(() => {
     positionedRef.current = positionedMemorials;
-  }, [positionedMemorials]);
+    const activeList = positionedMemorials.filter((m) => m.space === roomRef.current);
+    const maxY = activeList.reduce((mx, m) => Math.max(mx, m.worldY), 640);
+    roomHeightRef.current = Math.max(820, maxY + 170);
+  }, [positionedMemorials, activeRoom]);
 
   const spawnFloatingParticles = (x, y, emoji, count = 5) => {
     for (let i = 0; i < count; i += 1) {
@@ -440,7 +434,10 @@ export default function ParkWorld2D({
   };
 
   const handleWalkToPet = (memorial) => {
-    if (nearbyIdRef.current === memorial.id) {
+    if (memorial.species && memorial.species !== activeSpecies && onSelectSpecies) {
+      onSelectSpecies(memorial.species);
+    }
+    if (nearbyIdRef.current === memorial.id && (!memorial.species || memorial.species === activeSpecies)) {
       setInspectedId(memorial.id);
       return;
     }
@@ -461,7 +458,7 @@ export default function ParkWorld2D({
         setWalkMessage(`Walking to ${found.name} (${found.locationCode})...`);
         setTimeout(() => setWalkMessage(''), 2200);
       }
-    }, 60);
+    }, 100);
   };
 
   const showArmtip = (msg) => {
@@ -553,7 +550,7 @@ export default function ParkWorld2D({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const room = roomRef.current;
-      const bounds = WORLD_BOUNDS[room];
+      const bounds = { ...WORLD_BOUNDS[room], height: roomHeightRef.current };
       const p = playerRef.current;
       const speed = 190;
 
@@ -629,6 +626,13 @@ export default function ParkWorld2D({
         setNearPortal(isNearPortalNow);
       }
 
+      const gateDist = Math.hypot(p.x - 1135, p.y - 410);
+      const isNearGateNow = gateDist < 92;
+      if (isNearGateNow !== nearGateRef.current) {
+        nearGateRef.current = isNearGateNow;
+        setNearSpeciesGate(isNearGateNow);
+      }
+
       if (portalDist < 46 && now > p.portalCooldownUntil) {
         const nextRoom = room === 'tombstone' ? 'ash-room' : 'tombstone';
         p.portalCooldownUntil = now + 1100;
@@ -648,10 +652,10 @@ export default function ParkWorld2D({
         return;
       }
 
-      // Proximity check to memorials in current room
+      // Proximity check to memorials in current room (78px radius for spacious vigils)
       const roomMemorials = positionedRef.current.filter((m) => m.space === room);
       let closest = null;
-      let closestDist = 105;
+      let closestDist = 78;
       for (const m of roomMemorials) {
         const d = Math.hypot(p.x - m.worldX, p.y - (m.worldY + 24));
         if (d < closestDist) {
@@ -1124,77 +1128,25 @@ export default function ParkWorld2D({
         }
       });
 
-      const drawVisitor2D = (cx, cy, bobOff, cAv, outlineColor) => {
-        const isBoy = cAv?.gender === 'boy';
-        const cloak = cAv?.cloakColor || (isBoy ? '#4a7c59' : '#b86578');
-        const hair = cAv?.hairColor || '#2c221e';
-
-        // Shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.34)';
-        ctx.beginPath();
-        ctx.ellipse(cx, cy + 16, 13, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Body / Flared dress vs coat
-        ctx.fillStyle = cloak;
-        if (isBoy) {
-          drawRoundedRect(ctx, cx - 10, cy - 8 - bobOff, 20, 22, 6);
-          ctx.fill();
-          ctx.strokeStyle = outlineColor;
-          ctx.lineWidth = 1.3;
-          ctx.stroke();
-
-          // White collar trim
-          ctx.fillStyle = 'rgba(248, 244, 234, 0.92)';
-          ctx.beginPath();
-          ctx.moveTo(cx - 5.5, cy - 8 - bobOff);
-          ctx.lineTo(cx, cy - 2 - bobOff);
-          ctx.lineTo(cx + 5.5, cy - 8 - bobOff);
-          ctx.closePath();
-          ctx.fill();
-        } else {
-          ctx.beginPath();
-          ctx.moveTo(cx - 8, cy - 8 - bobOff);
-          ctx.lineTo(cx + 8, cy - 8 - bobOff);
-          ctx.lineTo(cx + 13, cy + 14 - bobOff);
-          ctx.lineTo(cx - 13, cy + 14 - bobOff);
-          ctx.closePath();
-          ctx.fill();
-          ctx.strokeStyle = outlineColor;
-          ctx.lineWidth = 1.3;
-          ctx.stroke();
-        }
-
-        // Head
-        ctx.fillStyle = '#f5d2b8';
-        ctx.beginPath();
-        ctx.arc(cx, cy - 16 - bobOff, 9.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Hair + Girl locks/ribbon
-        ctx.fillStyle = hair;
-        ctx.beginPath();
-        ctx.arc(cx, cy - 18 - bobOff, 9.8, Math.PI, 0);
-        ctx.fill();
-
-        if (!isBoy) {
-          ctx.beginPath();
-          ctx.ellipse(cx - 8, cy - 11 - bobOff, 3.2, 8.2, 0.12, 0, Math.PI * 2);
-          ctx.ellipse(cx + 8, cy - 11 - bobOff, 3.2, 8.2, -0.12, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.fillStyle = '#ff8fab';
-          ctx.beginPath();
-          ctx.arc(cx + 5.8, cy - 24 - bobOff, 3.1, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        if (cAv?.carryingLantern) {
-          ctx.font = '13px serif';
-          ctx.textAlign = 'center';
-          ctx.fillText('🏮', cx + 15, cy + 2 - bobOff);
-        }
-      };
+      // Species Sanctuary Gate (East side at 1135, 410)
+      ctx.save();
+      ctx.fillStyle = '#943030';
+      ctx.fillRect(1114, 382, 10, 56);
+      ctx.fillRect(1148, 382, 10, 56);
+      ctx.fillStyle = '#b84242';
+      drawRoundedRect(ctx, 1104, 374, 64, 12, 5);
+      ctx.fill();
+      ctx.strokeStyle = '#ffd57e';
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+      ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
+      ctx.fillStyle = 'rgba(20, 16, 18, 0.88)';
+      drawRoundedRect(ctx, 1082, 348, 108, 19, 6);
+      ctx.fill();
+      ctx.fillStyle = '#ffe5ad';
+      ctx.textAlign = 'center';
+      ctx.fillText('⛩️ Other Species', 1136, 361);
+      ctx.restore();
 
       // ====================
       // DRAW REMOTE MULTIPLAYER VISITORS
@@ -1223,11 +1175,15 @@ export default function ParkWorld2D({
           ctx.fill();
           ctx.font = '16px serif';
           ctx.textAlign = 'center';
-          ctx.fillText(
-            pAv.companion === 'cat' ? '🐈' : pAv.companion === 'bunny' ? '🐇' : '🐕',
-            sx,
-            sy + 6
-          );
+          const em =
+            pAv.companion === 'cat'
+              ? '🐈'
+              : pAv.companion === 'bunny'
+                ? '🐇'
+                : pAv.companion === 'dog'
+                  ? '🐕'
+                  : pAv.companion;
+          ctx.fillText(em, sx, sy + 6);
         }
 
         if (pAv.carryingLantern) {
@@ -1240,7 +1196,7 @@ export default function ParkWorld2D({
           ctx.fill();
         }
 
-        drawVisitor2D(px, py, pBob, pAv, 'rgba(130, 245, 175, 0.8)');
+        drawAvatar2D(ctx, px, py, 1, pBob, pAv, 'rgba(130, 245, 175, 0.8)');
 
         const gEmoji = pAv.gender === 'boy' ? '👦' : '👩';
         const pTag = `🟢 ${gEmoji} ${peer.name || 'Visitor'}`;
@@ -1282,10 +1238,10 @@ export default function ParkWorld2D({
       }
 
       // ====================
-      // DRAW SPIRIT PET COMPANION
+      // DRAW SPIRIT PET COMPANION (only when user has enshrined a pet)
       // ====================
       const av = avatarRef.current;
-      if (av.companion !== 'none') {
+      if (av.companion && av.companion !== 'none') {
         const trail = p.history[Math.min(18, p.history.length - 1)] || {
           x: p.x - 28,
           y: p.y + 8,
@@ -1302,9 +1258,7 @@ export default function ParkWorld2D({
 
         ctx.font = '17px serif';
         ctx.textAlign = 'center';
-        const compEmoji =
-          av.companion === 'cat' ? '🐈' : av.companion === 'bunny' ? '🐇' : '🐕';
-        ctx.fillText(compEmoji, sx, sy + 6);
+        ctx.fillText(av.companion, sx, sy + 6);
       }
 
       // ====================
@@ -1322,7 +1276,7 @@ export default function ParkWorld2D({
         ctx.fill();
       }
 
-      drawVisitor2D(p.x, p.y, bobOffset, av, 'rgba(255,255,255,0.45)');
+      drawAvatar2D(ctx, p.x, p.y, 1, bobOffset, av, 'rgba(255,255,255,0.45)');
 
       // Player Name Tag
       const gEmoji = av.gender === 'boy' ? '👦' : '👩';
@@ -1523,7 +1477,7 @@ export default function ParkWorld2D({
     const viewW = rect.width;
     const viewH = rect.height;
     const room = roomRef.current;
-    const bounds = WORLD_BOUNDS[room];
+    const bounds = { ...WORLD_BOUNDS[room], height: roomHeightRef.current };
     const p = playerRef.current;
 
     const camX =
@@ -1579,37 +1533,24 @@ export default function ParkWorld2D({
 
   return (
     <div className={`world-container ${isFullScreen ? 'is-fullscreen' : ''}`}>
-      {/* Top Quick-Find & Avatar Bar */}
+      {/* Top Walk-To Search Bar, Species Gate & Avatar Bar */}
       <div className="world-hud-top">
-        <div className="world-quick-pets">
-          <span className="quick-pets-label">
-            <Compass size={13} /> Walk to:
-          </span>
-          {memorials
-            .slice()
-            .sort((a, b) => {
-              const ac = !['m1', 'm2', 'm3', 'm4', 'm5', 'm6'].includes(a.id);
-              const bc = !['m1', 'm2', 'm3', 'm4', 'm5', 'm6'].includes(b.id);
-              if (ac !== bc) return ac ? -1 : 1;
-              return 0;
-            })
-            .map((m) => {
-              const isCustom = !['m1', 'm2', 'm3', 'm4', 'm5', 'm6'].includes(m.id);
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  className={`quick-pet-chip ${nearbyMemorialId === m.id ? 'active' : ''}`}
-                  onClick={() => handleWalkToPet(m)}
-                >
-                  <span>{isCustom ? '✨' : m.space === 'ash-room' ? '🏛️' : '🌿'}</span>
-                  <span>{m.name}</span>
-                </button>
-              );
-            })}
-        </div>
+        <WalkToSearchBar
+          allMemorials={allMemorials}
+          activeSpecies={activeSpecies}
+          nearbyMemorialId={nearbyMemorialId}
+          onSelectPet={handleWalkToPet}
+        />
 
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => setShowSpeciesGate(true)}
+            title="Visit another species sanctuary gate"
+          >
+            ⛩️ {getSpeciesEmoji(activeSpecies)} {activeSpecies} Gate
+          </button>
           <button
             type="button"
             className="btn-ghost"
@@ -1683,8 +1624,8 @@ export default function ParkWorld2D({
         {/* Room Indicator & Instructions */}
         <div className="world-room-pill">
           {activeRoom === 'ash-room'
-            ? '🏛️ Indoor Ash Room (Hall of Serenity)'
-            : '🌿 Outdoor Tombstone Garden (Whispering Meadow)'}
+            ? `🏛️ ${activeSpecies} Ash Room (Hall of Serenity)`
+            : `🌿 ${activeSpecies} Tombstone Garden`}
           <span className="world-hint-text"> • Tap ground/monument or use D-pad / WASD</span>
         </div>
 
@@ -1695,8 +1636,20 @@ export default function ParkWorld2D({
           </div>
         )}
 
+        {nearSpeciesGate && !nearbyMemorial && (
+          <div className="world-portal-prompt">
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => setShowSpeciesGate(true)}
+            >
+              ⛩️ Visit Other Species Gate
+            </button>
+          </div>
+        )}
+
         {/* Portal Doorway Prompt */}
-        {nearPortal && !nearbyMemorial && (
+        {nearPortal && !nearSpeciesGate && !nearbyMemorial && (
           <div className="world-portal-prompt">
             <button
               type="button"
@@ -1856,6 +1809,15 @@ export default function ParkWorld2D({
                 >
                   💌 Visit &amp; Leave Message
                 </button>
+                {onToggleFavorite && (
+                  <button
+                    type="button"
+                    className={favorites.includes(inspectedMemorial.id) ? 'btn-primary' : 'btn-ghost'}
+                    onClick={() => onToggleFavorite(inspectedMemorial.id)}
+                  >
+                    {favorites.includes(inspectedMemorial.id) ? '💖 Favorited' : '🤍 Favorite'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1863,132 +1825,13 @@ export default function ParkWorld2D({
 
         {/* Avatar Customizer Drawer */}
         {showAvatarPanel && (
-          <div className="world-avatar-drawer">
-            <div className="modal-header" style={{ marginBottom: 10 }}>
-              <strong style={{ fontSize: '0.92rem' }}>Customize Visitor Avatar</strong>
-              <button
-                type="button"
-                className="modal-close"
-                style={{ width: 28, height: 28 }}
-                onClick={() => setShowAvatarPanel(false)}
-              >
-                <X size={14} />
-              </button>
-            </div>
-
-            <div className="form-grid" style={{ gap: 10 }}>
-              <div>
-                <div className="field-label">Character Type</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    type="button"
-                    className={`chip ${(avatar.gender || 'girl') !== 'boy' ? 'active' : ''}`}
-                    onClick={() => {
-                      setAvatar((a) => ({ ...a, gender: 'girl' }));
-                      if (onChangeCharacterGender) onChangeCharacterGender('girl');
-                    }}
-                  >
-                    👩 Girl
-                  </button>
-                  <button
-                    type="button"
-                    className={`chip ${avatar.gender === 'boy' ? 'active' : ''}`}
-                    onClick={() => {
-                      setAvatar((a) => ({ ...a, gender: 'boy' }));
-                      if (onChangeCharacterGender) onChangeCharacterGender('boy');
-                    }}
-                  >
-                    👦 Boy
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <div className="field-label">Cloak Color</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {CLOAK_OPTIONS.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      title={c.label}
-                      onClick={() => setAvatar((a) => ({ ...a, cloakColor: c.color }))}
-                      style={{
-                        width: 26,
-                        height: 26,
-                        borderRadius: '50%',
-                        background: c.color,
-                        border:
-                          avatar.cloakColor === c.color
-                            ? '2.5px solid #ffd57e'
-                            : '1px solid rgba(255,255,255,0.25)',
-                        cursor: 'pointer',
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div className="field-label">Hair Color</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {HAIR_OPTIONS.map((h) => (
-                    <button
-                      key={h.id}
-                      type="button"
-                      title={h.label}
-                      onClick={() => setAvatar((a) => ({ ...a, hairColor: h.color }))}
-                      style={{
-                        width: 26,
-                        height: 26,
-                        borderRadius: '50%',
-                        background: h.color,
-                        border:
-                          avatar.hairColor === h.color
-                            ? '2.5px solid #ffd57e'
-                            : '1px solid rgba(255,255,255,0.25)',
-                        cursor: 'pointer',
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div className="field-label">Spirit Pet Companion</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {COMPANION_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      className={`chip ${avatar.companion === opt.id ? 'active' : ''}`}
-                      onClick={() => setAvatar((a) => ({ ...a, companion: opt.id }))}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontSize: '0.82rem',
-                  cursor: 'pointer',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={avatar.carryingLantern}
-                  onChange={(e) =>
-                    setAvatar((a) => ({ ...a, carryingLantern: e.target.checked }))
-                  }
-                />
-                Carry warm glowing lantern 🏮
-              </label>
-            </div>
-          </div>
+          <AvatarCustomizerDrawer
+            avatar={avatar}
+            userPets={userPets}
+            onUpdateAvatar={(patch) => setAvatar((a) => ({ ...a, ...patch }))}
+            onChangeCharacterGender={onChangeCharacterGender}
+            onClose={() => setShowAvatarPanel(false)}
+          />
         )}
 
         <MultiplayerMeetupHUD
@@ -1996,11 +1839,15 @@ export default function ParkWorld2D({
           onCloseDrawer={() => setShowMeetupPanel(false)}
           mpPeers={mpPeers}
           mpStatus={mpStatus}
+          mpOnline={mpOnline}
           mpRoomCode={mpRoomCode}
           mpNickname={mpNickname}
           mpChatLog={mpChatLog}
+          friends={friends}
           currentRoom={activeRoom}
           hideBottomChatBar={Boolean(inspectedMemorial || showMeetupPanel)}
+          onToggleMpOnline={onToggleMpOnline}
+          onToggleFriend={onToggleFriend}
           onChangeMpRoom={onChangeMpRoom}
           onChangeMpNickname={onChangeMpNickname}
           onSendChat={onSendChat}
@@ -2008,6 +1855,19 @@ export default function ParkWorld2D({
           onWalkToPeer={handleWalkToPeer}
         />
       </div>
+
+      {showSpeciesGate && (
+        <SpeciesGateModal
+          activeSpecies={activeSpecies}
+          allMemorials={allMemorials}
+          onSelectSpecies={(sp) => {
+            if (onSelectSpecies) onSelectSpecies(sp);
+            setWalkMessage(`Entered ${getSpeciesEmoji(sp)} ${sp} Sanctuary`);
+            setTimeout(() => setWalkMessage(''), 2200);
+          }}
+          onClose={() => setShowSpeciesGate(false)}
+        />
+      )}
     </div>
   );
 }

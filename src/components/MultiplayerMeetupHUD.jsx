@@ -1,16 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Users, X, Send, Copy, Check, Navigation } from 'lucide-react';
+import { Users, X, Send, Copy, Check, Navigation, UserPlus, UserCheck, Wifi, WifiOff } from 'lucide-react';
 
 export default function MultiplayerMeetupHUD({
   showDrawer,
   onCloseDrawer,
   mpPeers = [],
   mpStatus = 'connecting',
+  mpOnline = true,
   mpRoomCode = 'PUBLIC',
   mpNickname = 'Visitor',
   mpChatLog = [],
+  friends = [],
   currentRoom = 'tombstone',
   hideBottomChatBar = false,
+  onToggleMpOnline,
+  onToggleFriend,
   onChangeMpRoom,
   onChangeMpNickname,
   onSendChat,
@@ -94,19 +98,33 @@ export default function MultiplayerMeetupHUD({
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
               <Users size={15} />
               <strong style={{ fontSize: '0.92rem' }}>Park Meetup</strong>
-              <span className={`mp-status-badge ${mpStatus === 'connected' ? 'is-live' : ''}`}>
-                {mpStatus === 'connected' ? '🟢 Live Sync' : '🟡 Connecting'}
+              <span className={`mp-status-badge ${mpOnline && mpStatus === 'connected' ? 'is-live' : ''}`}>
+                {!mpOnline ? '⚪ Offline' : mpStatus === 'connected' ? '🟢 Live Sync' : '🟡 Connecting'}
               </span>
             </div>
-            <button
-              type="button"
-              className="modal-close"
-              style={{ width: 28, height: 28 }}
-              onClick={onCloseDrawer}
-              aria-label="Close meetup drawer"
-            >
-              <X size={14} />
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              {onToggleMpOnline && (
+                <button
+                  type="button"
+                  className={mpOnline ? 'btn-primary' : 'btn-ghost'}
+                  style={{ padding: '4px 8px', fontSize: '0.7rem' }}
+                  onClick={onToggleMpOnline}
+                  title={mpOnline ? 'Go Offline' : 'Go Online'}
+                >
+                  {mpOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
+                  {mpOnline ? 'Online' : 'Offline'}
+                </button>
+              )}
+              <button
+                type="button"
+                className="modal-close"
+                style={{ width: 28, height: 28 }}
+                onClick={onCloseDrawer}
+                aria-label="Close meetup drawer"
+              >
+                <X size={14} />
+              </button>
+            </div>
           </div>
 
           <div className="form-grid" style={{ gap: 8 }}>
@@ -166,42 +184,49 @@ export default function MultiplayerMeetupHUD({
                   </span>
                 </div>
 
-                {mpPeers.map((peer) => (
-                  <div key={peer.peerId} className="mp-visitor-row">
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                      <span
-                        className="mp-cloak-dot"
-                        style={{ background: peer.avatar?.cloakColor || '#4a7c59' }}
-                      />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {peer.name}
+                {mpPeers.map((peer) => {
+                  const isFriend = friends.some(
+                    (f) => f.toLowerCase() === (peer.name || '').toLowerCase()
+                  );
+                  return (
+                    <div key={peer.peerId} className="mp-visitor-row">
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                        <span
+                          className="mp-cloak-dot"
+                          style={{ background: peer.avatar?.cloakColor || '#4a7c59' }}
+                        />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {peer.avatar?.gender === 'boy' ? '👦' : '👩'} {peer.name}
+                        </span>
                       </span>
-                      <span style={{ fontSize: '0.76rem' }}>
-                        {peer.avatar?.companion === 'cat'
-                          ? '🐈'
-                          : peer.avatar?.companion === 'bunny'
-                            ? '🐇'
-                            : peer.avatar?.companion === 'dog'
-                              ? '🐕'
-                              : ''}
-                      </span>
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                      <span className="mp-room-tag">
-                        {peer.room === 'ash-room' ? '🏛️' : '🌿'}
-                      </span>
-                      <button
-                        type="button"
-                        className="btn-primary"
-                        style={{ padding: '3px 8px', fontSize: '0.7rem' }}
-                        onClick={() => onWalkToPeer && onWalkToPeer(peer)}
-                        title={`Walk to ${peer.name}`}
-                      >
-                        <Navigation size={10} /> Meet
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        <span className="mp-room-tag">
+                          {peer.room === 'ash-room' ? '🏛️' : '🌿'}
+                        </span>
+                        {onToggleFriend && (
+                          <button
+                            type="button"
+                            className={isFriend ? 'btn-primary' : 'btn-ghost'}
+                            style={{ padding: '3px 6px', fontSize: '0.68rem' }}
+                            onClick={() => onToggleFriend(peer.name)}
+                            title={isFriend ? 'Friend added (tap to remove)' : 'Add Friend'}
+                          >
+                            {isFriend ? <UserCheck size={10} /> : <UserPlus size={10} />}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          style={{ padding: '3px 8px', fontSize: '0.7rem' }}
+                          onClick={() => onWalkToPeer && onWalkToPeer(peer)}
+                          title={`Walk to ${peer.name}`}
+                        >
+                          <Navigation size={10} /> Meet
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {mpPeers.length === 0 && (
                   <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', padding: '4px 2px' }}>

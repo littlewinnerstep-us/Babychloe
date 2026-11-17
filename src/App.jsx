@@ -23,7 +23,11 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import { INITIAL_MEMORIALS } from './data/memorialData';
+import {
+  INITIAL_MEMORIALS,
+  SPECIES_LIST,
+  normalizeAndDeduplicateMemorials,
+} from './data/memorialData';
 import MonumentVisual from './components/MonumentVisual';
 import ParkWorld2D from './components/ParkWorld2D';
 import ParkWorld3D from './components/ParkWorld3D';
@@ -34,6 +38,7 @@ import {
   setSoundState,
   playThunderSound,
   playDogBarkAndHowl,
+  playOwlHoot,
   unlockAudioFromGesture,
   isAudioUnlocked,
   wasRecentlyUnlockedInGesture,
@@ -49,12 +54,19 @@ import {
   getMeetupRoom,
   setMeetupNickname,
   getMeetupNickname,
+  isMultiplayerOnline,
+  setMultiplayerOnline,
+  updateAccountProfile,
 } from './utils/multiplayerEngine';
 
 const STORAGE_MEMORIALS_KEY = 'evergreen_paws_memorials_v1';
 const STORAGE_USER_KEY = 'evergreen_paws_user_v1';
 const STORAGE_VIEWMODE_KEY = 'evergreen_paws_viewmode_v1';
 const STORAGE_MUSIC_URL_KEY = 'evergreen_paws_music_url_v1';
+const STORAGE_FAVORITES_KEY = 'evergreen_paws_favorites_v1';
+const STORAGE_FRIENDS_KEY = 'evergreen_paws_friends_v1';
+const STORAGE_WEATHER_FX_KEY = 'evergreen_paws_weather_fx_v1';
+const STORAGE_WEATHER_SOUND_KEY = 'evergreen_paws_weather_sound_v1';
 
 const SEASONS = [
   { id: 'spring', label: '🌸 Spring' },
@@ -95,12 +107,38 @@ function loadSavedMemorials() {
     const raw = localStorage.getItem(STORAGE_MEMORIALS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return normalizeAndDeduplicateMemorials(parsed);
+      }
     }
   } catch {
     // ignore corrupted storage
   }
-  return INITIAL_MEMORIALS;
+  return normalizeAndDeduplicateMemorials(INITIAL_MEMORIALS);
+}
+
+function loadBoolPref(key, fallback = true) {
+  try {
+    const v = localStorage.getItem(key);
+    if (v === 'false') return false;
+    if (v === 'true') return true;
+  } catch {
+    // ignore
+  }
+  return fallback;
+}
+
+function loadArrayPref(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    // ignore
+  }
+  return [];
 }
 
 function loadSavedUser() {
@@ -155,15 +193,25 @@ export default function App() {
   const [season, setSeason] = useState(initialEnv.season); // 'spring' | 'summer' | 'autumn' | 'winter'
   const [weather, setWeather] = useState(initialEnv.weather); // 'clear' | 'windy' | 'snow' | 'rain' | 'thunderstorm'
   const [randomWeather, setRandomWeather] = useState(true);
+  const [weatherEffectsEnabled, setWeatherEffectsEnabled] = useState(() =>
+    loadBoolPref(STORAGE_WEATHER_FX_KEY, true)
+  );
+  const [weatherSoundEnabled, setWeatherSoundEnabled] = useState(() =>
+    loadBoolPref(STORAGE_WEATHER_SOUND_KEY, true)
+  );
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [musicUrl, setMusicUrl] = useState(loadSavedMusicUrl);
   const [musicInput, setMusicInput] = useState(loadSavedMusicUrl);
   const [showMusicModal, setShowMusicModal] = useState(false);
   const [activeTab, setActiveTab] = useState('tombstone'); // 'tombstone' | 'ash-room' | 'sanctuary'
   const [activeRoom, setActiveRoom] = useState('tombstone'); // 'tombstone' | 'ash-room'
+  const [activeSpecies, setActiveSpecies] = useState('Dog');
+  const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
   const [viewMode, setViewMode] = useState(loadSavedViewMode); // 'world3d' | 'world2d' | 'grid'
   const [searchQuery, setSearchQuery] = useState('');
-  const [speciesFilter, setSpeciesFilter] = useState('All');
+  const [favorites, setFavorites] = useState(() => loadArrayPref(STORAGE_FAVORITES_KEY));
+  const [friends, setFriends] = useState(() => loadArrayPref(STORAGE_FRIENDS_KEY));
+  const [mpOnline, setMpOnline] = useState(isMultiplayerOnline);
 
   const [selectedMemorialId, setSelectedMemorialId] = useState(null);
   const [pendingMemorialId, setPendingMemorialId] = useState(null);
@@ -201,8 +249,39 @@ export default function App() {
   }, [musicUrl]);
 
   useEffect(() => {
-    setSoundState({ enabled: soundEnabled, musicUrl, weather });
-  }, [soundEnabled, musicUrl, weather]);
+    try {
+      localStorage.setItem(STORAGE_WEATHER_FX_KEY, String(weatherEffectsEnabled));
+      localStorage.setItem(STORAGE_WEATHER_SOUND_KEY, String(weatherSoundEnabled));
+    } catch {
+      // ignore
+    }
+  }, [weatherEffectsEnabled, weatherSoundEnabled]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_FAVORITES_KEY, JSON.stringify(favorites));
+    } catch {
+      // ignore
+    }
+  }, [favorites]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_FRIENDS_KEY, JSON.stringify(friends));
+    } catch {
+      // ignore
+    }
+  }, [friends]);
+
+  useEffect(() => {
+    setSoundState({
+      enabled: soundEnabled,
+      weatherSoundEnabled: weatherEffectsEnabled && weatherSoundEnabled,
+      musicUrl,
+      weather: weatherEffectsEnabled ? weather : 'clear',
+      room: activeRoom,
+    });
+  }, [soundEnabled, weatherEffectsEnabled, weatherSoundEnabled, musicUrl, weather, activeRoom]);
 
   useEffect(() => {
     if (!randomWeather) return undefined;
@@ -214,16 +293,6 @@ export default function App() {
     }, 15 * 60 * 1000);
     return () => clearInterval(timer);
   }, [randomWeather]);
-
-  useEffect(() => {
-    if (!soundEnabled) return undefined;
-    if (weather !== 'clear' && weather !== 'windy' && weather !== 'rain') return undefined;
-    playDogBarkAndHowl();
-    const barkTimer = setInterval(() => {
-      playDogBarkAndHowl();
-    }, 8500);
-    return () => clearInterval(barkTimer);
-  }, [soundEnabled, weather]);
 
   const handleSelectSeason = (nextSeason) => {
     setSeason(nextSeason);
@@ -238,17 +307,22 @@ export default function App() {
   };
 
   const handleToggleSound = () => {
-    // If soundEnabled is true on load/first-tap before Safari unlocked media playback,
-    // unlock and play immediately instead of toggling sound off on that first tap.
+    const statePayload = (enabled) => ({
+      enabled,
+      weatherSoundEnabled: weatherEffectsEnabled && weatherSoundEnabled,
+      musicUrl,
+      weather: weatherEffectsEnabled ? weather : 'clear',
+      room: activeRoom,
+    });
     if (soundEnabled && (!isAudioUnlocked() || wasRecentlyUnlockedInGesture(350))) {
-      setSoundState({ enabled: true, musicUrl, weather });
+      setSoundState(statePayload(true));
       unlockAudioFromGesture();
       playDogBarkAndHowl(true);
       return;
     }
     const next = !soundEnabled;
     setSoundEnabled(next);
-    setSoundState({ enabled: next, musicUrl, weather });
+    setSoundState(statePayload(next));
     if (next) {
       unlockAudioFromGesture();
     }
@@ -308,23 +382,34 @@ export default function App() {
     });
   }, [memorials, currentUser]);
 
+  const speciesMemorials = useMemo(
+    () => visibleMemorials.filter((m) => (m.species || 'Dog') === activeSpecies),
+    [visibleMemorials, activeSpecies]
+  );
+
   const filteredMemorials = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const userEmail = currentUser?.email?.toLowerCase() || '';
+    const userName = currentUser?.username?.toLowerCase() || '';
     return visibleMemorials.filter((m) => {
       if (activeTab === 'tombstone' && m.space !== 'tombstone') return false;
       if (activeTab === 'ash-room' && m.space !== 'ash-room') return false;
       if (activeTab === 'sanctuary') {
-        if (!userEmail || m.ownerEmail.toLowerCase() !== userEmail) return false;
+        const matchUser =
+          (userName && (m.ownerUsername || '').toLowerCase() === userName) ||
+          (userEmail && m.ownerEmail.toLowerCase() === userEmail);
+        if (!matchUser) return false;
+      } else {
+        if ((m.species || 'Dog') !== activeSpecies) return false;
       }
-      if (speciesFilter !== 'All' && m.species !== speciesFilter) return false;
+      if (showOnlyFavorites && !favorites.includes(m.id)) return false;
       if (q) {
-        const hay = `${m.name} ${m.breed} ${m.species} ${m.ownerName} ${m.locationCode}`.toLowerCase();
+        const hay = `${m.name} ${m.breed} ${m.species} ${m.ownerName} ${m.ownerUsername || ''} ${m.locationCode}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [visibleMemorials, activeTab, speciesFilter, searchQuery, currentUser]);
+  }, [visibleMemorials, activeTab, activeSpecies, showOnlyFavorites, favorites, searchQuery, currentUser]);
 
   const stats = useMemo(() => {
     const candles = visibleMemorials.reduce((sum, m) => sum + (m.candlesCount || 0), 0);
@@ -383,6 +468,9 @@ export default function App() {
   const handleChangeCharacterGender = (nextGender) => {
     const clean = nextGender === 'boy' ? 'boy' : 'girl';
     setCurrentUser((prev) => (prev ? { ...prev, gender: clean } : prev));
+    if (currentUser) {
+      updateAccountProfile(currentUser.username || currentUser.email, { gender: clean });
+    }
     syncAvatarGenderToStorage(clean, false);
   };
 
@@ -391,16 +479,48 @@ export default function App() {
     const clean = editAccountName.trim();
     if (!clean) return;
     setCurrentUser((prev) => (prev ? { ...prev, name: clean } : prev));
+    if (currentUser) {
+      updateAccountProfile(currentUser.username || currentUser.email, { name: clean });
+    }
     if (!getMeetupNickname()) {
       setMpNickname(clean.split(' ')[0] || 'Visitor');
     }
+  };
+
+  const handleToggleMpOnline = () => {
+    const next = setMultiplayerOnline(!mpOnline);
+    setMpOnline(next);
+  };
+
+  const handleToggleFavorite = (memorialId) => {
+    setFavorites((prev) =>
+      prev.includes(memorialId) ? prev.filter((id) => id !== memorialId) : [...prev, memorialId]
+    );
+  };
+
+  const handleToggleFriend = (friendName) => {
+    const clean = String(friendName || '').trim();
+    if (!clean) return;
+    setFriends((prev) =>
+      prev.some((f) => f.toLowerCase() === clean.toLowerCase())
+        ? prev.filter((f) => f.toLowerCase() !== clean.toLowerCase())
+        : [...prev, clean]
+    );
   };
 
   const handleLogin = (user) => {
     const gender = user.gender === 'boy' ? 'boy' : 'girl';
     const enriched = { ...user, gender };
     setCurrentUser(enriched);
-    syncAvatarGenderToStorage(gender, true);
+    if (user.avatar) {
+      try {
+        localStorage.setItem('evergreen_paws_avatar_v1', JSON.stringify(user.avatar));
+      } catch {
+        // ignore
+      }
+    } else {
+      syncAvatarGenderToStorage(gender, true);
+    }
     if (!getMeetupNickname()) {
       setMpNickname(enriched.name.split(' ')[0] || 'Visitor');
     }
@@ -442,7 +562,7 @@ export default function App() {
     if (!incoming || !incoming.id || incoming.visibility === 'private') return prevList;
     const idx = prevList.findIndex((m) => m.id === incoming.id);
     if (idx === -1) {
-      return [incoming, ...prevList];
+      return normalizeAndDeduplicateMemorials([incoming, ...prevList]);
     }
     const existing = prevList[idx];
     const preferIncomingMeta = (incoming.updatedAt || 0) >= (existing.updatedAt || 0);
@@ -683,18 +803,21 @@ export default function App() {
 
   const handleCreateMemorial = (newMemorial) => {
     const withTs = { ...newMemorial, updatedAt: Date.now() };
-    setMemorials((prev) => [withTs, ...prev]);
-    if (withTs.visibility !== 'private') {
-      publishSharedMemorial(withTs);
+    const nextList = normalizeAndDeduplicateMemorials([withTs, ...memorialsRef.current]);
+    const finalMemorial = nextList.find((m) => m.id === withTs.id) || withTs;
+    setMemorials(nextList);
+    if (finalMemorial.visibility !== 'private') {
+      publishSharedMemorial(finalMemorial);
       sendMultiplayerAction({
         kind: 'create_memorial',
-        memorial: withTs,
+        memorial: finalMemorial,
       });
     }
     setShowCreateModal(false);
-    setActiveTab(withTs.space === 'ash-room' ? 'ash-room' : 'tombstone');
-    setActiveRoom(withTs.space === 'ash-room' ? 'ash-room' : 'tombstone');
-    setSelectedMemorialId(withTs.id);
+    setActiveSpecies(finalMemorial.species || 'Dog');
+    setActiveTab(finalMemorial.space === 'ash-room' ? 'ash-room' : 'tombstone');
+    setActiveRoom(finalMemorial.space === 'ash-room' ? 'ash-room' : 'tombstone');
+    setSelectedMemorialId(finalMemorial.id);
   };
 
   const handleSelectNavTab = (tab) => {
@@ -877,6 +1000,25 @@ export default function App() {
                   </button>
                 </form>
 
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.76rem' }}>
+                  <span>Presence Mode</span>
+                  <button
+                    type="button"
+                    className={mpOnline ? 'btn-primary' : 'btn-ghost'}
+                    style={{ padding: '4px 10px', fontSize: '0.74rem' }}
+                    onClick={handleToggleMpOnline}
+                  >
+                    {mpOnline ? '🟢 Online' : '⚪ Offline'}
+                  </button>
+                </div>
+
+                {friends.length > 0 && (
+                  <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', padding: '2px 4px' }}>
+                    🤝 Friends ({friends.length}): {friends.slice(0, 4).join(', ')}
+                    {friends.length > 4 ? '…' : ''}
+                  </div>
+                )}
+
                 <button
                   type="button"
                   className="btn-ghost"
@@ -1002,18 +1144,61 @@ export default function App() {
             </button>
             <button
               type="button"
+              className={`env-pill ${weatherEffectsEnabled ? 'active' : ''}`}
+              onClick={() => setWeatherEffectsEnabled((v) => !v)}
+              title="Turn all weather visual effects on or off"
+            >
+              {weatherEffectsEnabled ? '🌦️ Weather FX: ON' : '☀️ Weather FX: OFF'}
+            </button>
+            <button
+              type="button"
+              className={`env-pill ${weatherSoundEnabled && weatherEffectsEnabled ? 'active' : ''}`}
+              onClick={() => setWeatherSoundEnabled((v) => !v)}
+              title="Turn weather sound effects (rain/wind/thunder) on or off"
+            >
+              {weatherSoundEnabled ? '🔊 Weather Sound: ON' : '🔇 Weather Sound: OFF'}
+            </button>
+            <button
+              type="button"
               className="env-pill"
               onClick={() => {
                 if (!soundEnabled) {
                   setSoundEnabled(true);
                 }
-                setSoundState({ enabled: true, musicUrl, weather });
+                setSoundState({
+                  enabled: true,
+                  weatherSoundEnabled: weatherEffectsEnabled && weatherSoundEnabled,
+                  musicUrl,
+                  weather: weatherEffectsEnabled ? weather : 'clear',
+                  room: activeRoom,
+                });
                 unlockAudioFromGesture();
                 playDogBarkAndHowl(true);
               }}
               title="Hear distant dog bark & moonlight howl"
             >
               🐕 Bark/Howl
+            </button>
+            <button
+              type="button"
+              className="env-pill"
+              onClick={() => {
+                if (!soundEnabled) {
+                  setSoundEnabled(true);
+                }
+                setSoundState({
+                  enabled: true,
+                  weatherSoundEnabled: weatherEffectsEnabled && weatherSoundEnabled,
+                  musicUrl,
+                  weather: weatherEffectsEnabled ? weather : 'clear',
+                  room: activeRoom,
+                });
+                unlockAudioFromGesture();
+                playOwlHoot(true);
+              }}
+              title="Hear distant owl hoot"
+            >
+              🦉 Owl
             </button>
             <button
               type="button"
@@ -1039,14 +1224,21 @@ export default function App() {
           </div>
 
           <div className="species-chips">
-            {['All', 'Dog', 'Cat', 'Rabbit', 'Bird'].map((sp) => (
+            <button
+              type="button"
+              className={`chip ${showOnlyFavorites ? 'active' : ''}`}
+              onClick={() => setShowOnlyFavorites((v) => !v)}
+            >
+              💖 Favorites ({favorites.length})
+            </button>
+            {SPECIES_LIST.map((sp) => (
               <button
-                key={sp}
+                key={sp.id}
                 type="button"
-                className={`chip ${speciesFilter === sp ? 'active' : ''}`}
-                onClick={() => setSpeciesFilter(sp)}
+                className={`chip ${activeSpecies === sp.id ? 'active' : ''}`}
+                onClick={() => setActiveSpecies(sp.id)}
               >
-                {sp}
+                {sp.emoji} {sp.label}
               </button>
             ))}
           </div>
@@ -1089,20 +1281,29 @@ export default function App() {
         {/* 3D Walkable Park, 2D Walkable Park, or Cards Directory */}
         {viewMode === 'world3d' && activeTab !== 'sanctuary' ? (
           <ParkWorld3D
-            memorials={visibleMemorials}
+            memorials={speciesMemorials}
+            allMemorials={visibleMemorials}
+            activeSpecies={activeSpecies}
+            onSelectSpecies={setActiveSpecies}
             currentUser={currentUser}
             characterGender={currentUser?.gender}
             onChangeCharacterGender={handleChangeCharacterGender}
             atmosphere={atmosphere}
             season={season}
-            weather={weather}
+            weather={weatherEffectsEnabled ? weather : 'clear'}
             activeRoom={activeRoom}
             mpPeers={mpPeers}
             mpStatus={mpStatus}
+            mpOnline={mpOnline}
             mpRoomCode={mpRoomCode}
             mpNickname={mpNickname}
             mpChatLog={mpChatLog}
+            favorites={favorites}
+            friends={friends}
             remoteWorldEvent={remoteWorldEvent}
+            onToggleMpOnline={handleToggleMpOnline}
+            onToggleFavorite={handleToggleFavorite}
+            onToggleFriend={handleToggleFriend}
             onSendChat={handleSendMpChat}
             onSendEmote={sendMultiplayerEmote}
             onChangeMpRoom={handleChangeMpRoom}
@@ -1118,20 +1319,29 @@ export default function App() {
           />
         ) : viewMode === 'world2d' && activeTab !== 'sanctuary' ? (
           <ParkWorld2D
-            memorials={visibleMemorials}
+            memorials={speciesMemorials}
+            allMemorials={visibleMemorials}
+            activeSpecies={activeSpecies}
+            onSelectSpecies={setActiveSpecies}
             currentUser={currentUser}
             characterGender={currentUser?.gender}
             onChangeCharacterGender={handleChangeCharacterGender}
             atmosphere={atmosphere}
             season={season}
-            weather={weather}
+            weather={weatherEffectsEnabled ? weather : 'clear'}
             activeRoom={activeRoom}
             mpPeers={mpPeers}
             mpStatus={mpStatus}
+            mpOnline={mpOnline}
             mpRoomCode={mpRoomCode}
             mpNickname={mpNickname}
             mpChatLog={mpChatLog}
+            favorites={favorites}
+            friends={friends}
             remoteWorldEvent={remoteWorldEvent}
+            onToggleMpOnline={handleToggleMpOnline}
+            onToggleFavorite={handleToggleFavorite}
+            onToggleFriend={handleToggleFriend}
             onSendChat={handleSendMpChat}
             onSendEmote={sendMultiplayerEmote}
             onChangeMpRoom={handleChangeMpRoom}
@@ -1260,6 +1470,12 @@ export default function App() {
         <VisitMemorialModal
           memorial={selectedMemorial}
           currentUser={currentUser}
+          isFavorite={favorites.includes(selectedMemorial.id)}
+          onToggleFavorite={handleToggleFavorite}
+          isFriend={friends.some(
+            (f) => f.toLowerCase() === (selectedMemorial.ownerName || '').toLowerCase()
+          )}
+          onToggleFriend={handleToggleFriend}
           onClose={() => setSelectedMemorialId(null)}
           onPerformOffering={handlePerformOffering}
           onAddTribute={handleAddTribute}
@@ -1272,7 +1488,8 @@ export default function App() {
       {showCreateModal && currentUser && (
         <CreateMemorialModal
           currentUser={currentUser}
-          existingCount={memorials.length}
+          memorials={memorials}
+          defaultSpecies={activeSpecies}
           onClose={() => setShowCreateModal(false)}
           onCreate={handleCreateMemorial}
         />

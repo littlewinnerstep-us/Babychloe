@@ -16,7 +16,7 @@ import {
   Minimize2,
   Users,
 } from 'lucide-react';
-import { OFFERING_TYPES } from '../data/memorialData';
+import { OFFERING_TYPES, getSpeciesEmoji } from '../data/memorialData';
 import {
   hasGivenToday,
   recordGivenToday,
@@ -27,31 +27,13 @@ import {
   getPeersMap,
   getLocalChatBubble,
 } from '../utils/multiplayerEngine';
+import { drawAvatarHeadAndHair } from '../utils/avatarRenderer';
 import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
+import WalkToSearchBar from './WalkToSearchBar';
+import AvatarCustomizerDrawer from './AvatarCustomizerDrawer';
+import SpeciesGateModal from './SpeciesGateModal';
 
 const AVATAR_STORAGE_KEY = 'evergreen_paws_avatar_v1';
-
-const CLOAK_OPTIONS = [
-  { id: 'sage', label: 'Sage', color: '#4a7c59' },
-  { id: 'lavender', label: 'Lavender', color: '#7c6a9a' },
-  { id: 'amber', label: 'Amber', color: '#c87d4b' },
-  { id: 'starlight', label: 'Starlight', color: '#3b5978' },
-  { id: 'rose', label: 'Rose', color: '#b86578' },
-];
-
-const HAIR_OPTIONS = [
-  { id: 'espresso', label: 'Espresso', color: '#2c221e' },
-  { id: 'chestnut', label: 'Chestnut', color: '#8d4a32' },
-  { id: 'honey', label: 'Honey', color: '#d8c098' },
-  { id: 'silver', label: 'Silver', color: '#e2e8f0' },
-];
-
-const COMPANION_OPTIONS = [
-  { id: 'dog', label: '🐕 Spirit Pup' },
-  { id: 'cat', label: '🐈 Spirit Kitty' },
-  { id: 'bunny', label: '🐇 Spirit Bunny' },
-  { id: 'none', label: 'None' },
-];
 
 const CAMERA_PRESETS = {
   follow: { label: 'Follow', dist: 235, height: 145, pitch: 0.36 },
@@ -61,9 +43,12 @@ const CAMERA_PRESETS = {
 
 const DEFAULT_AVATAR = {
   gender: 'girl',
+  avatarStyle: 'classic',
+  hairStyle: 'long',
   cloakColor: '#b86578',
   hairColor: '#2c221e',
-  companion: 'dog',
+  companion: 'none',
+  companionPetId: '',
   carryingLantern: true,
 };
 
@@ -77,31 +62,7 @@ function loadAvatarPrefs() {
   return DEFAULT_AVATAR;
 }
 
-const TOMBSTONE_SLOTS_3D = [
-  { x: -240, z: -180 },
-  { x: 240, z: -180 },
-  { x: -270, z: 20 },
-  { x: 270, z: 20 },
-  { x: -195, z: 215 },
-  { x: 195, z: 215 },
-  { x: -410, z: -90 },
-  { x: 410, z: -90 },
-  { x: -400, z: 165 },
-  { x: 400, z: 165 },
-];
-
-const ASH_SLOTS_3D = [
-  { x: -250, z: -230 },
-  { x: -95, z: -230 },
-  { x: 95, z: -230 },
-  { x: 250, z: -230 },
-  { x: -330, z: -30 },
-  { x: 330, z: -30 },
-  { x: -330, z: 160 },
-  { x: 330, z: 160 },
-  { x: -165, z: 210 },
-  { x: 165, z: 210 },
-];
+const COLS_3D = [-390, -200, 200, 390];
 
 const GARDEN_NPCS_3D = [
   {
@@ -166,6 +127,9 @@ const ASH_NPCS_3D = [
 
 export default function ParkWorld3D({
   memorials,
+  allMemorials = [],
+  activeSpecies = 'Dog',
+  onSelectSpecies,
   currentUser,
   characterGender,
   onChangeCharacterGender,
@@ -175,10 +139,16 @@ export default function ParkWorld3D({
   activeRoom,
   mpPeers = [],
   mpStatus = 'connecting',
+  mpOnline = true,
   mpRoomCode = 'PUBLIC',
   mpNickname = 'Visitor',
   mpChatLog = [],
+  favorites = [],
+  friends = [],
   remoteWorldEvent = null,
+  onToggleMpOnline,
+  onToggleFavorite,
+  onToggleFriend,
   onSendChat,
   onSendEmote,
   onChangeMpRoom,
@@ -195,10 +165,12 @@ export default function ParkWorld3D({
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showAvatarPanel, setShowAvatarPanel] = useState(false);
   const [showMeetupPanel, setShowMeetupPanel] = useState(false);
+  const [showSpeciesGate, setShowSpeciesGate] = useState(false);
   const [nearbyMemorialId, setNearbyMemorialId] = useState(null);
   const [inspectedId, setInspectedId] = useState(null);
   const [armtipText, setArmtipText] = useState('');
   const [nearPortal, setNearPortal] = useState(false);
+  const [nearSpeciesGate, setNearSpeciesGate] = useState(false);
   const [walkMessage, setWalkMessage] = useState('');
 
   useEffect(() => {
@@ -258,6 +230,26 @@ export default function ParkWorld3D({
   const nearbyIdRef = useRef(null);
   const pendingOpenIdRef = useRef(null);
   const nearPortalRef = useRef(false);
+  const nearGateRef = useRef(false);
+  const maxZRef = useRef(360);
+
+  const userPets = useMemo(() => {
+    if (!currentUser) return [];
+    const uName = (currentUser.username || '').toLowerCase();
+    const uEmail = (currentUser.email || '').toLowerCase();
+    return allMemorials.filter((m) => {
+      if (uName && (m.ownerUsername || '').toLowerCase() === uName) return true;
+      if (uEmail && (m.ownerEmail || '').toLowerCase() === uEmail) return true;
+      return false;
+    });
+  }, [allMemorials, currentUser]);
+
+  const effectiveCompanion = useMemo(() => {
+    if (userPets.length === 0 || avatar.companion === 'none') return 'none';
+    const matched = userPets.find((p) => p.id === avatar.companionPetId);
+    if (matched) return getSpeciesEmoji(matched.species);
+    return getSpeciesEmoji(userPets[0].species);
+  }, [userPets, avatar.companion, avatar.companionPetId]);
 
   useEffect(() => {
     atmosphereRef.current = atmosphere;
@@ -277,13 +269,13 @@ export default function ParkWorld3D({
   }, [onLightningStrike]);
 
   useEffect(() => {
-    avatarRef.current = avatar;
+    avatarRef.current = { ...avatar, companion: effectiveCompanion };
     try {
       localStorage.setItem(AVATAR_STORAGE_KEY, JSON.stringify(avatar));
     } catch {
       // ignore
     }
-  }, [avatar]);
+  }, [avatar, effectiveCompanion]);
 
   useEffect(() => {
     userRef.current = currentUser;
@@ -334,26 +326,25 @@ export default function ParkWorld3D({
   }, [activeRoom]);
 
   const positionedMemorials = useMemo(() => {
-    const starterOrder = { m1: 1, m2: 2, m3: 3, m4: 4, m5: 5, m6: 6 };
-    const sortCanonical = (a, b) => {
-      const sa = starterOrder[a.id] || 999;
-      const sb = starterOrder[b.id] || 999;
-      if (sa !== sb) return sa - sb;
+    const sortSeq = (a, b) => {
+      const na = parseInt((a.locationCode || '').match(/(\d+)\s*$/)?.[1] || '9999', 10);
+      const nb = parseInt((b.locationCode || '').match(/(\d+)\s*$/)?.[1] || '9999', 10);
+      if (na !== nb) return na - nb;
       return String(a.id).localeCompare(String(b.id));
     };
 
-    const tombstones = memorials.filter((m) => m.space === 'tombstone').sort(sortCanonical);
-    const ashNiches = memorials.filter((m) => m.space === 'ash-room').sort(sortCanonical);
+    const tombstones = memorials.filter((m) => m.space === 'tombstone').sort(sortSeq);
+    const ashNiches = memorials.filter((m) => m.space === 'ash-room').sort(sortSeq);
     const list = [];
     tombstones.forEach((m, idx) => {
-      const s = TOMBSTONE_SLOTS_3D[idx % TOMBSTONE_SLOTS_3D.length];
-      const extraOffset = Math.floor(idx / TOMBSTONE_SLOTS_3D.length) * 75;
-      list.push({ ...m, worldX: s.x, worldZ: Math.min(320, s.z + extraOffset) });
+      const col = COLS_3D[idx % COLS_3D.length];
+      const row = Math.floor(idx / COLS_3D.length);
+      list.push({ ...m, worldX: col, worldZ: -170 + row * 195 });
     });
     ashNiches.forEach((m, idx) => {
-      const s = ASH_SLOTS_3D[idx % ASH_SLOTS_3D.length];
-      const extraOffset = Math.floor(idx / ASH_SLOTS_3D.length) * 75;
-      list.push({ ...m, worldX: s.x, worldZ: Math.min(320, s.z + extraOffset) });
+      const col = COLS_3D[idx % COLS_3D.length];
+      const row = Math.floor(idx / COLS_3D.length);
+      list.push({ ...m, worldX: col, worldZ: -170 + row * 195 });
     });
     return list;
   }, [memorials]);
@@ -361,7 +352,10 @@ export default function ParkWorld3D({
   const positionedRef = useRef(positionedMemorials);
   useEffect(() => {
     positionedRef.current = positionedMemorials;
-  }, [positionedMemorials]);
+    const activeList = positionedMemorials.filter((m) => m.space === roomRef.current);
+    const maxMonZ = activeList.reduce((mx, m) => Math.max(mx, m.worldZ), 200);
+    maxZRef.current = Math.max(360, maxMonZ + 170);
+  }, [positionedMemorials, activeRoom]);
 
   const spawnFloatingParticles = (wx, wy, wz, emoji, count = 5) => {
     for (let i = 0; i < count; i += 1) {
@@ -406,7 +400,10 @@ export default function ParkWorld3D({
   };
 
   const handleWalkToPet = (memorial) => {
-    if (nearbyIdRef.current === memorial.id) {
+    if (memorial.species && memorial.species !== activeSpecies && onSelectSpecies) {
+      onSelectSpecies(memorial.species);
+    }
+    if (nearbyIdRef.current === memorial.id && (!memorial.species || memorial.species === activeSpecies)) {
       setInspectedId(memorial.id);
       return;
     }
@@ -426,7 +423,7 @@ export default function ParkWorld3D({
         setWalkMessage(`Walking in 3D to ${found.name} (${found.locationCode})...`);
         setTimeout(() => setWalkMessage(''), 2200);
       }
-    }, 60);
+    }, 100);
   };
 
   const showArmtip = (msg) => {
@@ -579,9 +576,10 @@ export default function ParkWorld3D({
         p.moving = false;
       }
 
-      // Clamp 3D world bounds
+      // Clamp 3D world bounds (expanding dynamically as more memorials are added)
+      const maxZ = maxZRef.current;
       p.x = Math.max(-500, Math.min(500, p.x));
-      p.z = Math.max(-360, Math.min(360, p.z));
+      p.z = Math.max(-360, Math.min(maxZ, p.z));
 
       if (p.moving || p.history.length === 0) {
         p.history.unshift({ x: p.x, z: p.z });
@@ -607,6 +605,13 @@ export default function ParkWorld3D({
         setNearPortal(isNearPortalNow);
       }
 
+      const gateDist = Math.hypot(p.x - 460, p.z - 0);
+      const isNearGateNow = gateDist < 92;
+      if (isNearGateNow !== nearGateRef.current) {
+        nearGateRef.current = isNearGateNow;
+        setNearSpeciesGate(isNearGateNow);
+      }
+
       if (portalDist < 44 && now > p.portalCooldownUntil) {
         const nextRoom = room === 'tombstone' ? 'ash-room' : 'tombstone';
         p.portalCooldownUntil = now + 1100;
@@ -621,10 +626,10 @@ export default function ParkWorld3D({
         return;
       }
 
-      // Proximity to 3D monuments
+      // Proximity to 3D monuments (78-unit radius so spacious vigils never overlap)
       const roomMemorials = positionedRef.current.filter((m) => m.space === room);
       let closest = null;
-      let closestDist = 110;
+      let closestDist = 78;
       for (const m of roomMemorials) {
         const d = Math.hypot(p.x - m.worldX, p.z - m.worldZ);
         if (d < closestDist) {
@@ -812,7 +817,7 @@ export default function ParkWorld3D({
         ctx.lineWidth = 1;
         for (let gx = -500; gx <= 500; gx += 100) {
           const a = project3D(gx, 0, -360);
-          const b = project3D(gx, 0, 360);
+          const b = project3D(gx, 0, maxZ);
           if (a && b) {
             ctx.beginPath();
             ctx.moveTo(a.sx, a.sy);
@@ -822,7 +827,7 @@ export default function ParkWorld3D({
         }
         // Main Stone Walkway along Z
         const pathColor = atm === 'night' ? '#3d4952' : '#c6bea9';
-        for (let pz = -330; pz < 330; pz += 66) {
+        for (let pz = -330; pz < maxZ - 20; pz += 66) {
           drawGroundPoly(
             [
               [-36, 0, pz],
@@ -835,7 +840,7 @@ export default function ParkWorld3D({
           );
         }
         // Cross paths
-        [-150, 50, 240].forEach((cz) => {
+        for (let cz = -150; cz < maxZ - 60; cz += 200) {
           for (let px = -360; px < 360; px += 90) {
             drawGroundPoly(
               [
@@ -848,7 +853,7 @@ export default function ParkWorld3D({
               'rgba(0,0,0,0.08)'
             );
           }
-        });
+        }
         // 3D Reflection Pond at (-110, 100)
         const pondPts = [];
         for (let a = 0; a < 14; a += 1) {
@@ -862,7 +867,7 @@ export default function ParkWorld3D({
         );
       } else {
         // Ash Room Crimson & Gold Sanctuary Runner
-        for (let pz = -300; pz < 320; pz += 62) {
+        for (let pz = -300; pz < maxZ - 20; pz += 62) {
           drawGroundPoly(
             [
               [-48, 0.5, pz],
@@ -1229,13 +1234,55 @@ export default function ParkWorld3D({
         });
       });
 
+      // 2b. Species Sanctuary Gate (East side at x=460, z=0)
+      pushEntity(460, 0, () => {
+        draw3DBox(460, 0, -28, 12, 82, 12, { top: '#b84242', front: '#943030', side: '#6e2020' });
+        draw3DBox(460, 0, 28, 12, 82, 12, { top: '#b84242', front: '#943030', side: '#6e2020' });
+        const topGate = draw3DBox(460, 76, 0, 16, 12, 76, {
+          top: '#e0a958',
+          front: '#8f2929',
+          side: '#6b1d1d',
+          stroke: '#ffd57e',
+        });
+        if (topGate) {
+          ctx.font = `700 ${Math.max(10, Math.round(12 * topGate.scale))}px "Plus Jakarta Sans", sans-serif`;
+          const gTxt = '⛩️ Other Species Gate';
+          const gw = ctx.measureText(gTxt).width + 14;
+          ctx.fillStyle = 'rgba(20, 16, 18, 0.88)';
+          ctx.fillRect(topGate.sx - gw / 2, topGate.sy - 24, gw, 18);
+          ctx.fillStyle = '#ffe5ad';
+          ctx.textAlign = 'center';
+          ctx.fillText(gTxt, topGate.sx, topGate.sy - 11);
+        }
+      });
+
       const drawVisitorStyle = (wx, wyBase, wz, head, cAv) => {
         const isBoy = cAv?.gender === 'boy';
-        if (isBoy) {
-          // Crisp collar accent at shoulders
+        const style = cAv?.avatarStyle || 'classic';
+        if (style === 'uniform') {
+          const beltPt = project3D(wx, wyBase + 14, wz + 6);
+          if (beltPt) {
+            ctx.fillStyle = '#f5d078';
+            ctx.fillRect(beltPt.sx - 8 * beltPt.scale, beltPt.sy - 2 * beltPt.scale, 16 * beltPt.scale, 3.5 * beltPt.scale);
+          }
+        } else if (style === 'cape') {
+          const scarfPt = project3D(wx, wyBase + 27, wz + 5);
+          if (scarfPt) {
+            ctx.fillStyle = '#ffe5ad';
+            ctx.beginPath();
+            ctx.ellipse(scarfPt.sx, scarfPt.sy, 8.5 * scarfPt.scale, 3 * scarfPt.scale, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (style === 'kimono') {
+          const obiPt = project3D(wx, wyBase + 14, wz + 6);
+          if (obiPt) {
+            ctx.fillStyle = '#e5a05d';
+            ctx.fillRect(obiPt.sx - 8 * obiPt.scale, obiPt.sy - 2.5 * obiPt.scale, 16 * obiPt.scale, 5 * obiPt.scale);
+          }
+        } else if (style === 'formal' || isBoy) {
           const collarPt = project3D(wx, wyBase + 27, wz + 6);
           if (collarPt) {
-            ctx.fillStyle = 'rgba(248, 244, 234, 0.9)';
+            ctx.fillStyle = 'rgba(248, 244, 234, 0.92)';
             ctx.beginPath();
             ctx.moveTo(collarPt.sx - 6 * collarPt.scale, collarPt.sy - 2 * collarPt.scale);
             ctx.lineTo(collarPt.sx, collarPt.sy + 4 * collarPt.scale);
@@ -1244,7 +1291,6 @@ export default function ParkWorld3D({
             ctx.fill();
           }
         } else {
-          // Flared skirt silhouette at base of cloak
           const hemPt = project3D(wx, wyBase + 5, wz + 4);
           if (hemPt) {
             ctx.fillStyle = cAv?.cloakColor || '#b86578';
@@ -1258,44 +1304,7 @@ export default function ParkWorld3D({
           }
         }
         if (head) {
-          ctx.fillStyle = '#f5d2b8';
-          ctx.beginPath();
-          ctx.arc(head.sx, head.sy, 9.5 * head.scale, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.fillStyle = cAv?.hairColor || '#2c221e';
-          ctx.beginPath();
-          ctx.arc(head.sx, head.sy - 2 * head.scale, 9.8 * head.scale, Math.PI, 0);
-          ctx.fill();
-
-          if (!isBoy) {
-            // Flowing side hair locks + rose ribbon bow
-            ctx.beginPath();
-            ctx.ellipse(
-              head.sx - 7.8 * head.scale,
-              head.sy + 4.5 * head.scale,
-              3.2 * head.scale,
-              8.5 * head.scale,
-              0.12,
-              0,
-              Math.PI * 2
-            );
-            ctx.ellipse(
-              head.sx + 7.8 * head.scale,
-              head.sy + 4.5 * head.scale,
-              3.2 * head.scale,
-              8.5 * head.scale,
-              -0.12,
-              0,
-              Math.PI * 2
-            );
-            ctx.fill();
-
-            ctx.fillStyle = '#ff8fab';
-            ctx.beginPath();
-            ctx.arc(head.sx + 5.8 * head.scale, head.sy - 8.5 * head.scale, 3.1 * head.scale, 0, Math.PI * 2);
-            ctx.fill();
-          }
+          drawAvatarHeadAndHair(ctx, head.sx, head.sy, head.scale, cAv);
         }
       };
 
@@ -1324,7 +1333,14 @@ export default function ParkWorld3D({
               ctx.fill();
               ctx.font = `${Math.max(13, Math.round(17 * sp.scale))}px serif`;
               ctx.textAlign = 'center';
-              const em = pAv.companion === 'cat' ? '🐈' : pAv.companion === 'bunny' ? '🐇' : '🐕';
+              const em =
+                pAv.companion === 'cat'
+                  ? '🐈'
+                  : pAv.companion === 'bunny'
+                    ? '🐇'
+                    : pAv.companion === 'dog'
+                      ? '🐕'
+                      : pAv.companion;
               ctx.fillText(em, sp.sx, sp.sy + 5);
             }
           });
@@ -1381,9 +1397,9 @@ export default function ParkWorld3D({
         });
       });
 
-      // 5. 3D Spirit Pet Companion
+      // 5. 3D Spirit Pet Companion (only when user has enshrined a pet in the game)
       const av = avatarRef.current;
-      if (av.companion !== 'none') {
+      if (av.companion && av.companion !== 'none') {
         const trail = p.history[Math.min(18, p.history.length - 1)] || { x: p.x - 24, z: p.z + 18 };
         const sx = trail.x - p.facingX * 18;
         const sz = trail.z - p.facingZ * 18;
@@ -1400,8 +1416,7 @@ export default function ParkWorld3D({
             ctx.fill();
             ctx.font = `${Math.max(14, Math.round(18 * sp.scale))}px serif`;
             ctx.textAlign = 'center';
-            const emoji = av.companion === 'cat' ? '🐈' : av.companion === 'bunny' ? '🐇' : '🐕';
-            ctx.fillText(emoji, sp.sx, sp.sy + 5);
+            ctx.fillText(av.companion, sp.sx, sp.sy + 5);
           }
         });
       }
@@ -1697,7 +1712,7 @@ export default function ParkWorld3D({
       const gx = camX + t * rayX;
       const gz = camZ + t * rayZ;
       p.targetX = Math.max(-500, Math.min(500, gx));
-      p.targetZ = Math.max(-360, Math.min(360, gz));
+      p.targetZ = Math.max(-360, Math.min(maxZRef.current, gz));
     }
   };
 
@@ -1717,37 +1732,24 @@ export default function ParkWorld3D({
 
   return (
     <div className={`world-container ${isFullScreen ? 'is-fullscreen' : ''}`}>
-      {/* Top Quick-Find, Emotes & Camera Bar */}
+      {/* Top Walk-To Search Bar, Species Gate, Emotes & Camera Bar */}
       <div className="world-hud-top">
-        <div className="world-quick-pets">
-          <span className="quick-pets-label">
-            <Compass size={13} /> Walk to:
-          </span>
-          {memorials
-            .slice()
-            .sort((a, b) => {
-              const ac = !['m1', 'm2', 'm3', 'm4', 'm5', 'm6'].includes(a.id);
-              const bc = !['m1', 'm2', 'm3', 'm4', 'm5', 'm6'].includes(b.id);
-              if (ac !== bc) return ac ? -1 : 1;
-              return 0;
-            })
-            .map((m) => {
-              const isCustom = !['m1', 'm2', 'm3', 'm4', 'm5', 'm6'].includes(m.id);
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  className={`quick-pet-chip ${nearbyMemorialId === m.id ? 'active' : ''}`}
-                  onClick={() => handleWalkToPet(m)}
-                >
-                  <span>{isCustom ? '✨' : m.space === 'ash-room' ? '🏛️' : '🌿'}</span>
-                  <span>{m.name}</span>
-                </button>
-              );
-            })}
-        </div>
+        <WalkToSearchBar
+          allMemorials={allMemorials}
+          activeSpecies={activeSpecies}
+          nearbyMemorialId={nearbyMemorialId}
+          onSelectPet={handleWalkToPet}
+        />
 
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => setShowSpeciesGate(true)}
+            title="Visit another species sanctuary gate"
+          >
+            ⛩️ {getSpeciesEmoji(activeSpecies)} {activeSpecies} Gate
+          </button>
           <button
             type="button"
             className="btn-ghost"
@@ -1849,8 +1851,8 @@ export default function ParkWorld3D({
 
         <div className="world-room-pill">
           {activeRoom === 'ash-room'
-            ? '🧊 3D Ash Room (Hall of Serenity)'
-            : '🧊 3D Tombstone Garden (Whispering Meadow)'}
+            ? `🧊 3D ${activeSpecies} Ash Room`
+            : `🧊 3D ${activeSpecies} Tombstone Garden`}
           <span className="world-hint-text">
             {' '}
             • Drag to orbit 3D camera • Tap ground/monument or use D-pad / WASD
@@ -1863,7 +1865,19 @@ export default function ParkWorld3D({
           </div>
         )}
 
-        {nearPortal && !nearbyMemorial && (
+        {nearSpeciesGate && !nearbyMemorial && (
+          <div className="world-portal-prompt">
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => setShowSpeciesGate(true)}
+            >
+              ⛩️ Visit Other Species Gate
+            </button>
+          </div>
+        )}
+
+        {nearPortal && !nearSpeciesGate && !nearbyMemorial && (
           <div className="world-portal-prompt">
             <button
               type="button"
@@ -2023,6 +2037,15 @@ export default function ParkWorld3D({
                 >
                   💌 Visit &amp; Leave Message
                 </button>
+                {onToggleFavorite && (
+                  <button
+                    type="button"
+                    className={favorites.includes(inspectedMemorial.id) ? 'btn-primary' : 'btn-ghost'}
+                    onClick={() => onToggleFavorite(inspectedMemorial.id)}
+                  >
+                    {favorites.includes(inspectedMemorial.id) ? '💖 Favorited' : '🤍 Favorite'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -2030,132 +2053,13 @@ export default function ParkWorld3D({
 
         {/* Avatar Customizer Drawer */}
         {showAvatarPanel && (
-          <div className="world-avatar-drawer">
-            <div className="modal-header" style={{ marginBottom: 10 }}>
-              <strong style={{ fontSize: '0.92rem' }}>Customize Visitor Avatar</strong>
-              <button
-                type="button"
-                className="modal-close"
-                style={{ width: 28, height: 28 }}
-                onClick={() => setShowAvatarPanel(false)}
-              >
-                <X size={14} />
-              </button>
-            </div>
-
-            <div className="form-grid" style={{ gap: 10 }}>
-              <div>
-                <div className="field-label">Character Type</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    type="button"
-                    className={`chip ${(avatar.gender || 'girl') !== 'boy' ? 'active' : ''}`}
-                    onClick={() => {
-                      setAvatar((a) => ({ ...a, gender: 'girl' }));
-                      if (onChangeCharacterGender) onChangeCharacterGender('girl');
-                    }}
-                  >
-                    👩 Girl
-                  </button>
-                  <button
-                    type="button"
-                    className={`chip ${avatar.gender === 'boy' ? 'active' : ''}`}
-                    onClick={() => {
-                      setAvatar((a) => ({ ...a, gender: 'boy' }));
-                      if (onChangeCharacterGender) onChangeCharacterGender('boy');
-                    }}
-                  >
-                    👦 Boy
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <div className="field-label">Cloak Color</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {CLOAK_OPTIONS.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      title={c.label}
-                      onClick={() => setAvatar((a) => ({ ...a, cloakColor: c.color }))}
-                      style={{
-                        width: 26,
-                        height: 26,
-                        borderRadius: '50%',
-                        background: c.color,
-                        border:
-                          avatar.cloakColor === c.color
-                            ? '2.5px solid #ffd57e'
-                            : '1px solid rgba(255,255,255,0.25)',
-                        cursor: 'pointer',
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div className="field-label">Hair Color</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {HAIR_OPTIONS.map((h) => (
-                    <button
-                      key={h.id}
-                      type="button"
-                      title={h.label}
-                      onClick={() => setAvatar((a) => ({ ...a, hairColor: h.color }))}
-                      style={{
-                        width: 26,
-                        height: 26,
-                        borderRadius: '50%',
-                        background: h.color,
-                        border:
-                          avatar.hairColor === h.color
-                            ? '2.5px solid #ffd57e'
-                            : '1px solid rgba(255,255,255,0.25)',
-                        cursor: 'pointer',
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div className="field-label">Spirit Pet Companion</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {COMPANION_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      className={`chip ${avatar.companion === opt.id ? 'active' : ''}`}
-                      onClick={() => setAvatar((a) => ({ ...a, companion: opt.id }))}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontSize: '0.82rem',
-                  cursor: 'pointer',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={avatar.carryingLantern}
-                  onChange={(e) =>
-                    setAvatar((a) => ({ ...a, carryingLantern: e.target.checked }))
-                  }
-                />
-                Carry warm glowing lantern 🏮
-              </label>
-            </div>
-          </div>
+          <AvatarCustomizerDrawer
+            avatar={avatar}
+            userPets={userPets}
+            onUpdateAvatar={(patch) => setAvatar((a) => ({ ...a, ...patch }))}
+            onChangeCharacterGender={onChangeCharacterGender}
+            onClose={() => setShowAvatarPanel(false)}
+          />
         )}
 
         <MultiplayerMeetupHUD
@@ -2163,11 +2067,15 @@ export default function ParkWorld3D({
           onCloseDrawer={() => setShowMeetupPanel(false)}
           mpPeers={mpPeers}
           mpStatus={mpStatus}
+          mpOnline={mpOnline}
           mpRoomCode={mpRoomCode}
           mpNickname={mpNickname}
           mpChatLog={mpChatLog}
+          friends={friends}
           currentRoom={activeRoom}
           hideBottomChatBar={Boolean(inspectedMemorial || showMeetupPanel)}
+          onToggleMpOnline={onToggleMpOnline}
+          onToggleFriend={onToggleFriend}
           onChangeMpRoom={onChangeMpRoom}
           onChangeMpNickname={onChangeMpNickname}
           onSendChat={onSendChat}
@@ -2175,6 +2083,19 @@ export default function ParkWorld3D({
           onWalkToPeer={handleWalkToPeer}
         />
       </div>
+
+      {showSpeciesGate && (
+        <SpeciesGateModal
+          activeSpecies={activeSpecies}
+          allMemorials={allMemorials}
+          onSelectSpecies={(sp) => {
+            if (onSelectSpecies) onSelectSpecies(sp);
+            setWalkMessage(`Entered ${getSpeciesEmoji(sp)} ${sp} Sanctuary`);
+            setTimeout(() => setWalkMessage(''), 2200);
+          }}
+          onClose={() => setShowSpeciesGate(false)}
+        />
+      )}
     </div>
   );
 }
