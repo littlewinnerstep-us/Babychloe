@@ -48,13 +48,6 @@ function readInitialRoom() {
 }
 
 function readInitialNickname() {
-  try {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem(STORAGE_NICKNAME_KEY) || '';
-    }
-  } catch {
-    // ignore storage errors
-  }
   return '';
 }
 
@@ -214,6 +207,7 @@ let callbacks = {
   onNotificationsChange: null,
   onGroupChatChange: null,
   onGroupChange: null,
+  onAccountsChange: null,
 };
 
 const peersMap = new Map(); // peerId -> peer state
@@ -529,6 +523,7 @@ function handleIncomingPayload(msg) {
     if (!existing || (msg.account.updatedAt || 0) >= (existing.updatedAt || 0)) {
       accountsMap.set(msg.account.usernameLower, msg.account);
       persistAccountsRegistry();
+      notifyAccountsChanged();
     }
     return;
   }
@@ -927,8 +922,99 @@ export function setMultiplayerOnline(nextOnline) {
   return isOnlineMode;
 }
 
+function notifyAccountsChanged() {
+  if (typeof callbacks.onAccountsChange === 'function') {
+    callbacks.onAccountsChange(getRegisteredAccounts());
+  }
+}
+
+export function isModerationActive(until) {
+  return until === -1 || (Number.isFinite(until) && until > Date.now());
+}
+
+export function formatModerationRemaining(until) {
+  if (until === -1) return 'Permanent';
+  if (!Number.isFinite(until) || until <= Date.now()) return '';
+  const diffMs = until - Date.now();
+  const totalMins = Math.max(1, Math.ceil(diffMs / 60000));
+  const days = Math.floor(totalMins / (60 * 24));
+  const hours = Math.floor((totalMins % (60 * 24)) / 60);
+  const mins = totalMins % 60;
+  if (days > 0) return `${days}d ${hours}h left`;
+  if (hours > 0) return `${hours}h ${mins}m left`;
+  return `${mins}m left`;
+}
+
+function findRegisteredAccount(usernameOrEmail) {
+  const key = String(usernameOrEmail || '').trim().toLowerCase();
+  if (!key) return null;
+  const direct = accountsMap.get(key);
+  if (direct) return direct;
+  for (const acc of accountsMap.values()) {
+    if ((acc.email || '').toLowerCase() === key) {
+      return acc;
+    }
+  }
+  return null;
+}
+
+export function getUserRestrictionStatus(user) {
+  if (!user) {
+    return {
+      account: null,
+      vigilPaused: false,
+      vigilLabel: '',
+      muted: false,
+      muteLabel: '',
+      loginBanned: false,
+      loginBanLabel: '',
+    };
+  }
+  const latest = findRegisteredAccount(user.username || user.email) || user;
+  const mod = latest.moderation || {};
+  const vigilPaused = isModerationActive(mod.vigilPausedUntil);
+  const muted = isModerationActive(mod.mutedUntil);
+  const loginBanned = isModerationActive(mod.loginBannedUntil);
+  return {
+    account: latest,
+    vigilPaused,
+    vigilLabel: vigilPaused ? formatModerationRemaining(mod.vigilPausedUntil) : '',
+    muted,
+    muteLabel: muted ? formatModerationRemaining(mod.mutedUntil) : '',
+    loginBanned,
+    loginBanLabel: loginBanned ? formatModerationRemaining(mod.loginBannedUntil) : '',
+  };
+}
+
+export function updateUserModeration(usernameOrEmail, moderationPatch) {
+  const found = findRegisteredAccount(usernameOrEmail);
+  if (!found) {
+    return { ok: false, error: 'Account not found.' };
+  }
+  const prevMod = found.moderation || {};
+  const nextMod = {
+    vigilPausedUntil: 0,
+    mutedUntil: 0,
+    loginBannedUntil: 0,
+    ...prevMod,
+    ...moderationPatch,
+  };
+  const updated = {
+    ...found,
+    moderation: nextMod,
+    updatedAt: Date.now(),
+  };
+  accountsMap.set(found.usernameLower, updated);
+  persistAccountsRegistry();
+  broadcastAccountRecord(updated);
+  notifyAccountsChanged();
+  return { ok: true, user: updated };
+}
+
 export function getRegisteredAccounts() {
-  return Array.from(accountsMap.values());
+  return Array.from(accountsMap.values()).sort((a, b) =>
+    (a.name || a.username || '').localeCompare(b.name || b.username || '')
+  );
 }
 
 export function isUsernameTaken(username) {
@@ -1020,6 +1106,7 @@ export function registerAccount({ username, password, name, email = '', gender =
   accountsMap.set(cleanLower, account);
   persistAccountsRegistry();
   broadcastAccountRecord(account);
+  notifyAccountsChanged();
 
   return { ok: true, user: account };
 }
@@ -1029,20 +1116,19 @@ export function authenticateAccount(usernameOrEmail, password) {
   if (!input || !password) {
     return { ok: false, error: 'Please enter both username and password.' };
   }
-  let found = accountsMap.get(input);
-  if (!found) {
-    for (const acc of accountsMap.values()) {
-      if ((acc.email || '').toLowerCase() === input) {
-        found = acc;
-        break;
-      }
-    }
-  }
+  const found = findRegisteredAccount(input);
   if (!found) {
     return { ok: false, error: 'Account not found. Check your username or create a new account.' };
   }
   if (found.password !== String(password)) {
     return { ok: false, error: 'Incorrect password. Please try again.' };
+  }
+  const loginBannedUntil = found.moderation?.loginBannedUntil;
+  if (isModerationActive(loginBannedUntil)) {
+    return {
+      ok: false,
+      error: `Account banned from logging in (${formatModerationRemaining(loginBannedUntil)}). Contact Admin for assistance.`,
+    };
   }
   return { ok: true, user: found };
 }
@@ -1056,63 +1142,28 @@ export function verifyAdminCredentials(username, password) {
   return { ok: true, user: res.user };
 }
 
-export function updateAccountDisplayName(usernameOrEmail, rawDisplayName) {
-  const key = String(usernameOrEmail || '').trim().toLowerCase();
-  let found = accountsMap.get(key);
-  if (!found) {
-    for (const acc of accountsMap.values()) {
-      if ((acc.email || '').toLowerCase() === key) {
-        found = acc;
-        break;
-      }
-    }
-  }
-  if (!found) return { ok: false, error: 'Account not found.' };
-
-  const dnCheck = validateTextOnlyDisplayName(rawDisplayName);
-  if (!dnCheck.ok) {
-    return { ok: false, error: dnCheck.error };
-  }
-  if (isDisplayNameTaken(dnCheck.clean, found.usernameLower)) {
-    return { ok: false, error: `Display name "${dnCheck.clean}" is already taken.` };
-  }
-  const updated = { ...found, name: dnCheck.clean, updatedAt: Date.now() };
-  accountsMap.set(found.usernameLower, updated);
-  persistAccountsRegistry();
-  broadcastAccountRecord(updated);
-  return { ok: true, user: updated };
+export function updateAccountDisplayName() {
+  return {
+    ok: false,
+    error: 'Name and display name are permanent and cannot be changed.',
+  };
 }
 
 export function updateAccountProfile(usernameOrEmail, patch) {
-  const key = String(usernameOrEmail || '').trim().toLowerCase();
-  let found = accountsMap.get(key);
-  if (!found) {
-    for (const acc of accountsMap.values()) {
-      if ((acc.email || '').toLowerCase() === key) {
-        found = acc;
-        break;
-      }
-    }
-  }
+  const found = findRegisteredAccount(usernameOrEmail);
   if (!found) return null;
-  // Enforce immutable username, role, and gender on existing accounts
+  // Enforce immutable username, display name, role, and gender on existing accounts
   const safePatch = { ...patch };
   delete safePatch.username;
   delete safePatch.usernameLower;
+  delete safePatch.name;
   delete safePatch.gender;
   delete safePatch.role;
-  if (safePatch.name !== undefined) {
-    const check = validateTextOnlyDisplayName(safePatch.name);
-    if (!check.ok || isDisplayNameTaken(check.clean, found.usernameLower)) {
-      delete safePatch.name;
-    } else {
-      safePatch.name = check.clean;
-    }
-  }
   const updated = { ...found, ...safePatch, updatedAt: Date.now() };
   accountsMap.set(found.usernameLower, updated);
   persistAccountsRegistry();
   broadcastAccountRecord(updated);
+  notifyAccountsChanged();
   return updated;
 }
 
@@ -1336,7 +1387,7 @@ export function updateLocalPresence({
   avatar = null,
   force = false,
 }) {
-  const effectiveName = (customNickname || name || 'Visitor').trim() || 'Visitor';
+  const effectiveName = (name || 'Visitor').trim() || 'Visitor';
   const curGroupId = activeGroup?.id || '';
   localState = {
     name: effectiveName,
@@ -1483,17 +1534,16 @@ export function getMeetupRoom() {
   return currentRoomCode;
 }
 
-export function setMeetupNickname(name) {
-  const clean = String(name || '').trim().slice(0, 20);
-  customNickname = clean;
+export function setMeetupNickname() {
+  customNickname = '';
   try {
-    if (clean) localStorage.setItem(STORAGE_NICKNAME_KEY, clean);
-    else localStorage.removeItem(STORAGE_NICKNAME_KEY);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(STORAGE_NICKNAME_KEY);
+    }
   } catch {
     // ignore
   }
-  updateLocalPresence({ ...localState, name: clean || localState.name, force: true });
-  return customNickname;
+  return '';
 }
 
 export function getMeetupNickname() {

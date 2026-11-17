@@ -121,7 +121,7 @@ export default function ParkWorld2D({
   onExitGroup,
   onSendEmote,
   onChangeMpRoom,
-  onChangeMpNickname,
+  moderationStatus = {},
   onChangeRoom,
   onSelectMemorial,
   onPerformOffering,
@@ -452,6 +452,12 @@ export default function ParkWorld2D({
     const activeUserKey = getUserIdentityKey(userRef.current);
     if (!activeUserKey) {
       onRequireLogin();
+      return;
+    }
+    if (moderationStatus?.vigilPaused) {
+      showArmtip(
+        `⏸️ Vigil actions are paused by Admin (${moderationStatus.vigilLabel || 'Active'}).`
+      );
       return;
     }
     if (hasGivenToday(activeUserKey, memorial.id, offering.category)) {
@@ -1929,7 +1935,8 @@ export default function ParkWorld2D({
           onToggleOutsideChat={onToggleOutsideChat}
           onToggleFriend={onToggleFriend}
           onChangeMpRoom={onChangeMpRoom}
-          onChangeMpNickname={onChangeMpNickname}
+          isMuted={Boolean(moderationStatus?.muted)}
+          muteLabel={moderationStatus?.muteLabel || ''}
           onCreateGroup={onCreateGroup}
           onJoinGroup={onJoinGroup}
           onExitGroup={onExitGroup}

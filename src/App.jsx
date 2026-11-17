@@ -60,14 +60,10 @@ import {
   syncAllLocalMemorials,
   setMeetupRoom,
   getMeetupRoom,
-  setMeetupNickname,
-  getMeetupNickname,
   isMultiplayerOnline,
   setMultiplayerOnline,
-  updateAccountDisplayName,
-  validateTextOnlyDisplayName,
-  isDisplayNameTaken,
   getRegisteredAccounts,
+  getUserRestrictionStatus,
   getAdminConfig,
   getAdminNotifications,
   getActiveGroup,
@@ -277,18 +273,35 @@ export default function App() {
   const [pendingCreate, setPendingCreate] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [editAccountName, setEditAccountName] = useState(() => currentUser?.name || '');
+  const [accountsList, setAccountsList] = useState(getRegisteredAccounts);
+  const [globalNotice, setGlobalNotice] = useState('');
+
+  const showGlobalNotice = (msg) => {
+    setGlobalNotice(msg);
+    setTimeout(() => setGlobalNotice(''), 4200);
+  };
+
+  const moderationStatus = useMemo(
+    () => getUserRestrictionStatus(currentUser),
+    [currentUser, accountsList]
+  );
 
   useEffect(() => {
-    setEditAccountName(currentUser?.name || '');
-  }, [currentUser]);
+    if (currentUser && moderationStatus.loginBanned) {
+      setCurrentUser(null);
+      setSelectedMemorialId(null);
+      setShowCreateModal(false);
+      setShowUserMenu(false);
+      showGlobalNotice(
+        `⛔ Your account is banned from logging in (${moderationStatus.loginBanLabel}).`
+      );
+    }
+  }, [currentUser, moderationStatus]);
 
   const [mpPeers, setMpPeers] = useState([]);
   const [mpStatus, setMpStatus] = useState('connecting');
   const [mpRoomCode, setMpRoomCode] = useState(getMeetupRoom);
-  const [mpNickname, setMpNickname] = useState(
-    () => getMeetupNickname() || currentUser?.name?.split(' ')[0] || 'Visitor'
-  );
+  const mpNickname = currentUser?.name?.split(' ')[0] || currentUser?.username || 'Visitor';
   const [mpChatLog, setMpChatLog] = useState([]);
   const [remoteWorldEvent, setRemoteWorldEvent] = useState(null);
   const memorialsRef = useRef(memorials);
@@ -477,6 +490,12 @@ export default function App() {
       setShowAuthModal(true);
       return;
     }
+    if (moderationStatus.vigilPaused) {
+      showGlobalNotice(
+        `⏸️ Visiting & taking actions on vigils is paused by Admin (${moderationStatus.vigilLabel}).`
+      );
+      return;
+    }
     setSelectedMemorialId(memorialId);
   };
 
@@ -484,6 +503,12 @@ export default function App() {
     if (!currentUser) {
       setPendingCreate(true);
       setShowAuthModal(true);
+      return;
+    }
+    if (moderationStatus.vigilPaused) {
+      showGlobalNotice(
+        `⏸️ Vigil actions are paused by Admin (${moderationStatus.vigilLabel}).`
+      );
       return;
     }
     setShowCreateModal(true);
@@ -515,20 +540,9 @@ export default function App() {
     setTimeout(() => setAccountMenuFeedback(''), 3200);
   };
 
-  const handleSaveAccountName = (e) => {
-    e.preventDefault();
-    if (!currentUser) return;
-    const res = updateAccountDisplayName(currentUser.username || currentUser.email, editAccountName);
-    if (!res.ok) {
-      setAccountMenuFeedback(res.error);
-      setTimeout(() => setAccountMenuFeedback(''), 3200);
-      return;
-    }
-    setAccountMenuFeedback('');
-    setCurrentUser((prev) => (prev ? { ...prev, name: res.user.name } : prev));
-    if (!getMeetupNickname()) {
-      setMpNickname(res.user.name.split(' ')[0] || 'Visitor');
-    }
+  const showLockedNameNotice = () => {
+    setAccountMenuFeedback('Name and display name are permanent and cannot be changed.');
+    setTimeout(() => setAccountMenuFeedback(''), 3200);
   };
 
   const handleToggleMpOnline = () => {
@@ -564,9 +578,6 @@ export default function App() {
       }
     } else {
       syncAvatarGenderToStorage(gender, true);
-    }
-    if (!getMeetupNickname()) {
-      setMpNickname(enriched.name.split(' ')[0] || 'Visitor');
     }
     setShowAuthModal(false);
     if (pendingMemorialId) {
@@ -724,6 +735,9 @@ export default function App() {
       onGroupChatChange: (msgs) => {
         setGroupChatLog(msgs);
       },
+      onAccountsChange: (list) => {
+        setAccountsList(list);
+      },
       onRemoteEvent: (evt) => {
         if (!evt) return;
         if (evt.kind === 'offering' && evt.memorialId && evt.offering) {
@@ -790,6 +804,10 @@ export default function App() {
   }, []);
 
   const handleSendMpChat = (text) => {
+    if (moderationStatus.muted) {
+      showGlobalNotice(`🔇 You are muted by Admin (${moderationStatus.muteLabel}) and cannot chat.`);
+      return;
+    }
     const msg = sendMultiplayerChat(text);
     if (msg) {
       setMpChatLog((prev) => [...prev, msg].slice(-40));
@@ -797,6 +815,10 @@ export default function App() {
   };
 
   const handleSendGroupChat = (text) => {
+    if (moderationStatus.muted) {
+      showGlobalNotice(`🔇 You are muted by Admin (${moderationStatus.muteLabel}) and cannot message groups.`);
+      return;
+    }
     sendGroupChatMessage(text);
   };
 
@@ -826,27 +848,12 @@ export default function App() {
     setMpChatLog([]);
   };
 
-  const handleChangeMpNickname = (nextName) => {
-    const dnCheck = validateTextOnlyDisplayName(nextName);
-    if (!dnCheck.ok) {
-      return { ok: false, error: dnCheck.error };
-    }
-    const myLower = (currentUser?.username || '').toLowerCase();
-    if (isDisplayNameTaken(dnCheck.clean, myLower)) {
-      return { ok: false, error: `Display name "${dnCheck.clean}" is already taken.` };
-    }
-    if (currentUser) {
-      const res = updateAccountDisplayName(currentUser.username || currentUser.email, dnCheck.clean);
-      if (!res.ok) return res;
-      setCurrentUser((prev) => (prev ? { ...prev, name: res.user.name } : prev));
-    }
-    const saved = setMeetupNickname(dnCheck.clean);
-    setMpNickname(saved || currentUser?.name?.split(' ')[0] || 'Visitor');
-    return { ok: true };
-  };
-
   const handlePerformOffering = (memorialId, offering) => {
-    const visitorName = mpNickname || currentUser?.name || 'Kind Visitor';
+    if (moderationStatus.vigilPaused) {
+      showGlobalNotice(`⏸️ Vigil actions are paused by Admin (${moderationStatus.vigilLabel}).`);
+      return;
+    }
+    const visitorName = currentUser?.name || mpNickname || 'Kind Visitor';
     const current = memorialsRef.current.find((m) => m.id === memorialId);
     if (!current) return;
     const updated = buildWithOffering(current, offering, visitorName);
@@ -861,7 +868,15 @@ export default function App() {
   };
 
   const handleAddTribute = (memorialId, message) => {
-    const author = mpNickname || currentUser?.name || 'Kind Visitor';
+    if (moderationStatus.vigilPaused || moderationStatus.muted) {
+      showGlobalNotice(
+        moderationStatus.vigilPaused
+          ? `⏸️ Giving vigil messages & visiting is paused by Admin (${moderationStatus.vigilLabel}).`
+          : `🔇 You are muted by Admin (${moderationStatus.muteLabel}) and cannot leave messages.`
+      );
+      return;
+    }
+    const author = currentUser?.name || mpNickname || 'Kind Visitor';
     const current = memorialsRef.current.find((m) => m.id === memorialId);
     if (!current) return;
     const updated = buildWithTribute(current, message, author);
@@ -876,6 +891,10 @@ export default function App() {
   };
 
   const handleAddMemory = (memorialId, memory) => {
+    if (moderationStatus.vigilPaused) {
+      showGlobalNotice(`⏸️ Vigil actions are paused by Admin (${moderationStatus.vigilLabel}).`);
+      return;
+    }
     const current = memorialsRef.current.find((m) => m.id === memorialId);
     if (!current) return;
     const updated = {
@@ -888,6 +907,10 @@ export default function App() {
   };
 
   const handleUpdateMemorial = (memorialId, patch) => {
+    if (moderationStatus.vigilPaused) {
+      showGlobalNotice(`⏸️ Vigil actions are paused by Admin (${moderationStatus.vigilLabel}).`);
+      return;
+    }
     const current = memorialsRef.current.find((m) => m.id === memorialId);
     if (!current) return;
     const updated = { ...current, ...patch, updatedAt: Date.now() };
@@ -896,6 +919,10 @@ export default function App() {
   };
 
   const handleCreateMemorial = (newMemorial) => {
+    if (moderationStatus.vigilPaused) {
+      showGlobalNotice(`⏸️ Vigil creation & actions are paused by Admin (${moderationStatus.vigilLabel}).`);
+      return;
+    }
     const withTs = { ...newMemorial, updatedAt: Date.now() };
     const nextList = normalizeAndDeduplicateMemorials([withTs, ...memorialsRef.current]);
     const finalMemorial = nextList.find((m) => m.id === withTs.id) || withTs;
@@ -1112,24 +1139,20 @@ export default function App() {
                   </div>
                 </div>
 
-                <form onSubmit={handleSaveAccountName} style={{ display: 'flex', gap: 5 }}>
-                  <input
-                    type="text"
-                    className="input-control"
-                    maxLength={32}
-                    value={editAccountName}
-                    onChange={(e) => setEditAccountName(e.target.value)}
-                    placeholder="Text-only display name"
-                    style={{ padding: '5px 8px', fontSize: '0.76rem' }}
-                  />
+                <div>
+                  <div className="field-label" style={{ marginBottom: 4 }}>
+                    Display Name (Permanent)
+                  </div>
                   <button
-                    type="submit"
+                    type="button"
                     className="btn-ghost"
-                    style={{ padding: '5px 9px', fontSize: '0.74rem' }}
+                    style={{ width: '100%', justifyContent: 'space-between', padding: '6px 9px', fontSize: '0.76rem' }}
+                    onClick={showLockedNameNotice}
                   >
-                    Save
+                    <span>{currentUser.name || currentUser.username}</span>
+                    <Lock size={12} />
                   </button>
-                </form>
+                </div>
 
                 {accountMenuFeedback && (
                   <div className="armtip-notif" style={{ fontSize: '0.72rem', padding: '6px 8px' }}>
@@ -1179,6 +1202,23 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {globalNotice && (
+        <div
+          className="armtip-notif"
+          style={{
+            position: 'fixed',
+            top: 72,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 90,
+            maxWidth: '92vw',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          }}
+        >
+          {globalNotice}
+        </div>
+      )}
 
       <main className="main-content">
         {/* Hero Banner */}
@@ -1475,7 +1515,7 @@ export default function App() {
             onExitGroup={handleExitGroup}
             onSendEmote={sendMultiplayerEmote}
             onChangeMpRoom={handleChangeMpRoom}
-            onChangeMpNickname={handleChangeMpNickname}
+            moderationStatus={moderationStatus}
             onChangeRoom={(r) => {
               setActiveRoom(r);
               setActiveTab(r);
@@ -1523,7 +1563,7 @@ export default function App() {
             onExitGroup={handleExitGroup}
             onSendEmote={sendMultiplayerEmote}
             onChangeMpRoom={handleChangeMpRoom}
-            onChangeMpNickname={handleChangeMpNickname}
+            moderationStatus={moderationStatus}
             onChangeRoom={(r) => {
               setActiveRoom(r);
               setActiveTab(r);
@@ -1698,8 +1738,9 @@ export default function App() {
           onSetAdminAuthenticated={setAdminAuthenticated}
           adminConfig={adminConfig}
           notifications={notifications}
+          accountsList={accountsList}
           totalMemorials={visibleMemorials.length}
-          totalAccounts={getRegisteredAccounts().length}
+          totalAccounts={accountsList.length}
           onClose={() => setShowAdminModal(false)}
         />
       )}

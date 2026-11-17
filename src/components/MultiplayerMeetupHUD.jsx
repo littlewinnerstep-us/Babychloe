@@ -35,7 +35,8 @@ export default function MultiplayerMeetupHUD({
   onToggleOutsideChat,
   onToggleFriend,
   onChangeMpRoom,
-  onChangeMpNickname,
+  isMuted = false,
+  muteLabel = '',
   onCreateGroup,
   onJoinGroup,
   onExitGroup,
@@ -48,22 +49,16 @@ export default function MultiplayerMeetupHUD({
   const [chatInput, setChatInput] = useState('');
   const [groupChatInput, setGroupChatInput] = useState('');
   const [roomInput, setRoomInput] = useState(mpRoomCode);
-  const [nickInput, setNickInput] = useState(mpNickname);
   const [newGroupName, setNewGroupName] = useState('');
   const [joinGroupCode, setJoinGroupCode] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedGroupCode, setCopiedGroupCode] = useState(false);
-  const [nickFeedback, setNickFeedback] = useState('');
   const chatEndRef = useRef(null);
   const groupChatEndRef = useRef(null);
 
   useEffect(() => {
     setRoomInput(mpRoomCode);
   }, [mpRoomCode]);
-
-  useEffect(() => {
-    setNickInput(mpNickname);
-  }, [mpNickname]);
 
   const combinedFeed = useMemo(() => {
     const outside = showOutsideChat
@@ -115,18 +110,6 @@ export default function MultiplayerMeetupHUD({
   const handleRoomSubmit = (e) => {
     e.preventDefault();
     if (onChangeMpRoom) onChangeMpRoom(roomInput);
-  };
-
-  const handleNickSubmit = (e) => {
-    e.preventDefault();
-    if (!onChangeMpNickname) return;
-    const res = onChangeMpNickname(nickInput);
-    if (res && res.error) {
-      setNickFeedback(res.error);
-      setTimeout(() => setNickFeedback(''), 3000);
-    } else {
-      setNickFeedback('');
-    }
   };
 
   const handleCopyInvite = () => {
@@ -183,11 +166,14 @@ export default function MultiplayerMeetupHUD({
             type="text"
             maxLength={140}
             value={chatInput}
+            disabled={isMuted}
             onChange={(e) => setChatInput(e.target.value)}
             placeholder={
-              activeGroup
-                ? `🔒 Group "${activeGroup.name}" chat (${groupMembers.length + 1} members)...`
-                : `💬 Chat in ${mpRoomCode} (${mpPeers.length + 1} online)...`
+              isMuted
+                ? `🔇 Muted by Admin (${muteLabel || 'Active'})`
+                : activeGroup
+                  ? `🔒 Group "${activeGroup.name}" chat (${groupMembers.length + 1} members)...`
+                  : `💬 Chat in ${mpRoomCode} (${mpPeers.length + 1} online)...`
             }
             aria-label="Park meetup chat message"
           />
@@ -252,27 +238,6 @@ export default function MultiplayerMeetupHUD({
 
           {drawerTab === 'meetup' ? (
             <div className="form-grid" style={{ gap: 8 }}>
-              {/* Display Name */}
-              <form onSubmit={handleNickSubmit} className="mp-inline-form">
-                <input
-                  type="text"
-                  className="input-control"
-                  maxLength={32}
-                  value={nickInput}
-                  onChange={(e) => setNickInput(e.target.value)}
-                  placeholder="Text-only display name"
-                  style={{ padding: '6px 10px', fontSize: '0.78rem' }}
-                />
-                <button type="submit" className="btn-ghost" style={{ padding: '5px 10px', fontSize: '0.74rem' }}>
-                  Name
-                </button>
-              </form>
-              {nickFeedback && (
-                <div className="armtip-notif" style={{ fontSize: '0.72rem', padding: '5px 8px' }}>
-                  {nickFeedback}
-                </div>
-              )}
-
               {/* Meetup Room Code + Invite Link */}
               <form onSubmit={handleRoomSubmit} className="mp-inline-form">
                 <input
@@ -569,9 +534,14 @@ export default function MultiplayerMeetupHUD({
                       type="text"
                       className="input-control"
                       maxLength={240}
+                      disabled={isMuted}
                       value={groupChatInput}
                       onChange={(e) => setGroupChatInput(e.target.value)}
-                      placeholder={`Message ${activeGroup.name} members...`}
+                      placeholder={
+                        isMuted
+                          ? `🔇 Muted by Admin (${muteLabel || 'Active'})`
+                          : `Message ${activeGroup.name} members...`
+                      }
                       style={{ padding: '6px 10px', fontSize: '0.78rem' }}
                     />
                     <button type="submit" className="btn-primary" style={{ padding: '6px 11px', fontSize: '0.75rem' }}>
