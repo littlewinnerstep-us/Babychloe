@@ -662,6 +662,7 @@ export function normalizeAndDeduplicateMemorials(memorials) {
       species: sp,
       space,
       locationCode: nextCode,
+      visitsCount: Number.isFinite(Number(m.visitsCount)) ? Number(m.visitsCount) : 0,
       activeOfferings: Array.isArray(m.activeOfferings) ? m.activeOfferings : [],
       tributes: Array.isArray(m.tributes) ? m.tributes : [],
       memories: Array.isArray(m.memories) ? m.memories : [],

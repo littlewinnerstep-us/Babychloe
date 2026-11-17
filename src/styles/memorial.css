@@ -1753,6 +1753,41 @@ select {
   white-space: nowrap;
 }
 
+@keyframes inviteBlinkPulse {
+  0%, 100% {
+    border-color: rgba(255, 213, 126, 0.95);
+    box-shadow: 0 0 14px rgba(255, 213, 126, 0.45);
+    background: rgba(26, 36, 30, 0.94);
+  }
+  50% {
+    border-color: rgba(130, 245, 175, 0.95);
+    box-shadow: 0 0 18px rgba(130, 245, 175, 0.55);
+    background: rgba(38, 48, 34, 0.96);
+  }
+}
+
+.world-group-invite-banner {
+  position: absolute;
+  top: 84px;
+  left: 10px;
+  z-index: 16;
+  width: min(270px, calc(100% - 20px));
+  padding: 9px 11px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 213, 126, 0.9);
+  color: #fff8eb;
+  backdrop-filter: blur(8px);
+  animation: inviteBlinkPulse 1.15s ease-in-out infinite;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notif-bell-btn.has-invite {
+  border-color: #ffd57e;
+  animation: inviteBlinkPulse 1.2s ease-in-out infinite;
+}
+
 .world-nearby-note {
   position: absolute;
   bottom: 62px;

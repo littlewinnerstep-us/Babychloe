@@ -13,6 +13,7 @@ const ACCOUNTS_TOPIC_PREFIX = 'evergreen-paws-park/v2/accounts/';
 const ADMIN_CONFIG_TOPIC = 'evergreen-paws-park/v2/admin/config';
 const ADMIN_NOTIF_TOPIC_PREFIX = 'evergreen-paws-park/v2/admin/notif/';
 const GROUP_TOPIC_PREFIX = 'evergreen-paws-park/v2/group/';
+const GROUP_INVITE_TOPIC_PREFIX = 'evergreen-paws-park/v2/group-invite/';
 const STORAGE_ROOM_KEY = 'evergreen_paws_meetup_room_v1';
 const STORAGE_NICKNAME_KEY = 'evergreen_paws_nickname_v1';
 const STORAGE_ONLINE_KEY = 'evergreen_paws_mp_online_v1';
@@ -21,8 +22,10 @@ const STORAGE_ADMIN_CONFIG_KEY = 'evergreen_paws_admin_config_v1';
 const STORAGE_ADMIN_NOTIFS_KEY = 'evergreen_paws_admin_notifs_v1';
 const STORAGE_GROUP_KEY = 'evergreen_paws_group_v1';
 const STORAGE_GROUP_CHAT_KEY = 'evergreen_paws_group_chat_v1';
+const STORAGE_GROUP_INVITES_KEY = 'evergreen_paws_group_invites_v1';
 const PEER_TIMEOUT_MS = 45000;
 export const GROUP_MSG_TTL_MS = 23 * 60 * 1000;
+export const GROUP_INVITE_TTL_MS = 30 * 60 * 1000;
 const STARTER_IDS = new Set(['mem-barnaby', 'mem-mochi', 'mem-koda', 'mem-clover', 'mem-luna', 'mem-yuzu', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6']);
 
 const myPeerId = `mp_${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`;
@@ -203,6 +206,30 @@ let groupChatMessages = (() => {
   return [];
 })();
 
+let currentUserIdentity = { username: '', name: '' };
+const groupInvitesMap = new Map(); // id -> invite
+
+(() => {
+  try {
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem(STORAGE_GROUP_INVITES_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          const now = Date.now();
+          arr.forEach((inv) => {
+            if (inv && inv.id && Number(inv.expiresAt) > now) {
+              groupInvitesMap.set(inv.id, inv);
+            }
+          });
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+})();
+
 let callbacks = {
   onPeersChange: null,
   onChatMessage: null,
@@ -214,6 +241,7 @@ let callbacks = {
   onGroupChatChange: null,
   onGroupChange: null,
   onAccountsChange: null,
+  onGroupInvitesChange: null,
 };
 
 const peersMap = new Map(); // peerId -> peer state
@@ -555,6 +583,17 @@ function handleIncomingPayload(msg) {
     return;
   }
 
+  if (msg.type === 'group_invite' && msg.invite && msg.invite.id) {
+    const inv = msg.invite;
+    const now = Date.now();
+    if (!Number.isFinite(inv.expiresAt) || inv.expiresAt <= now) return;
+    if (!isInviteTargetedToMe(inv)) return;
+    groupInvitesMap.set(inv.id, inv);
+    persistGroupInvites();
+    notifyGroupInvitesChanged();
+    return;
+  }
+
   if (msg.type === 'group_chat') {
     if (!activeGroup || !msg.groupId || msg.groupId !== activeGroup.id) return;
     if (!isOnlineMode) return;
@@ -744,6 +783,7 @@ function processMqttBuffer(entry) {
         entry.ws.send(buildMqttSubscribe(4, `${ACCOUNTS_TOPIC_PREFIX}+`));
         entry.ws.send(buildMqttSubscribe(5, ADMIN_CONFIG_TOPIC));
         entry.ws.send(buildMqttSubscribe(6, `${ADMIN_NOTIF_TOPIC_PREFIX}+`));
+        entry.ws.send(buildMqttSubscribe(8, `${GROUP_INVITE_TOPIC_PREFIX}+`));
         if (activeGroup?.id) {
           entry.ws.send(buildMqttSubscribe(7, `${GROUP_TOPIC_PREFIX}${activeGroup.id}`));
         }
@@ -884,6 +924,7 @@ export function initMultiplayer(nextCallbacks = {}) {
       }
       if (changed) notifyPeersChanged();
       pruneExpiredGroupMessages();
+      pruneExpiredGroupInvites();
     }, 3000);
   }
 
@@ -1262,6 +1303,138 @@ export function getActiveGroup() {
 
 export function getGroupChatHistory() {
   return [...pruneExpiredGroupMessages()];
+}
+
+function persistGroupInvites() {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(
+        STORAGE_GROUP_INVITES_KEY,
+        JSON.stringify(Array.from(groupInvitesMap.values()))
+      );
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function pruneExpiredGroupInvites() {
+  const now = Date.now();
+  let removed = false;
+  for (const [id, inv] of groupInvitesMap.entries()) {
+    if (!inv || !Number.isFinite(inv.expiresAt) || inv.expiresAt <= now) {
+      groupInvitesMap.delete(id);
+      removed = true;
+    }
+  }
+  if (removed) {
+    persistGroupInvites();
+    notifyGroupInvitesChanged();
+  }
+}
+
+function notifyGroupInvitesChanged() {
+  if (typeof callbacks.onGroupInvitesChange === 'function') {
+    callbacks.onGroupInvitesChange(getPendingGroupInvites());
+  }
+}
+
+function isInviteTargetedToMe(inv) {
+  if (!inv) return false;
+  if (inv.toPeerId && inv.toPeerId === myPeerId) return true;
+  const toUser = String(inv.toUsername || '').trim().toLowerCase();
+  const toName = String(inv.toName || '').trim().toLowerCase();
+  const myUser = String(currentUserIdentity.username || '').trim().toLowerCase();
+  const myFull = String(currentUserIdentity.name || '').trim().toLowerCase();
+  const myFirst = myFull.split(/\s+/)[0] || '';
+  const localFirst = String(localState.name || '').trim().toLowerCase();
+  if (myUser && (toUser === myUser || toName === myUser)) return true;
+  if (myFull && (toName === myFull || toName === myFirst || toUser === myFull)) return true;
+  if (!myUser && !myFull && localFirst && localFirst !== 'visitor' && toName === localFirst) return true;
+  return false;
+}
+
+export function setCurrentUserIdentity(user) {
+  currentUserIdentity = {
+    username: String(user?.username || '').trim(),
+    name: String(user?.name || '').trim(),
+  };
+  pruneExpiredGroupInvites();
+  notifyGroupInvitesChanged();
+}
+
+export function getPendingGroupInvites() {
+  pruneExpiredGroupInvites();
+  const now = Date.now();
+  return Array.from(groupInvitesMap.values())
+    .filter((inv) => inv && inv.expiresAt > now)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+export function sendGroupInvite({
+  toName = '',
+  toUsername = '',
+  toPeerId = '',
+  fromName = '',
+  fromUsername = '',
+  groupName = '',
+} = {}) {
+  const cleanTargetName = String(toName || toUsername || '').trim();
+  if (!cleanTargetName && !toPeerId) {
+    return { ok: false, error: 'Friend name or username is required.' };
+  }
+  const senderLabel = String(fromName || localState.name || 'Friend').trim() || 'Friend';
+  let targetGroup = activeGroup;
+  if (!targetGroup || !targetGroup.id) {
+    targetGroup = createGroupChat(groupName || `${senderLabel.split(' ')[0]}'s Circle`);
+  }
+  const now = Date.now();
+  seqCounter += 1;
+  const id = `ginv-${now}-${myPeerId}-${seqCounter}`;
+  const invite = {
+    id,
+    groupId: targetGroup.id,
+    groupName: targetGroup.name,
+    fromName: senderLabel,
+    fromUsername: String(fromUsername || currentUserIdentity.username || '').trim(),
+    fromPeerId: myPeerId,
+    toName: cleanTargetName,
+    toUsername: String(toUsername || '').trim(),
+    toPeerId: String(toPeerId || '').trim(),
+    createdAt: now,
+    expiresAt: now + GROUP_INVITE_TTL_MS,
+  };
+  const payload = {
+    type: 'group_invite',
+    peerId: myPeerId,
+    msgId: `${myPeerId}_${seqCounter}`,
+    ts: now,
+    invite,
+  };
+  markSeen(payload.msgId);
+  broadcastGlobalTopic(`${GROUP_INVITE_TOPIC_PREFIX}${id}`, payload, false);
+  return { ok: true, invite, group: targetGroup };
+}
+
+export function acceptGroupInvite(inviteId) {
+  const inv = groupInvitesMap.get(inviteId);
+  if (!inv || inv.expiresAt <= Date.now()) {
+    groupInvitesMap.delete(inviteId);
+    persistGroupInvites();
+    notifyGroupInvitesChanged();
+    return null;
+  }
+  groupInvitesMap.delete(inviteId);
+  persistGroupInvites();
+  notifyGroupInvitesChanged();
+  return joinGroupChat(inv.groupId, inv.groupName);
+}
+
+export function ignoreGroupInvite(inviteId) {
+  if (groupInvitesMap.delete(inviteId)) {
+    persistGroupInvites();
+    notifyGroupInvitesChanged();
+  }
 }
 
 function subscribeGroupTopic(groupId) {

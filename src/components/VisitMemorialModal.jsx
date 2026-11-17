@@ -194,6 +194,9 @@ export default function VisitMemorialModal({
                 {memorial.visibility === 'private' ? <Lock size={11} /> : <Globe size={11} />}
                 {memorial.visibility === 'private' ? 'Private Sanctuary' : 'Public Park'}
               </span>
+              <span className="trait-tag" title="Total visits to this pet vigil">
+                👣 {memorial.visitsCount || 0} {Number(memorial.visitsCount || 0) === 1 ? 'Visit' : 'Visits'}
+              </span>
             </div>
             <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.85rem', margin: 0 }}>
               {memorial.name}

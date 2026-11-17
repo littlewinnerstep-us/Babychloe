@@ -113,11 +113,16 @@ export default function ParkWorld2D({
   showOutsideChat = true,
   favorites = [],
   friends = [],
+  groupInvites = [],
+  accountsList = [],
   remoteWorldEvent = null,
   onToggleMpOnline,
   onToggleOutsideChat,
   onToggleFavorite,
   onToggleFriend,
+  onInviteFriendToGroup,
+  onAcceptInvite,
+  onIgnoreInvite,
   onSendChat,
   onSendGroupChat,
   onCreateGroup,
@@ -1856,6 +1861,7 @@ export default function ParkWorld2D({
               <div className="proximity-title-row">
                 <strong>{inspectedMemorial.name || 'Beloved Pet'}</strong>
                 <span className="location-badge">{inspectedMemorial.locationCode || 'Sanctuary'}</span>
+                <span className="location-badge">👣 {inspectedMemorial.visitsCount || 0} visits</span>
               </div>
               <p className="proximity-epitaph">“{inspectedMemorial.epitaph || 'Forever loved and remembered'}”</p>
               {armtipText && <div className="armtip-notif">{armtipText}</div>}
@@ -1941,6 +1947,9 @@ export default function ParkWorld2D({
           groupChatLog={groupChatLog}
           showOutsideChat={showOutsideChat}
           friends={friends}
+          groupInvites={groupInvites}
+          accountsList={accountsList}
+          currentUser={currentUser}
           currentRoom={activeRoom}
           activeSpecies={activeSpecies}
           speciesEmoji={getSpeciesEmoji(activeSpecies)}
@@ -1948,6 +1957,9 @@ export default function ParkWorld2D({
           onToggleMpOnline={onToggleMpOnline}
           onToggleOutsideChat={onToggleOutsideChat}
           onToggleFriend={onToggleFriend}
+          onInviteFriendToGroup={onInviteFriendToGroup}
+          onAcceptInvite={onAcceptInvite}
+          onIgnoreInvite={onIgnoreInvite}
           onChangeMpRoom={onChangeMpRoom}
           isMuted={Boolean(moderationStatus?.muted)}
           muteLabel={moderationStatus?.muteLabel || ''}

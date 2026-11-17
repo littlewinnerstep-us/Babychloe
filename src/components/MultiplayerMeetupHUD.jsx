@@ -29,6 +29,9 @@ export default function MultiplayerMeetupHUD({
   groupChatLog = [],
   showOutsideChat = true,
   friends = [],
+  groupInvites = [],
+  accountsList = [],
+  currentUser = null,
   currentRoom = 'tombstone',
   activeSpecies = 'Dog',
   speciesEmoji = '🐕',
@@ -36,6 +39,9 @@ export default function MultiplayerMeetupHUD({
   onToggleMpOnline,
   onToggleOutsideChat,
   onToggleFriend,
+  onInviteFriendToGroup,
+  onAcceptInvite,
+  onIgnoreInvite,
   isMuted = false,
   muteLabel = '',
   onCreateGroup,
@@ -46,15 +52,27 @@ export default function MultiplayerMeetupHUD({
   onSendEmote,
   onWalkToPeer,
 }) {
-  const [drawerTab, setDrawerTab] = useState('meetup'); // 'meetup' | 'group'
+  const [drawerTab, setDrawerTab] = useState('meetup'); // 'meetup' | 'friends' | 'group'
   const [chatInput, setChatInput] = useState('');
   const [groupChatInput, setGroupChatInput] = useState('');
+  const [friendInput, setFriendInput] = useState('');
+  const [inviteFeedback, setInviteFeedback] = useState('');
   const [newGroupName, setNewGroupName] = useState('');
   const [joinGroupCode, setJoinGroupCode] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedGroupCode, setCopiedGroupCode] = useState(false);
   const chatEndRef = useRef(null);
   const groupChatEndRef = useRef(null);
+
+  const showInviteFeedback = (msg) => {
+    setInviteFeedback(msg);
+    setTimeout(() => setInviteFeedback(''), 3200);
+  };
+
+  const formatMinsLeft = (expiresAt) => {
+    const mins = Math.max(1, Math.ceil((Number(expiresAt || 0) - Date.now()) / 60000));
+    return `${mins}m`;
+  };
 
   const combinedFeed = useMemo(() => {
     const outside = showOutsideChat
@@ -158,6 +176,40 @@ export default function MultiplayerMeetupHUD({
         <span>{activeSpecies} Gates</span>
       </div>
 
+      {/* Left-Screen Blinking Group Chat Invite Banner (Accept / Ignore, 30m auto-cancel) */}
+      {groupInvites.length > 0 && (
+        <div className="world-group-invite-banner" role="alert" aria-live="polite">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, fontSize: '0.76rem' }}>
+            <strong>🔔 Group Chat Invite</strong>
+            <span style={{ fontSize: '0.68rem', color: '#ffd57e' }}>
+              ⏱ {formatMinsLeft(groupInvites[0].expiresAt)} left
+            </span>
+          </div>
+          <div style={{ fontSize: '0.74rem', color: '#ece7db', lineHeight: 1.3 }}>
+            <strong>{groupInvites[0].fromName}</strong> invited you to{' '}
+            <strong>“{groupInvites[0].groupName}”</strong>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              type="button"
+              className="btn-primary"
+              style={{ flex: 1, justifyContent: 'center', padding: '4px 8px', fontSize: '0.72rem' }}
+              onClick={() => onAcceptInvite && onAcceptInvite(groupInvites[0].id)}
+            >
+              ✅ Accept
+            </button>
+            <button
+              type="button"
+              className="btn-ghost"
+              style={{ flex: 1, justifyContent: 'center', padding: '4px 8px', fontSize: '0.72rem' }}
+              onClick={() => onIgnoreInvite && onIgnoreInvite(groupInvites[0].id)}
+            >
+              ✖️ Ignore
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Latest 3 Chat Rows in Main View (Public & Group Chat) */}
       {!hideBottomChatBar && latestThreeChat.length > 0 && (
         <div className="world-chat-preview-3rows" aria-label="Recent chat messages">
@@ -239,16 +291,29 @@ export default function MultiplayerMeetupHUD({
               className={`modal-tab ${drawerTab === 'meetup' ? 'active' : ''}`}
               onClick={() => setDrawerTab('meetup')}
             >
-              🌐 Room &amp; Visitors
+              🌐 Room
+            </button>
+            <button
+              type="button"
+              className={`modal-tab ${drawerTab === 'friends' ? 'active' : ''}`}
+              onClick={() => setDrawerTab('friends')}
+            >
+              🤝 Friends ({friends.length})
             </button>
             <button
               type="button"
               className={`modal-tab ${drawerTab === 'group' ? 'active' : ''}`}
               onClick={() => setDrawerTab('group')}
             >
-              🔒 Group Chat {activeGroup ? `(${groupMembers.length + 1})` : ''}
+              🔒 Group {activeGroup ? `(${groupMembers.length + 1})` : ''}
             </button>
           </div>
+
+          {inviteFeedback && (
+            <div className="armtip-notif" style={{ fontSize: '0.72rem', padding: '5px 8px', marginBottom: 6 }}>
+              {inviteFeedback}
+            </div>
+          )}
 
           {drawerTab === 'meetup' ? (
             <div className="form-grid" style={{ gap: 8 }}>
@@ -327,6 +392,20 @@ export default function MultiplayerMeetupHUD({
                               title={isFriend ? 'Friend added (tap to remove)' : 'Add Friend'}
                             >
                               {isFriend ? <UserCheck size={10} /> : <UserPlus size={10} />}
+                            </button>
+                          )}
+                          {onInviteFriendToGroup && (
+                            <button
+                              type="button"
+                              className="btn-ghost"
+                              style={{ padding: '3px 6px', fontSize: '0.68rem' }}
+                              onClick={() => {
+                                onInviteFriendToGroup(peer.name, peer);
+                                showInviteFeedback(`📨 Invited ${peer.name} to Group Chat (30m)`);
+                              }}
+                              title={`Invite ${peer.name} to Group Chat`}
+                            >
+                              🔒+
                             </button>
                           )}
                           <button
@@ -412,6 +491,120 @@ export default function MultiplayerMeetupHUD({
                   <Send size={12} />
                 </button>
               </form>
+            </div>
+          ) : drawerTab === 'friends' ? (
+            <div className="form-grid" style={{ gap: 8 }}>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const clean = friendInput.trim();
+                  if (!clean) return;
+                  if (onToggleFriend) {
+                    const exists = friends.some((f) => f.toLowerCase() === clean.toLowerCase());
+                    if (!exists) onToggleFriend(clean);
+                    showInviteFeedback(exists ? `${clean} is already your friend.` : `🤝 Added ${clean} as Friend!`);
+                  }
+                  setFriendInput('');
+                }}
+                className="mp-inline-form"
+              >
+                <input
+                  type="text"
+                  className="input-control"
+                  maxLength={32}
+                  value={friendInput}
+                  onChange={(e) => setFriendInput(e.target.value)}
+                  placeholder="Friend name or @username..."
+                  style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                />
+                <button type="submit" className="btn-primary" style={{ padding: '5px 10px', fontSize: '0.74rem' }}>
+                  <UserPlus size={12} /> Add
+                </button>
+              </form>
+
+              <div className="field-label" style={{ marginBottom: 0 }}>
+                Your Friends ({friends.length})
+              </div>
+              <div className="mp-visitors-list" style={{ maxHeight: 155 }}>
+                {friends.length === 0 ? (
+                  <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', padding: '4px 2px' }}>
+                    No friends added yet. Add someone above or tap a visitor in Room / Memorials.
+                  </div>
+                ) : (
+                  friends.map((fr) => (
+                    <div key={fr} className="mp-visitor-row">
+                      <span>🤝 <strong>{fr}</strong></span>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {onInviteFriendToGroup && (
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            style={{ padding: '3px 8px', fontSize: '0.68rem' }}
+                            onClick={() => {
+                              onInviteFriendToGroup(fr);
+                              showInviteFeedback(`📨 Group Chat invite sent to ${fr} (expires 30m)`);
+                            }}
+                            title="Invite friend to Group Chat without group code"
+                          >
+                            🔒 Invite Group
+                          </button>
+                        )}
+                        {onToggleFriend && (
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            style={{ padding: '3px 6px', fontSize: '0.68rem' }}
+                            onClick={() => onToggleFriend(fr)}
+                            title="Remove Friend"
+                          >
+                            <X size={10} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {accountsList.length > 0 && (
+                <>
+                  <div className="field-label" style={{ marginBottom: 0 }}>
+                    Community Visitors
+                  </div>
+                  <div className="mp-visitors-list" style={{ maxHeight: 110 }}>
+                    {accountsList
+                      .filter((a) => {
+                        const myLower = (currentUser?.username || '').toLowerCase();
+                        return a && a.usernameLower !== 'admin' && a.usernameLower !== myLower;
+                      })
+                      .slice(0, 12)
+                      .map((acc) => {
+                        const label = acc.name || acc.username;
+                        const isFr = friends.some(
+                          (f) => f.toLowerCase() === label.toLowerCase() || f.toLowerCase() === (acc.username || '').toLowerCase()
+                        );
+                        return (
+                          <div key={acc.usernameLower || label} className="mp-visitor-row">
+                            <span>
+                              {acc.gender === 'boy' ? '👦' : '👩'} {label}{' '}
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem' }}>@{acc.username}</span>
+                            </span>
+                            {onToggleFriend && (
+                              <button
+                                type="button"
+                                className={isFr ? 'btn-primary' : 'btn-ghost'}
+                                style={{ padding: '3px 7px', fontSize: '0.68rem' }}
+                                onClick={() => onToggleFriend(label)}
+                              >
+                                {isFr ? '🤝 Friend' : '+ Add'}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="form-grid" style={{ gap: 8 }}>
@@ -507,6 +700,24 @@ export default function MultiplayerMeetupHUD({
                     <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: 3 }}>
                       Members online: {groupMembers.length + 1} (Unlimited capacity) &bull; Messages auto-delete after 23m
                     </div>
+                    {friends.length > 0 && onInviteFriendToGroup && (
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+                        {friends.map((fr) => (
+                          <button
+                            key={fr}
+                            type="button"
+                            className="btn-ghost"
+                            style={{ padding: '2px 7px', fontSize: '0.68rem' }}
+                            onClick={() => {
+                              onInviteFriendToGroup(fr);
+                              showInviteFeedback(`📨 Invited ${fr} to "${activeGroup.name}" (30m)`);
+                            }}
+                          >
+                            📨 Invite {fr.split(' ')[0]}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Group Members List */}

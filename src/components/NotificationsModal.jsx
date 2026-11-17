@@ -4,9 +4,17 @@ import { X, Bell } from 'lucide-react';
 export default function NotificationsModal({
   notifications = [],
   readIds = [],
+  groupInvites = [],
+  onAcceptInvite,
+  onIgnoreInvite,
   onClose,
 }) {
   const [categoryFilter, setCategoryFilter] = useState('All');
+
+  const formatMinsLeft = (expiresAt) => {
+    const mins = Math.max(1, Math.ceil((Number(expiresAt || 0) - Date.now()) / 60000));
+    return `${mins}m`;
+  };
 
   const filtered = useMemo(() => {
     if (categoryFilter === 'All') return notifications;
@@ -48,6 +56,56 @@ export default function NotificationsModal({
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '55vh', overflowY: 'auto' }}>
+          {groupInvites.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="field-label" style={{ marginBottom: 0 }}>
+                🔒 Group Chat Invites ({groupInvites.length})
+              </div>
+              {groupInvites.map((inv) => (
+                <div
+                  key={inv.id}
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 12,
+                    background: 'var(--bg-elevated)',
+                    border: '1.5px solid #ffd57e',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.8rem' }}>
+                    <strong>🔔 {inv.fromName} invited you to "{inv.groupName}"</strong>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                      Expires in {formatMinsLeft(inv.expiresAt)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ padding: '5px 12px', fontSize: '0.76rem' }}
+                      onClick={() => {
+                        if (onAcceptInvite) onAcceptInvite(inv.id);
+                        onClose();
+                      }}
+                    >
+                      ✅ Accept
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      style={{ padding: '5px 12px', fontSize: '0.76rem' }}
+                      onClick={() => onIgnoreInvite && onIgnoreInvite(inv.id)}
+                    >
+                      ✖️ Ignore
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {filtered.length === 0 ? (
             <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.86rem' }}>
               No announcements in this category yet.

@@ -70,6 +70,11 @@ import {
   joinGroupChat,
   exitGroupChat,
   sendGroupChatMessage,
+  getPendingGroupInvites,
+  sendGroupInvite,
+  acceptGroupInvite,
+  ignoreGroupInvite,
+  setCurrentUserIdentity,
 } from './utils/multiplayerEngine';
 
 const STORAGE_MEMORIALS_KEY = 'evergreen_paws_memorials_v1';
@@ -268,6 +273,8 @@ export default function App() {
   const [mpOnline, setMpOnline] = useState(isMultiplayerOnline);
   const [activeGroup, setActiveGroup] = useState(getActiveGroup);
   const [groupChatLog, setGroupChatLog] = useState(getGroupChatHistory);
+  const [groupInvites, setGroupInvites] = useState(getPendingGroupInvites);
+  const [, setInviteClockTick] = useState(0);
   const [showOutsideChat, setShowOutsideChat] = useState(() =>
     loadBoolPref(STORAGE_OUTSIDE_CHAT_KEY, true)
   );
@@ -293,6 +300,7 @@ export default function App() {
   );
 
   useEffect(() => {
+    setCurrentUserIdentity(currentUser);
     if (currentUser && moderationStatus.account?.name && currentUser.name !== moderationStatus.account.name) {
       setCurrentUser((prev) => (prev ? { ...prev, name: moderationStatus.account.name } : prev));
     }
@@ -314,6 +322,7 @@ export default function App() {
   const [mpChatLog, setMpChatLog] = useState([]);
   const [remoteWorldEvent, setRemoteWorldEvent] = useState(null);
   const memorialsRef = useRef(memorials);
+  const recentVisitAtRef = useRef({});
 
   useEffect(() => {
     memorialsRef.current = memorials;
@@ -349,9 +358,34 @@ export default function App() {
 
   const markMemorialVisited = useCallback((memorialId) => {
     if (!memorialId) return;
+    const now = Date.now();
+    const last = recentVisitAtRef.current[memorialId] || 0;
+    if (now - last < 3000) return;
+    recentVisitAtRef.current[memorialId] = now;
+
     setVisitedMemorialIds((prev) =>
       prev.includes(memorialId) ? prev : [...prev, memorialId]
     );
+    let updatedForSync = null;
+    setMemorials((prev) =>
+      prev.map((m) => {
+        if (m.id !== memorialId) return m;
+        updatedForSync = {
+          ...m,
+          visitsCount: (Number(m.visitsCount) || 0) + 1,
+          updatedAt: now,
+        };
+        return updatedForSync;
+      })
+    );
+    if (updatedForSync) {
+      publishSharedMemorial(updatedForSync);
+      sendMultiplayerAction({
+        kind: 'visit',
+        memorialId,
+        visitsCount: updatedForSync.visitsCount,
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -670,6 +704,7 @@ export default function App() {
       incenseCount: Math.max(existing.incenseCount || 0, incoming.incenseCount || 0),
       flowersCount: Math.max(existing.flowersCount || 0, incoming.flowersCount || 0),
       treatsCount: Math.max(existing.treatsCount || 0, incoming.treatsCount || 0),
+      visitsCount: Math.max(existing.visitsCount || 0, incoming.visitsCount || 0),
       activeOfferings: mergedOfferings,
       tributes: mergeById(existing.tributes, incoming.tributes),
       memories: mergeById(existing.memories, incoming.memories),
@@ -764,9 +799,23 @@ export default function App() {
       onAccountsChange: (list) => {
         setAccountsList(list);
       },
+      onGroupInvitesChange: (list) => {
+        setGroupInvites(list);
+      },
       onRemoteEvent: (evt) => {
         if (!evt) return;
-        if (evt.kind === 'offering' && evt.memorialId && evt.offering) {
+        if (evt.kind === 'visit' && evt.memorialId) {
+          setMemorials((prev) =>
+            prev.map((m) =>
+              m.id === evt.memorialId
+                ? {
+                    ...m,
+                    visitsCount: Math.max((Number(m.visitsCount) || 0) + 1, Number(evt.visitsCount) || 0),
+                  }
+                : m
+            )
+          );
+        } else if (evt.kind === 'offering' && evt.memorialId && evt.offering) {
           applyOfferingToState(evt.memorialId, evt.offering, evt.senderName || 'Visitor');
           const petName =
             evt.petName ||
@@ -827,6 +876,11 @@ export default function App() {
       },
     });
     syncAllLocalMemorials(memorialsRef.current, true);
+    const invTimer = setInterval(() => {
+      setGroupInvites(getPendingGroupInvites());
+      setInviteClockTick((n) => n + 1);
+    }, 30000);
+    return () => clearInterval(invTimer);
   }, []);
 
   const handleSendMpChat = (text) => {
@@ -866,6 +920,44 @@ export default function App() {
 
   const handleToggleOutsideChat = () => {
     setShowOutsideChat((v) => !v);
+  };
+
+  const handleInviteFriendToGroup = (friendName, peerObj = null) => {
+    const cleanTarget = String(friendName || peerObj?.name || '').trim();
+    if (!cleanTarget) return;
+    const matchedAccount = accountsList.find(
+      (a) =>
+        a &&
+        ((a.name || '').toLowerCase() === cleanTarget.toLowerCase() ||
+          (a.username || '').toLowerCase() === cleanTarget.toLowerCase())
+    );
+    const res = sendGroupInvite({
+      toName: matchedAccount?.name || cleanTarget,
+      toUsername: matchedAccount?.username || '',
+      toPeerId: peerObj?.peerId || '',
+      fromName: currentUser?.name || mpNickname || 'Friend',
+      fromUsername: currentUser?.username || '',
+    });
+    if (res?.ok && res.group) {
+      setActiveGroup(res.group);
+      showGlobalNotice(`📨 Group Chat invite sent to ${matchedAccount?.name || cleanTarget} (valid 30m).`);
+    }
+  };
+
+  const handleAcceptGroupInvite = (inviteId) => {
+    const joined = acceptGroupInvite(inviteId);
+    setGroupInvites(getPendingGroupInvites());
+    if (joined) {
+      setActiveGroup(joined);
+      showGlobalNotice(`🔒 Joined Group Chat "${joined.name}"!`);
+    } else {
+      showGlobalNotice('⏳ That Group Chat invite expired (30m timeout).');
+    }
+  };
+
+  const handleIgnoreGroupInvite = (inviteId) => {
+    ignoreGroupInvite(inviteId);
+    setGroupInvites(getPendingGroupInvites());
   };
 
   const handlePerformOffering = (memorialId, offering) => {
@@ -979,25 +1071,30 @@ export default function App() {
     }
   };
 
-  const sectionMeta = {
-    tombstone: {
-      title: '🌿 Outdoor Tombstone Garden',
-      subtitle: 'Sunlit meadow plots & carved memorial stones beneath open skies',
-    },
-    'ash-room': {
-      title: '🏛️ Indoor Ash Room (Columbarium)',
-      subtitle: 'Quiet candlelit cedar niches housing porcelain & crystal urns',
-    },
-    sanctuary: {
-      title: '✨ My Personal Sanctuary',
-      subtitle: currentUser
-        ? `Beloved pets enshrined by ${currentUser.name}`
-        : 'Sign in to view and tend to your own pets’ tombstones and ash niches',
-    },
-  }[activeTab] || {
-    title: '🌿 Outdoor Tombstone Garden',
-    subtitle: 'Sunlit meadow plots & carved memorial stones beneath open skies',
-  };
+  const sectionMeta = showOnlyFavorites
+    ? {
+        title: `💖 Favorite Pet Memorials (${filteredMemorials.length})`,
+        subtitle: 'All beloved companions you added to your favorites list across the sanctuary',
+      }
+    : {
+        tombstone: {
+          title: '🌿 Outdoor Tombstone Garden',
+          subtitle: 'Sunlit meadow plots & carved memorial stones beneath open skies',
+        },
+        'ash-room': {
+          title: '🏛️ Indoor Ash Room (Columbarium)',
+          subtitle: 'Quiet candlelit cedar niches housing porcelain & crystal urns',
+        },
+        sanctuary: {
+          title: '✨ My Personal Sanctuary',
+          subtitle: currentUser
+            ? `Beloved pets enshrined by ${currentUser.name}`
+            : 'Sign in to view and tend to your own pets’ tombstones and ash niches',
+        },
+      }[activeTab] || {
+        title: '🌿 Outdoor Tombstone Garden',
+        subtitle: 'Sunlit meadow plots & carved memorial stones beneath open skies',
+      };
 
   return (
     <div className={`park-shell theme-${atmosphere}`}>
@@ -1050,18 +1147,18 @@ export default function App() {
           <div className="top-actions" style={{ position: 'relative' }}>
             <button
               type="button"
-              className="top-music-btn notif-bell-btn"
+              className={`top-music-btn notif-bell-btn ${groupInvites.length > 0 ? 'has-invite' : ''}`}
               onClick={() => {
                 setShowNotificationsModal(true);
                 setReadNotifIds((prev) => Array.from(new Set([...prev, ...notifications.map((n) => n.id)])));
               }}
-              title="Sanctuary News & Updates"
+              title="Sanctuary News, Updates & Group Invites"
               aria-label="Notifications"
             >
               <Bell size={16} />
-              {notifications.some((n) => !readNotifIds.includes(n.id)) && (
+              {(notifications.some((n) => !readNotifIds.includes(n.id)) || groupInvites.length > 0) && (
                 <span className="notif-badge" aria-hidden="true">
-                  {notifications.filter((n) => !readNotifIds.includes(n.id)).length}
+                  {notifications.filter((n) => !readNotifIds.includes(n.id)).length + groupInvites.length}
                 </span>
               )}
             </button>
@@ -1470,22 +1567,31 @@ export default function App() {
             <div className="view-mode-switch" role="group" aria-label="View mode">
               <button
                 type="button"
-                className={`view-mode-btn ${viewMode === 'world3d' ? 'active' : ''}`}
-                onClick={() => setViewMode('world3d')}
+                className={`view-mode-btn ${viewMode === 'world3d' && !showOnlyFavorites ? 'active' : ''}`}
+                onClick={() => {
+                  setShowOnlyFavorites(false);
+                  setViewMode('world3d');
+                }}
               >
                 <Box size={14} /> 3D World
               </button>
               <button
                 type="button"
-                className={`view-mode-btn ${viewMode === 'world2d' ? 'active' : ''}`}
-                onClick={() => setViewMode('world2d')}
+                className={`view-mode-btn ${viewMode === 'world2d' && !showOnlyFavorites ? 'active' : ''}`}
+                onClick={() => {
+                  setShowOnlyFavorites(false);
+                  setViewMode('world2d');
+                }}
               >
                 <Footprints size={14} /> 2D World
               </button>
               <button
                 type="button"
-                className={`view-mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
-                onClick={() => setViewMode('grid')}
+                className={`view-mode-btn ${viewMode === 'grid' && !showOnlyFavorites ? 'active' : ''}`}
+                onClick={() => {
+                  setShowOnlyFavorites(false);
+                  setViewMode('grid');
+                }}
               >
                 <LayoutGrid size={14} /> Cards
               </button>
@@ -1493,8 +1599,8 @@ export default function App() {
           )}
         </div>
 
-        {/* 3D Walkable Park, 2D Walkable Park, or Cards Directory */}
-        {viewMode === 'world3d' && activeTab !== 'sanctuary' ? (
+        {/* 3D Walkable Park, 2D Walkable Park, or Cards / Favorites Directory */}
+        {viewMode === 'world3d' && activeTab !== 'sanctuary' && !showOnlyFavorites ? (
           <ParkWorld3D
             memorials={speciesMemorials}
             allMemorials={visibleMemorials}
@@ -1520,11 +1626,16 @@ export default function App() {
             showOutsideChat={showOutsideChat}
             favorites={favorites}
             friends={friends}
+            groupInvites={groupInvites}
+            accountsList={accountsList}
             remoteWorldEvent={remoteWorldEvent}
             onToggleMpOnline={handleToggleMpOnline}
             onToggleOutsideChat={handleToggleOutsideChat}
             onToggleFavorite={handleToggleFavorite}
             onToggleFriend={handleToggleFriend}
+            onInviteFriendToGroup={handleInviteFriendToGroup}
+            onAcceptInvite={handleAcceptGroupInvite}
+            onIgnoreInvite={handleIgnoreGroupInvite}
             onSendChat={handleSendMpChat}
             onSendGroupChat={handleSendGroupChat}
             onCreateGroup={handleCreateGroup}
@@ -1542,7 +1653,7 @@ export default function App() {
             onLightningStrike={playThunderSound}
             onRequireLogin={() => setShowAuthModal(true)}
           />
-        ) : viewMode === 'world2d' && activeTab !== 'sanctuary' ? (
+        ) : viewMode === 'world2d' && activeTab !== 'sanctuary' && !showOnlyFavorites ? (
           <ParkWorld2D
             memorials={speciesMemorials}
             allMemorials={visibleMemorials}
@@ -1568,11 +1679,16 @@ export default function App() {
             showOutsideChat={showOutsideChat}
             favorites={favorites}
             friends={friends}
+            groupInvites={groupInvites}
+            accountsList={accountsList}
             remoteWorldEvent={remoteWorldEvent}
             onToggleMpOnline={handleToggleMpOnline}
             onToggleOutsideChat={handleToggleOutsideChat}
             onToggleFavorite={handleToggleFavorite}
             onToggleFriend={handleToggleFriend}
+            onInviteFriendToGroup={handleInviteFriendToGroup}
+            onAcceptInvite={handleAcceptGroupInvite}
+            onIgnoreInvite={handleIgnoreGroupInvite}
             onSendChat={handleSendMpChat}
             onSendGroupChat={handleSendGroupChat}
             onCreateGroup={handleCreateGroup}
@@ -1590,7 +1706,7 @@ export default function App() {
             onLightningStrike={playThunderSound}
             onRequireLogin={() => setShowAuthModal(true)}
           />
-        ) : activeTab === 'sanctuary' && !currentUser ? (
+        ) : activeTab === 'sanctuary' && !currentUser && !showOnlyFavorites ? (
           <div className="empty-state">
             <h4 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.45rem', margin: '0 0 8px' }}>
               Sign In to Enter Your Personal Sanctuary
@@ -1606,14 +1722,22 @@ export default function App() {
         ) : filteredMemorials.length === 0 ? (
           <div className="empty-state">
             <h4 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.4rem', margin: '0 0 6px' }}>
-              No memorials match this view yet
+              {showOnlyFavorites ? 'No favorite pets saved yet' : 'No memorials match this view yet'}
             </h4>
             <p style={{ margin: '0 0 14px', fontSize: '0.86rem' }}>
-              Try clearing your filter or enshrine a new companion in this space.
+              {showOnlyFavorites
+                ? 'Tap 🤍 Favorite on any pet tombstone or ash niche to save them to your Favorites list.'
+                : 'Try clearing your filter or enshrine a new companion in this space.'}
             </p>
-            <button type="button" className="btn-primary" onClick={handleOpenCreate}>
-              <Plus size={15} /> Enshrine a Pet
-            </button>
+            {showOnlyFavorites ? (
+              <button type="button" className="btn-primary" onClick={() => setShowOnlyFavorites(false)}>
+                🌿 Back to Park View
+              </button>
+            ) : (
+              <button type="button" className="btn-primary" onClick={handleOpenCreate}>
+                <Plus size={15} /> Enshrine a Pet
+              </button>
+            )}
           </div>
         ) : (
           <section className="memorial-grid">
@@ -1657,6 +1781,7 @@ export default function App() {
                         <span>🕯️ {m.candlesCount}</span>
                         <span>🌸 {m.flowersCount}</span>
                         <span>💌 {m.tributes?.length || 0}</span>
+                        <span>👣 {m.visitsCount || 0}</span>
                       </div>
                       <span className="visit-cta">
                         {m.space === 'ash-room' ? 'Visit Ash Niche' : 'Visit Tombstone'}
@@ -1745,6 +1870,9 @@ export default function App() {
         <NotificationsModal
           notifications={notifications}
           readIds={readNotifIds}
+          groupInvites={groupInvites}
+          onAcceptInvite={handleAcceptGroupInvite}
+          onIgnoreInvite={handleIgnoreGroupInvite}
           onClose={() => setShowNotificationsModal(false)}
         />
       )}
