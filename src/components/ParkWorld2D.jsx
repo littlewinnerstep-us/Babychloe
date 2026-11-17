@@ -116,6 +116,7 @@ export default function ParkWorld2D({
   remoteWorldEvent = null,
   onToggleMpOnline,
   onToggleOutsideChat,
+  onToggleFavorite,
   onToggleFriend,
   onSendChat,
   onSendGroupChat,
