@@ -60,7 +60,8 @@ const CAMERA_PRESETS = {
 };
 
 const DEFAULT_AVATAR = {
-  cloakColor: '#4a7c59',
+  gender: 'girl',
+  cloakColor: '#b86578',
   hairColor: '#2c221e',
   companion: 'dog',
   carryingLantern: true,
@@ -166,6 +167,8 @@ const ASH_NPCS_3D = [
 export default function ParkWorld3D({
   memorials,
   currentUser,
+  characterGender,
+  onChangeCharacterGender,
   atmosphere,
   season = 'spring',
   weather = 'clear',
@@ -285,6 +288,12 @@ export default function ParkWorld3D({
   useEffect(() => {
     userRef.current = currentUser;
   }, [currentUser]);
+
+  useEffect(() => {
+    if (characterGender === 'girl' || characterGender === 'boy') {
+      setAvatar((a) => (a.gender === characterGender ? a : { ...a, gender: characterGender }));
+    }
+  }, [characterGender]);
 
   useEffect(() => {
     mpNicknameRef.current = mpNickname;
@@ -1220,6 +1229,76 @@ export default function ParkWorld3D({
         });
       });
 
+      const drawVisitorStyle = (wx, wyBase, wz, head, cAv) => {
+        const isBoy = cAv?.gender === 'boy';
+        if (isBoy) {
+          // Crisp collar accent at shoulders
+          const collarPt = project3D(wx, wyBase + 27, wz + 6);
+          if (collarPt) {
+            ctx.fillStyle = 'rgba(248, 244, 234, 0.9)';
+            ctx.beginPath();
+            ctx.moveTo(collarPt.sx - 6 * collarPt.scale, collarPt.sy - 2 * collarPt.scale);
+            ctx.lineTo(collarPt.sx, collarPt.sy + 4 * collarPt.scale);
+            ctx.lineTo(collarPt.sx + 6 * collarPt.scale, collarPt.sy - 2 * collarPt.scale);
+            ctx.closePath();
+            ctx.fill();
+          }
+        } else {
+          // Flared skirt silhouette at base of cloak
+          const hemPt = project3D(wx, wyBase + 5, wz + 4);
+          if (hemPt) {
+            ctx.fillStyle = cAv?.cloakColor || '#b86578';
+            ctx.beginPath();
+            ctx.moveTo(hemPt.sx - 9 * hemPt.scale, hemPt.sy - 10 * hemPt.scale);
+            ctx.lineTo(hemPt.sx + 9 * hemPt.scale, hemPt.sy - 10 * hemPt.scale);
+            ctx.lineTo(hemPt.sx + 13 * hemPt.scale, hemPt.sy + 4 * hemPt.scale);
+            ctx.lineTo(hemPt.sx - 13 * hemPt.scale, hemPt.sy + 4 * hemPt.scale);
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+        if (head) {
+          ctx.fillStyle = '#f5d2b8';
+          ctx.beginPath();
+          ctx.arc(head.sx, head.sy, 9.5 * head.scale, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = cAv?.hairColor || '#2c221e';
+          ctx.beginPath();
+          ctx.arc(head.sx, head.sy - 2 * head.scale, 9.8 * head.scale, Math.PI, 0);
+          ctx.fill();
+
+          if (!isBoy) {
+            // Flowing side hair locks + rose ribbon bow
+            ctx.beginPath();
+            ctx.ellipse(
+              head.sx - 7.8 * head.scale,
+              head.sy + 4.5 * head.scale,
+              3.2 * head.scale,
+              8.5 * head.scale,
+              0.12,
+              0,
+              Math.PI * 2
+            );
+            ctx.ellipse(
+              head.sx + 7.8 * head.scale,
+              head.sy + 4.5 * head.scale,
+              3.2 * head.scale,
+              8.5 * head.scale,
+              -0.12,
+              0,
+              Math.PI * 2
+            );
+            ctx.fill();
+
+            ctx.fillStyle = '#ff8fab';
+            ctx.beginPath();
+            ctx.arc(head.sx + 5.8 * head.scale, head.sy - 8.5 * head.scale, 3.1 * head.scale, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      };
+
       // 4b. Remote Live Multiplayer Visitors
       const nowMs = Date.now();
       getPeersMap().forEach((peer) => {
@@ -1267,23 +1346,16 @@ export default function ParkWorld3D({
             stroke: 'rgba(130, 245, 175, 0.75)',
           });
           const head = project3D(peer.rx, 37 + pBobY, peer.rz);
+          drawVisitorStyle(peer.rx, 2 + pBobY, peer.rz, head, pAv);
           if (head) {
-            ctx.fillStyle = '#f5d2b8';
-            ctx.beginPath();
-            ctx.arc(head.sx, head.sy, 9.5 * head.scale, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = pAv.hairColor || '#2c221e';
-            ctx.beginPath();
-            ctx.arc(head.sx, head.sy - 2 * head.scale, 9.8 * head.scale, Math.PI, 0);
-            ctx.fill();
-
             if (pAv.carryingLantern) {
               ctx.font = `${Math.max(11, Math.round(14 * head.scale))}px serif`;
               ctx.textAlign = 'center';
               ctx.fillText('🏮', head.sx + 16 * head.scale, head.sy + 14 * head.scale);
             }
 
-            const pTag = `🟢 ${peer.name || 'Visitor'}`;
+            const gEmoji = pAv.gender === 'boy' ? '👦' : '👩';
+            const pTag = `🟢 ${gEmoji} ${peer.name || 'Visitor'}`;
             ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
             const ptw = ctx.measureText(pTag).width + 12;
             const nameY = head.sy - 28 * head.scale - 14;
@@ -1351,23 +1423,17 @@ export default function ParkWorld3D({
           stroke: 'rgba(255,255,255,0.45)',
         });
         const head = project3D(p.x, 37 + bobY, p.z);
+        drawVisitorStyle(p.x, 2 + bobY, p.z, head, av);
         if (head) {
-          ctx.fillStyle = '#f5d2b8';
-          ctx.beginPath();
-          ctx.arc(head.sx, head.sy, 9.5 * head.scale, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = av.hairColor;
-          ctx.beginPath();
-          ctx.arc(head.sx, head.sy - 2 * head.scale, 9.8 * head.scale, Math.PI, 0);
-          ctx.fill();
-
           if (av.carryingLantern) {
             ctx.font = `${Math.max(11, Math.round(14 * head.scale))}px serif`;
             ctx.textAlign = 'center';
             ctx.fillText('🏮', head.sx + 16 * head.scale, head.sy + 14 * head.scale);
           }
 
-          const tag = mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor';
+          const gEmoji = av.gender === 'boy' ? '👦' : '👩';
+          const rawTag = mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor';
+          const tag = `${gEmoji} ${rawTag}`;
           ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
           const tw = ctx.measureText(tag).width + 12;
           const myNameY = head.sy - 28 * head.scale - 14;
@@ -1978,6 +2044,32 @@ export default function ParkWorld3D({
             </div>
 
             <div className="form-grid" style={{ gap: 10 }}>
+              <div>
+                <div className="field-label">Character Type</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    className={`chip ${(avatar.gender || 'girl') !== 'boy' ? 'active' : ''}`}
+                    onClick={() => {
+                      setAvatar((a) => ({ ...a, gender: 'girl' }));
+                      if (onChangeCharacterGender) onChangeCharacterGender('girl');
+                    }}
+                  >
+                    👩 Girl
+                  </button>
+                  <button
+                    type="button"
+                    className={`chip ${avatar.gender === 'boy' ? 'active' : ''}`}
+                    onClick={() => {
+                      setAvatar((a) => ({ ...a, gender: 'boy' }));
+                      if (onChangeCharacterGender) onChangeCharacterGender('boy');
+                    }}
+                  >
+                    👦 Boy
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <div className="field-label">Cloak Color</div>
                 <div style={{ display: 'flex', gap: 8 }}>

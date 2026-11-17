@@ -171,6 +171,11 @@ export default function App() {
   const [pendingCreate, setPendingCreate] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [editAccountName, setEditAccountName] = useState(() => currentUser?.name || '');
+
+  useEffect(() => {
+    setEditAccountName(currentUser?.name || '');
+  }, [currentUser]);
 
   const [mpPeers, setMpPeers] = useState([]);
   const [mpStatus, setMpStatus] = useState('connecting');
@@ -354,8 +359,51 @@ export default function App() {
     setShowCreateModal(true);
   };
 
+  const syncAvatarGenderToStorage = (nextGender, applyDefaultCloak = false) => {
+    try {
+      const raw = localStorage.getItem('evergreen_paws_avatar_v1');
+      const existing = raw ? JSON.parse(raw) : {};
+      const nextAvatar = {
+        cloakColor: nextGender === 'boy' ? '#4a7c59' : '#b86578',
+        hairColor: '#2c221e',
+        companion: 'dog',
+        carryingLantern: true,
+        ...existing,
+        gender: nextGender,
+      };
+      if (applyDefaultCloak && !raw) {
+        nextAvatar.cloakColor = nextGender === 'boy' ? '#4a7c59' : '#b86578';
+      }
+      localStorage.setItem('evergreen_paws_avatar_v1', JSON.stringify(nextAvatar));
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  const handleChangeCharacterGender = (nextGender) => {
+    const clean = nextGender === 'boy' ? 'boy' : 'girl';
+    setCurrentUser((prev) => (prev ? { ...prev, gender: clean } : prev));
+    syncAvatarGenderToStorage(clean, false);
+  };
+
+  const handleSaveAccountName = (e) => {
+    e.preventDefault();
+    const clean = editAccountName.trim();
+    if (!clean) return;
+    setCurrentUser((prev) => (prev ? { ...prev, name: clean } : prev));
+    if (!getMeetupNickname()) {
+      setMpNickname(clean.split(' ')[0] || 'Visitor');
+    }
+  };
+
   const handleLogin = (user) => {
-    setCurrentUser(user);
+    const gender = user.gender === 'boy' ? 'boy' : 'girl';
+    const enriched = { ...user, gender };
+    setCurrentUser(enriched);
+    syncAvatarGenderToStorage(gender, true);
+    if (!getMeetupNickname()) {
+      setMpNickname(enriched.name.split(' ')[0] || 'Visitor');
+    }
     setShowAuthModal(false);
     if (pendingMemorialId) {
       setSelectedMemorialId(pendingMemorialId);
@@ -744,7 +792,9 @@ export default function App() {
                 className="user-chip"
                 onClick={() => setShowUserMenu((v) => !v)}
               >
-                <span className="user-avatar-dot">{currentUser.name[0]?.toUpperCase()}</span>
+                <span className="user-avatar-dot">
+                  {currentUser.gender === 'boy' ? '👦' : '👩'}
+                </span>
                 <span>{currentUser.name.split(' ')[0]}</span>
               </button>
             ) : (
@@ -766,21 +816,67 @@ export default function App() {
                   background: 'var(--bg-surface-strong)',
                   border: '1px solid var(--border-soft)',
                   borderRadius: 14,
-                  padding: 10,
-                  minWidth: 210,
+                  padding: 12,
+                  minWidth: 245,
                   boxShadow: 'var(--shadow-card)',
                   zIndex: 50,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 6,
+                  gap: 8,
                 }}
               >
-                <div style={{ padding: '4px 6px', borderBottom: '1px solid var(--border-soft)' }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.84rem' }}>{currentUser.name}</div>
+                <div style={{ padding: '2px 4px 6px', borderBottom: '1px solid var(--border-soft)' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.86rem' }}>
+                    {currentUser.gender === 'boy' ? '👦' : '👩'} {currentUser.name}
+                  </div>
                   <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)' }}>
                     {currentUser.email}
                   </div>
                 </div>
+
+                <div>
+                  <div className="field-label" style={{ marginBottom: 4 }}>
+                    Edit Character
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      className={currentUser.gender !== 'boy' ? 'btn-primary' : 'btn-ghost'}
+                      style={{ flex: 1, justifyContent: 'center', padding: '6px 8px', fontSize: '0.76rem' }}
+                      onClick={() => handleChangeCharacterGender('girl')}
+                    >
+                      👩 Girl
+                    </button>
+                    <button
+                      type="button"
+                      className={currentUser.gender === 'boy' ? 'btn-primary' : 'btn-ghost'}
+                      style={{ flex: 1, justifyContent: 'center', padding: '6px 8px', fontSize: '0.76rem' }}
+                      onClick={() => handleChangeCharacterGender('boy')}
+                    >
+                      👦 Boy
+                    </button>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSaveAccountName} style={{ display: 'flex', gap: 5 }}>
+                  <input
+                    type="text"
+                    className="input-control"
+                    maxLength={32}
+                    value={editAccountName}
+                    onChange={(e) => setEditAccountName(e.target.value)}
+                    placeholder="Display name"
+                    style={{ padding: '5px 8px', fontSize: '0.76rem' }}
+                  />
+                  <button
+                    type="submit"
+                    className="btn-ghost"
+                    style={{ padding: '5px 9px', fontSize: '0.74rem' }}
+                  >
+                    Save
+                  </button>
+                </form>
+
                 <button
                   type="button"
                   className="btn-ghost"
@@ -995,6 +1091,8 @@ export default function App() {
           <ParkWorld3D
             memorials={visibleMemorials}
             currentUser={currentUser}
+            characterGender={currentUser?.gender}
+            onChangeCharacterGender={handleChangeCharacterGender}
             atmosphere={atmosphere}
             season={season}
             weather={weather}
@@ -1022,6 +1120,8 @@ export default function App() {
           <ParkWorld2D
             memorials={visibleMemorials}
             currentUser={currentUser}
+            characterGender={currentUser?.gender}
+            onChangeCharacterGender={handleChangeCharacterGender}
             atmosphere={atmosphere}
             season={season}
             weather={weather}

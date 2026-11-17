@@ -51,7 +51,8 @@ const COMPANION_OPTIONS = [
 ];
 
 const DEFAULT_AVATAR = {
-  cloakColor: '#4a7c59',
+  gender: 'girl',
+  cloakColor: '#b86578',
   hairColor: '#2c221e',
   companion: 'dog',
   carryingLantern: true,
@@ -205,6 +206,8 @@ function drawRoundedRect(ctx, x, y, w, h, r) {
 export default function ParkWorld2D({
   memorials,
   currentUser,
+  characterGender,
+  onChangeCharacterGender,
   atmosphere,
   season = 'spring',
   weather = 'clear',
@@ -314,6 +317,12 @@ export default function ParkWorld2D({
   useEffect(() => {
     userRef.current = currentUser;
   }, [currentUser]);
+
+  useEffect(() => {
+    if (characterGender === 'girl' || characterGender === 'boy') {
+      setAvatar((a) => (a.gender === characterGender ? a : { ...a, gender: characterGender }));
+    }
+  }, [characterGender]);
 
   useEffect(() => {
     mpNicknameRef.current = mpNickname;
@@ -1115,6 +1124,78 @@ export default function ParkWorld2D({
         }
       });
 
+      const drawVisitor2D = (cx, cy, bobOff, cAv, outlineColor) => {
+        const isBoy = cAv?.gender === 'boy';
+        const cloak = cAv?.cloakColor || (isBoy ? '#4a7c59' : '#b86578');
+        const hair = cAv?.hairColor || '#2c221e';
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.34)';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 16, 13, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Body / Flared dress vs coat
+        ctx.fillStyle = cloak;
+        if (isBoy) {
+          drawRoundedRect(ctx, cx - 10, cy - 8 - bobOff, 20, 22, 6);
+          ctx.fill();
+          ctx.strokeStyle = outlineColor;
+          ctx.lineWidth = 1.3;
+          ctx.stroke();
+
+          // White collar trim
+          ctx.fillStyle = 'rgba(248, 244, 234, 0.92)';
+          ctx.beginPath();
+          ctx.moveTo(cx - 5.5, cy - 8 - bobOff);
+          ctx.lineTo(cx, cy - 2 - bobOff);
+          ctx.lineTo(cx + 5.5, cy - 8 - bobOff);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(cx - 8, cy - 8 - bobOff);
+          ctx.lineTo(cx + 8, cy - 8 - bobOff);
+          ctx.lineTo(cx + 13, cy + 14 - bobOff);
+          ctx.lineTo(cx - 13, cy + 14 - bobOff);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = outlineColor;
+          ctx.lineWidth = 1.3;
+          ctx.stroke();
+        }
+
+        // Head
+        ctx.fillStyle = '#f5d2b8';
+        ctx.beginPath();
+        ctx.arc(cx, cy - 16 - bobOff, 9.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Hair + Girl locks/ribbon
+        ctx.fillStyle = hair;
+        ctx.beginPath();
+        ctx.arc(cx, cy - 18 - bobOff, 9.8, Math.PI, 0);
+        ctx.fill();
+
+        if (!isBoy) {
+          ctx.beginPath();
+          ctx.ellipse(cx - 8, cy - 11 - bobOff, 3.2, 8.2, 0.12, 0, Math.PI * 2);
+          ctx.ellipse(cx + 8, cy - 11 - bobOff, 3.2, 8.2, -0.12, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#ff8fab';
+          ctx.beginPath();
+          ctx.arc(cx + 5.8, cy - 24 - bobOff, 3.1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        if (cAv?.carryingLantern) {
+          ctx.font = '13px serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('🏮', cx + 15, cy + 2 - bobOff);
+        }
+      };
+
       // ====================
       // DRAW REMOTE MULTIPLAYER VISITORS
       // ====================
@@ -1159,35 +1240,10 @@ export default function ParkWorld2D({
           ctx.fill();
         }
 
-        ctx.fillStyle = 'rgba(0,0,0,0.34)';
-        ctx.beginPath();
-        ctx.ellipse(px, py + 16, 13, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
+        drawVisitor2D(px, py, pBob, pAv, 'rgba(130, 245, 175, 0.8)');
 
-        ctx.fillStyle = pAv.cloakColor || '#7c6a9a';
-        drawRoundedRect(ctx, px - 10, py - 8 - pBob, 20, 22, 7);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(130, 245, 175, 0.78)';
-        ctx.lineWidth = 1.4;
-        ctx.stroke();
-
-        ctx.fillStyle = '#f5d2b8';
-        ctx.beginPath();
-        ctx.arc(px, py - 16 - pBob, 9.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = pAv.hairColor || '#2c221e';
-        ctx.beginPath();
-        ctx.arc(px, py - 18 - pBob, 9.8, Math.PI, 0);
-        ctx.fill();
-
-        if (pAv.carryingLantern) {
-          ctx.font = '13px serif';
-          ctx.textAlign = 'center';
-          ctx.fillText('🏮', px + 15, py + 2 - pBob);
-        }
-
-        const pTag = `🟢 ${peer.name || 'Visitor'}`;
+        const gEmoji = pAv.gender === 'boy' ? '👦' : '👩';
+        const pTag = `🟢 ${gEmoji} ${peer.name || 'Visitor'}`;
         ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
         const ptw = ctx.measureText(pTag).width + 12;
         const pNameY = py - 44 - pBob;
@@ -1266,41 +1322,12 @@ export default function ParkWorld2D({
         ctx.fill();
       }
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0,0,0,0.34)';
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y + 16, 13, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Cloak / Body
-      ctx.fillStyle = av.cloakColor;
-      drawRoundedRect(ctx, p.x - 10, p.y - 8 - bobOffset, 20, 22, 7);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-
-      // Head
-      ctx.fillStyle = '#f5d2b8';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y - 16 - bobOffset, 9.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Hair
-      ctx.fillStyle = av.hairColor;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y - 18 - bobOffset, 9.8, Math.PI, 0);
-      ctx.fill();
-
-      // Lantern held on side
-      if (av.carryingLantern) {
-        ctx.font = '13px serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('🏮', p.x + 15, p.y + 2 - bobOffset);
-      }
+      drawVisitor2D(p.x, p.y, bobOffset, av, 'rgba(255,255,255,0.45)');
 
       // Player Name Tag
-      const label = mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor';
+      const gEmoji = av.gender === 'boy' ? '👦' : '👩';
+      const rawLabel = mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor';
+      const label = `${gEmoji} ${rawLabel}`;
       ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
       const lw = ctx.measureText(label).width + 12;
       const myNameY = p.y - 44 - bobOffset;
@@ -1850,6 +1877,32 @@ export default function ParkWorld2D({
             </div>
 
             <div className="form-grid" style={{ gap: 10 }}>
+              <div>
+                <div className="field-label">Character Type</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    className={`chip ${(avatar.gender || 'girl') !== 'boy' ? 'active' : ''}`}
+                    onClick={() => {
+                      setAvatar((a) => ({ ...a, gender: 'girl' }));
+                      if (onChangeCharacterGender) onChangeCharacterGender('girl');
+                    }}
+                  >
+                    👩 Girl
+                  </button>
+                  <button
+                    type="button"
+                    className={`chip ${avatar.gender === 'boy' ? 'active' : ''}`}
+                    onClick={() => {
+                      setAvatar((a) => ({ ...a, gender: 'boy' }));
+                      if (onChangeCharacterGender) onChangeCharacterGender('boy');
+                    }}
+                  >
+                    👦 Boy
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <div className="field-label">Cloak Color</div>
                 <div style={{ display: 'flex', gap: 8 }}>

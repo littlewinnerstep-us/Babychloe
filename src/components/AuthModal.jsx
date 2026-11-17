@@ -6,6 +6,7 @@ export default function AuthModal({ onClose, onLogin }) {
   const [mode, setMode] = useState('signin'); // 'signin' | 'register'
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [gender, setGender] = useState('girl'); // 'girl' | 'boy'
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -17,7 +18,7 @@ export default function AuthModal({ onClose, onLogin }) {
         .split('@')[0]
         .replace(/[._-]/g, ' ')
         .replace(/\b\w/g, (c) => c.toUpperCase());
-    onLogin({ email: cleanEmail, name: derivedName });
+    onLogin({ email: cleanEmail, name: derivedName, gender });
   };
 
   return (
@@ -41,7 +42,7 @@ export default function AuthModal({ onClose, onLogin }) {
           type="button"
           className="btn-primary"
           style={{ width: '100%', justifyContent: 'center', padding: '11px 14px', marginBottom: 14 }}
-          onClick={() => onLogin(DEMO_USER)}
+          onClick={() => onLogin({ ...DEMO_USER, gender })}
         >
           <Sparkles size={16} /> Instant Demo Login ({DEMO_USER.name})
         </button>
@@ -55,6 +56,34 @@ export default function AuthModal({ onClose, onLogin }) {
           }}
         >
           Demo account includes Barnaby (Tombstone) &amp; Mochi (Ash Room)
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label className="field-label">Choose Your Character</label>
+          <div className="form-row-2">
+            <button
+              type="button"
+              className={`style-option ${gender === 'girl' ? 'active' : ''}`}
+              onClick={() => setGender('girl')}
+              style={{ textAlign: 'center', padding: '8px 10px' }}
+            >
+              <strong style={{ fontSize: '0.86rem' }}>👩 Girl Character</strong>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                Ribbon bow &amp; flowing cloak
+              </div>
+            </button>
+            <button
+              type="button"
+              className={`style-option ${gender === 'boy' ? 'active' : ''}`}
+              onClick={() => setGender('boy')}
+              style={{ textAlign: 'center', padding: '8px 10px' }}
+            >
+              <strong style={{ fontSize: '0.86rem' }}>👦 Boy Character</strong>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                Short hair &amp; collar cape
+              </div>
+            </button>
+          </div>
         </div>
 
         <div className="modal-tabs" style={{ marginBottom: 12 }}>
