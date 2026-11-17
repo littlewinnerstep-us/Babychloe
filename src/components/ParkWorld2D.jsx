@@ -355,10 +355,18 @@ export default function ParkWorld2D({
     }
   }, [activeRoom]);
 
-  // Compute positioned memorials per room
+  // Compute positioned memorials per room deterministically so every player sees the same plot
   const positionedMemorials = useMemo(() => {
-    const tombstones = memorials.filter((m) => m.space === 'tombstone');
-    const ashNiches = memorials.filter((m) => m.space === 'ash-room');
+    const starterOrder = { m1: 1, m2: 2, m3: 3, m4: 4, m5: 5, m6: 6 };
+    const sortCanonical = (a, b) => {
+      const sa = starterOrder[a.id] || 999;
+      const sb = starterOrder[b.id] || 999;
+      if (sa !== sb) return sa - sb;
+      return String(a.id).localeCompare(String(b.id));
+    };
+
+    const tombstones = memorials.filter((m) => m.space === 'tombstone').sort(sortCanonical);
+    const ashNiches = memorials.filter((m) => m.space === 'ash-room').sort(sortCanonical);
 
     const map = [];
     tombstones.forEach((m, idx) => {
@@ -1550,17 +1558,28 @@ export default function ParkWorld2D({
           <span className="quick-pets-label">
             <Compass size={13} /> Walk to:
           </span>
-          {memorials.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              className={`quick-pet-chip ${nearbyMemorialId === m.id ? 'active' : ''}`}
-              onClick={() => handleWalkToPet(m)}
-            >
-              <span>{m.space === 'ash-room' ? '🏛️' : '🌿'}</span>
-              <span>{m.name}</span>
-            </button>
-          ))}
+          {memorials
+            .slice()
+            .sort((a, b) => {
+              const ac = !['m1', 'm2', 'm3', 'm4', 'm5', 'm6'].includes(a.id);
+              const bc = !['m1', 'm2', 'm3', 'm4', 'm5', 'm6'].includes(b.id);
+              if (ac !== bc) return ac ? -1 : 1;
+              return 0;
+            })
+            .map((m) => {
+              const isCustom = !['m1', 'm2', 'm3', 'm4', 'm5', 'm6'].includes(m.id);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`quick-pet-chip ${nearbyMemorialId === m.id ? 'active' : ''}`}
+                  onClick={() => handleWalkToPet(m)}
+                >
+                  <span>{isCustom ? '✨' : m.space === 'ash-room' ? '🏛️' : '🌿'}</span>
+                  <span>{m.name}</span>
+                </button>
+              );
+            })}
         </div>
 
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

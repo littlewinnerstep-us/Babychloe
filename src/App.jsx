@@ -43,6 +43,8 @@ import {
   sendMultiplayerAction,
   sendMultiplayerChat,
   sendMultiplayerEmote,
+  publishSharedMemorial,
+  syncAllLocalMemorials,
   setMeetupRoom,
   getMeetupRoom,
   setMeetupNickname,
@@ -182,6 +184,7 @@ export default function App() {
 
   useEffect(() => {
     memorialsRef.current = memorials;
+    syncAllLocalMemorials(memorials);
   }, [memorials]);
 
   useEffect(() => {
@@ -376,54 +379,114 @@ export default function App() {
     setShowUserMenu(false);
   };
 
+  const mergeById = (existing = [], incoming = []) => {
+    const map = new Map();
+    incoming.forEach((item) => {
+      if (item && item.id) map.set(item.id, item);
+    });
+    existing.forEach((item) => {
+      if (item && item.id && !map.has(item.id)) map.set(item.id, item);
+    });
+    return Array.from(map.values());
+  };
+
+  const mergeIncomingMemorial = (prevList, incoming) => {
+    if (!incoming || !incoming.id || incoming.visibility === 'private') return prevList;
+    const idx = prevList.findIndex((m) => m.id === incoming.id);
+    if (idx === -1) {
+      return [incoming, ...prevList];
+    }
+    const existing = prevList[idx];
+    const preferIncomingMeta = (incoming.updatedAt || 0) >= (existing.updatedAt || 0);
+    const mergedOfferings = Array.from(
+      new Set([
+        ...(preferIncomingMeta ? incoming.activeOfferings || [] : existing.activeOfferings || []),
+        ...(preferIncomingMeta ? existing.activeOfferings || [] : incoming.activeOfferings || []),
+      ])
+    ).slice(0, 6);
+
+    const merged = {
+      ...existing,
+      ...(preferIncomingMeta
+        ? {
+            name: incoming.name || existing.name,
+            species: incoming.species || existing.species,
+            breed: incoming.breed || existing.breed,
+            space: incoming.space || existing.space,
+            styleId: incoming.styleId || existing.styleId,
+            locationCode: incoming.locationCode || existing.locationCode,
+            zoneName: incoming.zoneName || existing.zoneName,
+            photo: incoming.photo || existing.photo,
+            epitaph: incoming.epitaph || existing.epitaph,
+            story: incoming.story || existing.story,
+            favoriteTreat: incoming.favoriteTreat || existing.favoriteTreat,
+            updatedAt: Math.max(existing.updatedAt || 0, incoming.updatedAt || 0),
+          }
+        : {}),
+      candlesCount: Math.max(existing.candlesCount || 0, incoming.candlesCount || 0),
+      incenseCount: Math.max(existing.incenseCount || 0, incoming.incenseCount || 0),
+      flowersCount: Math.max(existing.flowersCount || 0, incoming.flowersCount || 0),
+      treatsCount: Math.max(existing.treatsCount || 0, incoming.treatsCount || 0),
+      activeOfferings: mergedOfferings,
+      tributes: mergeById(existing.tributes, incoming.tributes),
+      memories: mergeById(existing.memories, incoming.memories),
+      offeringsLog: mergeById(existing.offeringsLog, incoming.offeringsLog),
+    };
+
+    const next = [...prevList];
+    next[idx] = merged;
+    return next;
+  };
+
+  const buildWithOffering = (m, offering, visitorName) => {
+    const nextActive = [
+      offering.emoji,
+      ...(m.activeOfferings || []).filter((e, i) => i < 5 || e !== offering.emoji),
+    ].slice(0, 6);
+    return {
+      ...m,
+      updatedAt: Date.now(),
+      candlesCount: offering.category === 'candle' ? m.candlesCount + 1 : m.candlesCount,
+      incenseCount: offering.category === 'incense' ? m.incenseCount + 1 : m.incenseCount,
+      flowersCount: offering.category === 'flower' ? m.flowersCount + 1 : m.flowersCount,
+      treatsCount: offering.category === 'treat' ? m.treatsCount + 1 : m.treatsCount,
+      activeOfferings: nextActive,
+      offeringsLog: [
+        {
+          id: `o-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          emoji: offering.emoji,
+          label: offering.label,
+          visitor: visitorName,
+          time: 'Just now',
+        },
+        ...(m.offeringsLog || []),
+      ],
+    };
+  };
+
+  const buildWithTribute = (m, message, author) => ({
+    ...m,
+    updatedAt: Date.now(),
+    tributes: [
+      {
+        id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        author,
+        message,
+        date: 'Just now',
+      },
+      ...(m.tributes || []),
+    ],
+  });
+
   const applyOfferingToState = (memorialId, offering, visitorName) => {
     setMemorials((prev) =>
-      prev.map((m) => {
-        if (m.id !== memorialId) return m;
-        const nextActive = [
-          offering.emoji,
-          ...(m.activeOfferings || []).filter((e, i) => i < 5 || e !== offering.emoji),
-        ].slice(0, 6);
-        return {
-          ...m,
-          candlesCount: offering.category === 'candle' ? m.candlesCount + 1 : m.candlesCount,
-          incenseCount: offering.category === 'incense' ? m.incenseCount + 1 : m.incenseCount,
-          flowersCount: offering.category === 'flower' ? m.flowersCount + 1 : m.flowersCount,
-          treatsCount: offering.category === 'treat' ? m.treatsCount + 1 : m.treatsCount,
-          activeOfferings: nextActive,
-          offeringsLog: [
-            {
-              id: `o-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              emoji: offering.emoji,
-              label: offering.label,
-              visitor: visitorName,
-              time: 'Just now',
-            },
-            ...(m.offeringsLog || []),
-          ],
-        };
-      })
+      prev.map((m) => (m.id === memorialId ? buildWithOffering(m, offering, visitorName) : m))
     );
   };
 
   const applyTributeToState = (memorialId, message, author) => {
     setMemorials((prev) =>
-      prev.map((m) =>
-        m.id === memorialId
-          ? {
-              ...m,
-              tributes: [
-                {
-                  id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                  author,
-                  message,
-                  date: 'Just now',
-                },
-                ...(m.tributes || []),
-              ],
-            }
-          : m
-      )
+      prev.map((m) => (m.id === memorialId ? buildWithTribute(m, message, author) : m))
     );
   };
 
@@ -433,6 +496,9 @@ export default function App() {
       onStatusChange: (status) => setMpStatus(status),
       onChatMessage: (msg) => {
         setMpChatLog((prev) => [...prev, msg].slice(-40));
+      },
+      onSyncMemorial: (memorial) => {
+        setMemorials((prev) => mergeIncomingMemorial(prev, memorial));
       },
       onRemoteEvent: (evt) => {
         if (!evt) return;
@@ -471,9 +537,7 @@ export default function App() {
             text: `💌 ${evt.senderName} left a message for ${petName}`,
           });
         } else if (evt.kind === 'create_memorial' && evt.memorial) {
-          setMemorials((prev) =>
-            prev.some((m) => m.id === evt.memorial.id) ? prev : [evt.memorial, ...prev]
-          );
+          setMemorials((prev) => mergeIncomingMemorial(prev, evt.memorial));
           setRemoteWorldEvent({
             id: evt.id,
             kind: 'create_memorial',
@@ -498,6 +562,7 @@ export default function App() {
         }
       },
     });
+    syncAllLocalMemorials(memorialsRef.current, true);
   }, []);
 
   const handleSendMpChat = (text) => {
@@ -520,59 +585,68 @@ export default function App() {
 
   const handlePerformOffering = (memorialId, offering) => {
     const visitorName = mpNickname || currentUser?.name || 'Kind Visitor';
-    const petName = memorials.find((m) => m.id === memorialId)?.name || 'a companion';
-    applyOfferingToState(memorialId, offering, visitorName);
+    const current = memorialsRef.current.find((m) => m.id === memorialId);
+    if (!current) return;
+    const updated = buildWithOffering(current, offering, visitorName);
+    setMemorials((prev) => prev.map((m) => (m.id === memorialId ? updated : m)));
+    publishSharedMemorial(updated);
     sendMultiplayerAction({
       kind: 'offering',
       memorialId,
       offering,
-      petName,
+      petName: updated.name,
     });
   };
 
   const handleAddTribute = (memorialId, message) => {
     const author = mpNickname || currentUser?.name || 'Kind Visitor';
-    const petName = memorials.find((m) => m.id === memorialId)?.name || 'a companion';
-    applyTributeToState(memorialId, message, author);
+    const current = memorialsRef.current.find((m) => m.id === memorialId);
+    if (!current) return;
+    const updated = buildWithTribute(current, message, author);
+    setMemorials((prev) => prev.map((m) => (m.id === memorialId ? updated : m)));
+    publishSharedMemorial(updated);
     sendMultiplayerAction({
       kind: 'tribute',
       memorialId,
       message,
-      petName,
+      petName: updated.name,
     });
   };
 
   const handleAddMemory = (memorialId, memory) => {
-    setMemorials((prev) =>
-      prev.map((m) =>
-        m.id === memorialId
-          ? {
-              ...m,
-              memories: [{ id: `m-${Date.now()}`, ...memory }, ...(m.memories || [])],
-            }
-          : m
-      )
-    );
+    const current = memorialsRef.current.find((m) => m.id === memorialId);
+    if (!current) return;
+    const updated = {
+      ...current,
+      updatedAt: Date.now(),
+      memories: [{ id: `m-${Date.now()}`, ...memory }, ...(current.memories || [])],
+    };
+    setMemorials((prev) => prev.map((m) => (m.id === memorialId ? updated : m)));
+    publishSharedMemorial(updated);
   };
 
   const handleUpdateMemorial = (memorialId, patch) => {
-    setMemorials((prev) =>
-      prev.map((m) => (m.id === memorialId ? { ...m, ...patch } : m))
-    );
+    const current = memorialsRef.current.find((m) => m.id === memorialId);
+    if (!current) return;
+    const updated = { ...current, ...patch, updatedAt: Date.now() };
+    setMemorials((prev) => prev.map((m) => (m.id === memorialId ? updated : m)));
+    publishSharedMemorial(updated);
   };
 
   const handleCreateMemorial = (newMemorial) => {
-    setMemorials((prev) => [newMemorial, ...prev]);
-    if (newMemorial.visibility !== 'private') {
+    const withTs = { ...newMemorial, updatedAt: Date.now() };
+    setMemorials((prev) => [withTs, ...prev]);
+    if (withTs.visibility !== 'private') {
+      publishSharedMemorial(withTs);
       sendMultiplayerAction({
         kind: 'create_memorial',
-        memorial: newMemorial,
+        memorial: withTs,
       });
     }
     setShowCreateModal(false);
-    setActiveTab(newMemorial.space === 'ash-room' ? 'ash-room' : 'tombstone');
-    setActiveRoom(newMemorial.space === 'ash-room' ? 'ash-room' : 'tombstone');
-    setSelectedMemorialId(newMemorial.id);
+    setActiveTab(withTs.space === 'ash-room' ? 'ash-room' : 'tombstone');
+    setActiveRoom(withTs.space === 'ash-room' ? 'ash-room' : 'tombstone');
+    setSelectedMemorialId(withTs.id);
   };
 
   const handleSelectNavTab = (tab) => {

@@ -1,5 +1,6 @@
 // Zero-setup real-time multiplayer engine using MQTT 3.1.1 over WSS dual brokers
-// plus BroadcastChannel for instant local tab sync.
+// plus BroadcastChannel for instant local tab sync and retained per-memorial persistence.
+import { prepareMemorialForSync } from './imageCompressor';
 
 const BROKERS = [
   'wss://broker.emqx.io:8084/mqtt',
@@ -10,6 +11,7 @@ const TOPIC_PREFIX = 'evergreen-paws-park/v2/room/';
 const STORAGE_ROOM_KEY = 'evergreen_paws_meetup_room_v1';
 const STORAGE_NICKNAME_KEY = 'evergreen_paws_nickname_v1';
 const PEER_TIMEOUT_MS = 12000;
+const STARTER_IDS = new Set(['m1', 'm2', 'm3', 'm4', 'm5', 'm6']);
 
 const myPeerId = `mp_${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`;
 let seqCounter = 0;
@@ -59,12 +61,16 @@ let callbacks = {
   onPeersChange: null,
   onChatMessage: null,
   onRemoteEvent: null,
+  onSyncMemorial: null,
   onStatusChange: null,
 };
 
 const peersMap = new Map(); // peerId -> peer state
 const seenMessages = new Map(); // msgId -> timestamp
 const sockets = new Map(); // brokerUrl -> { ws, ready, pingTimer, reconnectTimer, buf }
+const touchedMemorialIds = new Set();
+let localMemorialsList = [];
+let lastFullSyncAt = 0;
 let broadcastChan = null;
 let pruneTimer = null;
 let initialized = false;
@@ -124,11 +130,11 @@ function buildMqttUnsubscribe(packetId, topic) {
   return new Uint8Array([0xa2, ...encodeVarLen(rem.length), ...rem]);
 }
 
-function buildMqttPublish(topic, payloadObj) {
+function buildMqttPublish(topic, payloadObj, retain = false) {
   const vh = encodeUtf8Field(topic);
   const pl = encoder.encode(JSON.stringify(payloadObj));
   const remLen = vh.length + pl.length;
-  const header = [0x30, ...encodeVarLen(remLen)];
+  const header = [retain ? 0x31 : 0x30, ...encodeVarLen(remLen)];
   const out = new Uint8Array(header.length + remLen);
   out.set(header, 0);
   out.set(vh, header.length);
@@ -149,7 +155,15 @@ function concatBytes(a, b) {
 }
 
 function currentTopic() {
-  return `${TOPIC_PREFIX}${currentRoomCode}`;
+  return `${TOPIC_PREFIX}${currentRoomCode}/#`;
+}
+
+function liveTopic() {
+  return `${TOPIC_PREFIX}${currentRoomCode}/live`;
+}
+
+function memorialTopic(memorialId) {
+  return `${TOPIC_PREFIX}${currentRoomCode}/memorial/${String(memorialId || 'unknown')}`;
 }
 
 function notifyPeersChanged() {
@@ -192,7 +206,7 @@ function publishPacket(payloadObj) {
     }
   }
 
-  const pkt = buildMqttPublish(currentTopic(), msg);
+  const pkt = buildMqttPublish(liveTopic(), msg, false);
   sockets.forEach((entry) => {
     if (entry.ready && entry.ws && entry.ws.readyState === WebSocket.OPEN) {
       try {
@@ -200,6 +214,62 @@ function publishPacket(payloadObj) {
       } catch {
         // ignore transient send errors
       }
+    }
+  });
+}
+
+export async function publishSharedMemorial(memorial) {
+  if (!memorial || !memorial.id || memorial.visibility === 'private') return;
+  touchedMemorialIds.add(memorial.id);
+  const compact = await prepareMemorialForSync(memorial);
+
+  seqCounter += 1;
+  const msg = {
+    type: 'sync_memorial',
+    peerId: myPeerId,
+    senderName: localState.name,
+    roomCode: currentRoomCode,
+    msgId: `${myPeerId}_${seqCounter}`,
+    ts: Date.now(),
+    memorial: compact,
+  };
+  markSeen(msg.msgId);
+
+  if (broadcastChan) {
+    try {
+      broadcastChan.postMessage(msg);
+    } catch {
+      // ignore
+    }
+  }
+
+  const pkt = buildMqttPublish(memorialTopic(compact.id), msg, true);
+  sockets.forEach((entry) => {
+    if (entry.ready && entry.ws && entry.ws.readyState === WebSocket.OPEN) {
+      try {
+        entry.ws.send(pkt);
+      } catch {
+        // ignore transient send errors
+      }
+    }
+  });
+}
+
+export function syncAllLocalMemorials(memorialsList, forceSync = false) {
+  if (Array.isArray(memorialsList)) {
+    localMemorialsList = memorialsList;
+  }
+  if (!Array.isArray(localMemorialsList) || localMemorialsList.length === 0) return;
+
+  const now = Date.now();
+  if (!forceSync && now - lastFullSyncAt < 4000) return;
+  lastFullSyncAt = now;
+
+  localMemorialsList.forEach((m) => {
+    if (!m || m.visibility === 'private') return;
+    const isCustom = !STARTER_IDS.has(m.id);
+    if (isCustom || touchedMemorialIds.has(m.id)) {
+      publishSharedMemorial(m);
     }
   });
 }
@@ -236,6 +306,14 @@ function handleIncomingPayload(msg) {
 
   if (msg.type === 'request_presence') {
     updateLocalPresence({ ...localState, force: true });
+    syncAllLocalMemorials(localMemorialsList, false);
+    return;
+  }
+
+  if (msg.type === 'sync_memorial' && msg.memorial && typeof callbacks.onSyncMemorial === 'function') {
+    if (msg.memorial.visibility !== 'private') {
+      callbacks.onSyncMemorial(msg.memorial, msg.senderName || 'Visitor');
+    }
     return;
   }
 
@@ -356,6 +434,7 @@ function processMqttBuffer(entry) {
         entry.ws.send(buildMqttSubscribe(1, currentTopic()));
         publishPacket({ type: 'request_presence' });
         updateLocalPresence({ ...localState, force: true });
+        syncAllLocalMemorials(localMemorialsList, false);
       } catch {
         // ignore
       }
@@ -644,6 +723,7 @@ export function setMeetupRoom(nextCode) {
 
   publishPacket({ type: 'request_presence' });
   updateLocalPresence({ ...localState, force: true });
+  syncAllLocalMemorials(localMemorialsList, true);
   return clean;
 }
 

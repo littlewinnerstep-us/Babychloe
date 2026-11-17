@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Upload, Sparkles } from 'lucide-react';
 import MonumentVisual from './MonumentVisual';
 import { MONUMENT_STYLES, PHOTO_PRESETS } from '../data/memorialData';
+import { compressImageFile } from '../utils/imageCompressor';
 
 export default function CreateMemorialModal({
   currentUser,
@@ -33,16 +34,13 @@ export default function CreateMemorialModal({
     setStyleId(MONUMENT_STYLES[next][0].id);
   };
 
-  const handlePhotoUpload = (e) => {
+  const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setPhoto(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
+    const compressedUrl = await compressImageFile(file, 220, 0.74);
+    if (compressedUrl) {
+      setPhoto(compressedUrl);
+    }
   };
 
   const handleSubmit = (e) => {
