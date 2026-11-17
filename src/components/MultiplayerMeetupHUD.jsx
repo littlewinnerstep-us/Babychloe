@@ -28,6 +28,7 @@ export default function MultiplayerMeetupHUD({
   activeGroup = null,
   groupChatLog = [],
   showOutsideChat = true,
+  favorites = [],
   friends = [],
   groupInvites = [],
   accountsList = [],
@@ -38,6 +39,8 @@ export default function MultiplayerMeetupHUD({
   hideBottomChatBar = false,
   onToggleMpOnline,
   onToggleOutsideChat,
+  showOnlyFavorites = false,
+  onToggleShowFavorites,
   onToggleFriend,
   onInviteFriendToGroup,
   onAcceptInvite,
@@ -170,7 +173,21 @@ export default function MultiplayerMeetupHUD({
         </button>
       )}
 
-      {/* Read-Only Current Species Gates Indicator */}
+      {/* Favorite Menu Button Below Outside: ON */}
+      {onToggleShowFavorites && (
+        <button
+          type="button"
+          className={`world-favorites-btn ${showOnlyFavorites ? 'active' : ''}`}
+          onClick={onToggleShowFavorites}
+          title="Open Favorite Pet Memorials list"
+          aria-label="Favorite pet memorials"
+        >
+          <span>💖</span>
+          <span>Favorites ({favorites.length})</span>
+        </button>
+      )}
+
+      {/* Read-Only Current Species Gates Indicator (No click/tap action) */}
       <div className="world-gate-readonly-pill" aria-label={`Current sanctuary: ${activeSpecies} Gates`}>
         <span>{speciesEmoji}</span>
         <span>{activeSpecies} Gates</span>

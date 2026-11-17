@@ -1705,9 +1705,34 @@ select {
   color: #f4b2b2;
 }
 
-.world-gate-readonly-pill {
+.world-favorites-btn {
   position: absolute;
   top: 76px;
+  right: 10px;
+  z-index: 14;
+  border: 1px solid rgba(255, 190, 215, 0.45);
+  background: rgba(16, 22, 20, 0.84);
+  backdrop-filter: blur(8px);
+  color: #ffd7e6;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.world-favorites-btn.active {
+  background: rgba(184, 74, 118, 0.9);
+  border-color: #ffd57e;
+  color: #ffffff;
+}
+
+.world-gate-readonly-pill {
+  position: absolute;
+  top: 108px;
   right: 10px;
   z-index: 14;
   border: 1px solid rgba(255, 213, 126, 0.4);

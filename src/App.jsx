@@ -1535,27 +1535,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Favorites & Other Species Gates */}
-        <div className="controls-row">
-          <div className="species-chips">
-            <button
-              type="button"
-              className={`chip ${showOnlyFavorites ? 'active' : ''}`}
-              onClick={() => setShowOnlyFavorites((v) => !v)}
-            >
-              💖 Favorites ({favorites.length})
-            </button>
-            <button
-              type="button"
-              className="chip"
-              onClick={() => setShowSpeciesGate(true)}
-              title="Open Species Sanctuary Gate list to visit another species"
-            >
-              ⛩️ Other Gates
-            </button>
-          </div>
-        </div>
-
         {/* Section Header + View Mode Switch */}
         <div className="section-header" style={{ flexWrap: 'wrap' }}>
           <div>
@@ -1595,6 +1574,15 @@ export default function App() {
               >
                 <LayoutGrid size={14} /> Cards
               </button>
+              {(showOnlyFavorites || viewMode === 'grid') && (
+                <button
+                  type="button"
+                  className={`view-mode-btn ${showOnlyFavorites ? 'active' : ''}`}
+                  onClick={() => setShowOnlyFavorites((v) => !v)}
+                >
+                  💖 Favorites ({favorites.length})
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -1625,12 +1613,14 @@ export default function App() {
             groupChatLog={groupChatLog}
             showOutsideChat={showOutsideChat}
             favorites={favorites}
+            showOnlyFavorites={showOnlyFavorites}
             friends={friends}
             groupInvites={groupInvites}
             accountsList={accountsList}
             remoteWorldEvent={remoteWorldEvent}
             onToggleMpOnline={handleToggleMpOnline}
             onToggleOutsideChat={handleToggleOutsideChat}
+            onToggleShowFavorites={() => setShowOnlyFavorites((v) => !v)}
             onToggleFavorite={handleToggleFavorite}
             onToggleFriend={handleToggleFriend}
             onInviteFriendToGroup={handleInviteFriendToGroup}
@@ -1678,12 +1668,14 @@ export default function App() {
             groupChatLog={groupChatLog}
             showOutsideChat={showOutsideChat}
             favorites={favorites}
+            showOnlyFavorites={showOnlyFavorites}
             friends={friends}
             groupInvites={groupInvites}
             accountsList={accountsList}
             remoteWorldEvent={remoteWorldEvent}
             onToggleMpOnline={handleToggleMpOnline}
             onToggleOutsideChat={handleToggleOutsideChat}
+            onToggleShowFavorites={() => setShowOnlyFavorites((v) => !v)}
             onToggleFavorite={handleToggleFavorite}
             onToggleFriend={handleToggleFriend}
             onInviteFriendToGroup={handleInviteFriendToGroup}

@@ -102,12 +102,14 @@ export default function ParkWorld3D({
   groupChatLog = [],
   showOutsideChat = true,
   favorites = [],
+  showOnlyFavorites = false,
   friends = [],
   groupInvites = [],
   accountsList = [],
   remoteWorldEvent = null,
   onToggleMpOnline,
   onToggleOutsideChat,
+  onToggleShowFavorites,
   onToggleFavorite,
   onToggleFriend,
   onInviteFriendToGroup,
@@ -1926,8 +1928,8 @@ export default function ParkWorld3D({
           <button
             type="button"
             className="btn-ghost"
-            onClick={walkOrOpenSpeciesGate}
-            title="Walk to or open another species sanctuary gate"
+            onClick={openSpeciesGate}
+            title="Open another species sanctuary gate"
           >
             ⛩️ Other Gates
           </button>
@@ -2268,6 +2270,7 @@ export default function ParkWorld3D({
           activeGroup={activeGroup}
           groupChatLog={groupChatLog}
           showOutsideChat={showOutsideChat}
+          favorites={favorites}
           friends={friends}
           groupInvites={groupInvites}
           accountsList={accountsList}
@@ -2278,6 +2281,8 @@ export default function ParkWorld3D({
           hideBottomChatBar={Boolean(inspectedMemorial || showMeetupPanel || nearSpeciesGate || nearPortal)}
           onToggleMpOnline={onToggleMpOnline}
           onToggleOutsideChat={onToggleOutsideChat}
+          showOnlyFavorites={showOnlyFavorites}
+          onToggleShowFavorites={onToggleShowFavorites}
           onToggleFriend={onToggleFriend}
           onInviteFriendToGroup={onInviteFriendToGroup}
           onAcceptInvite={onAcceptInvite}
