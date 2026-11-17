@@ -1,5 +1,6 @@
 // Web Audio + HTMLAudio singleton engine for sanctuary music and weather/pet ambience
 // Strictly plays only when the app is active in the foreground.
+// Includes iOS/macOS Safari WebKit gesture unlocking, silent-buffer prime, and resume callbacks.
 
 let audioCtx = null;
 let musicAudioEl = null;
@@ -13,31 +14,87 @@ let weatherGain = null;
 
 let isSoundEnabled = false;
 let currentWeather = 'clear';
-let isAppForeground =
-  typeof document === 'undefined'
-    ? true
-    : document.visibilityState === 'visible' &&
-      (typeof document.hasFocus !== 'function' || document.hasFocus());
+let isAppForeground = typeof document === 'undefined' ? true : !document.hidden;
 
 function isAppActive() {
   if (!isAppForeground) return false;
-  if (typeof document !== 'undefined' && (document.hidden || document.visibilityState !== 'visible')) {
+  if (typeof document !== 'undefined' && document.hidden) {
     return false;
   }
   return true;
 }
 
-function ensureContext() {
+function getAudioContextClass() {
+  if (typeof window === 'undefined') return null;
+  return window.AudioContext || window.webkitAudioContext || null;
+}
+
+function primeSilentBuffer(ctx) {
+  try {
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    if (typeof source.start === 'function') {
+      source.start(0);
+    } else if (typeof source.noteOn === 'function') {
+      source.noteOn(0);
+    }
+  } catch {
+    // ignore if already primed or context not ready
+  }
+}
+
+function ensureContext(resumeIfSuspended = true) {
   if (typeof window === 'undefined' || !isAppActive()) return null;
   if (!audioCtx) {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const Ctx = getAudioContextClass();
     if (!Ctx) return null;
     audioCtx = new Ctx();
   }
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume().catch(() => {});
+  if (resumeIfSuspended && audioCtx.state !== 'running') {
+    audioCtx
+      .resume()
+      .then(() => {
+        if (isSoundEnabled && isAppActive()) {
+          if (!savedMusicUrl && !chimeTimer) {
+            startBuiltInHarpLoop();
+          }
+          if (!weatherNode && (currentWeather === 'rain' || currentWeather === 'thunderstorm' || currentWeather === 'windy')) {
+            startWeatherAmbience(currentWeather);
+          }
+        }
+      })
+      .catch(() => {});
   }
   return audioCtx;
+}
+
+export function unlockAudioFromGesture() {
+  if (typeof window === 'undefined') return;
+  isAppForeground = typeof document === 'undefined' ? true : !document.hidden;
+
+  const Ctx = getAudioContextClass();
+  if (Ctx) {
+    if (!audioCtx) {
+      audioCtx = new Ctx();
+    }
+    primeSilentBuffer(audioCtx);
+    if (audioCtx.state !== 'running') {
+      audioCtx
+        .resume()
+        .then(() => {
+          if (isSoundEnabled && isAppActive()) {
+            syncActiveAudio();
+          }
+        })
+        .catch(() => {});
+    }
+  }
+
+  if (savedMusicUrl && musicAudioEl && musicAudioEl.paused && isSoundEnabled) {
+    musicAudioEl.play().catch(() => {});
+  }
 }
 
 function getNoiseBuffer(ctx) {
@@ -72,9 +129,14 @@ function startBuiltInHarpLoop() {
   let step = 0;
 
   const playNote = () => {
-    if (!isSoundEnabled || !isAppActive() || currentMusicSrc) return;
-    const c = ensureContext();
+    if (!isSoundEnabled || !isAppActive() || savedMusicUrl) return;
+    const c = ensureContext(false);
     if (!c) return;
+    if (c.state !== 'running') {
+      c.resume().catch(() => {});
+      return;
+    }
+
     const freq = notes[(step * 3 + (step % 2)) % notes.length];
     step += 1;
 
@@ -89,7 +151,7 @@ function startBuiltInHarpLoop() {
     osc2.frequency.setValueAtTime(freq * 2, now);
 
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.045, now + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.11, now + 0.08);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.6);
 
     osc.connect(gain);
@@ -102,7 +164,18 @@ function startBuiltInHarpLoop() {
     osc2.stop(now + 2.7);
   };
 
-  playNote();
+  if (ctx.state === 'running') {
+    playNote();
+  } else {
+    ctx
+      .resume()
+      .then(() => {
+        if (isSoundEnabled && isAppActive() && !savedMusicUrl) {
+          playNote();
+        }
+      })
+      .catch(() => {});
+  }
   chimeTimer = setInterval(playNote, 1750);
 }
 
@@ -143,13 +216,13 @@ function startWeatherAmbience(weather) {
 
   if (weather === 'windy') {
     filter.type = 'bandpass';
-    filter.frequency.value = 340;
-    filter.Q.value = 1.6;
-    gain.gain.value = 0.055;
+    filter.frequency.value = 380;
+    filter.Q.value = 1.5;
+    gain.gain.value = 0.075;
   } else {
     filter.type = 'lowpass';
-    filter.frequency.value = weather === 'thunderstorm' ? 1450 : 1150;
-    gain.gain.value = weather === 'thunderstorm' ? 0.095 : 0.075;
+    filter.frequency.value = weather === 'thunderstorm' ? 1550 : 1250;
+    gain.gain.value = weather === 'thunderstorm' ? 0.11 : 0.09;
   }
 
   src.connect(filter);
@@ -200,7 +273,10 @@ function syncActiveAudio() {
     if (!musicAudioEl) {
       musicAudioEl = new Audio();
       musicAudioEl.loop = true;
-      musicAudioEl.volume = 0.45;
+      musicAudioEl.volume = 0.5;
+      musicAudioEl.playsInline = true;
+      musicAudioEl.preload = 'auto';
+      musicAudioEl.setAttribute('playsinline', '');
     }
     if (currentMusicSrc !== savedMusicUrl) {
       currentMusicSrc = savedMusicUrl;
@@ -232,14 +308,25 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     setAppForeground(!document.hidden && document.visibilityState === 'visible');
   });
-  window.addEventListener('blur', () => setAppForeground(false));
   window.addEventListener('pagehide', () => setAppForeground(false));
   window.addEventListener('focus', () => {
-    setAppForeground(!document.hidden && document.visibilityState === 'visible');
+    setAppForeground(!document.hidden);
   });
   window.addEventListener('pageshow', () => {
-    setAppForeground(!document.hidden && document.visibilityState === 'visible');
+    setAppForeground(!document.hidden);
   });
+
+  const handleUserGesture = () => {
+    isAppForeground = !document.hidden;
+    if (isSoundEnabled && isAppActive()) {
+      unlockAudioFromGesture();
+    }
+  };
+  window.addEventListener('pointerdown', handleUserGesture, { passive: true });
+  window.addEventListener('touchstart', handleUserGesture, { passive: true });
+  window.addEventListener('touchend', handleUserGesture, { passive: true });
+  window.addEventListener('click', handleUserGesture, { passive: true });
+  window.addEventListener('keydown', handleUserGesture, { passive: true });
 }
 
 export function setSoundState({ enabled, musicUrl = '', weather = 'clear' }) {
@@ -254,54 +341,76 @@ export function playThunderSound() {
   const ctx = ensureContext();
   if (!ctx) return;
 
-  const now = ctx.currentTime;
-  const src = ctx.createBufferSource();
-  src.buffer = getNoiseBuffer(ctx);
-  src.loop = true;
+  const triggerThunder = (c) => {
+    const now = c.currentTime;
+    const src = c.createBufferSource();
+    src.buffer = getNoiseBuffer(c);
+    src.loop = true;
 
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(150, now);
-  filter.frequency.exponentialRampToValueAtTime(52, now + 2.4);
+    const filter = c.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(190, now);
+    filter.frequency.exponentialRampToValueAtTime(58, now + 2.4);
 
-  const gain = ctx.createGain();
-  gain.gain.setValueAtTime(0.001, now);
-  gain.gain.linearRampToValueAtTime(0.32, now + 0.14);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 2.6);
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.36, now + 0.14);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 2.6);
 
-  src.connect(filter);
-  filter.connect(gain);
-  gain.connect(ctx.destination);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(c.destination);
 
-  src.start(now);
-  src.stop(now + 2.7);
+    src.start(now);
+    src.stop(now + 2.7);
+  };
+
+  if (ctx.state === 'running') {
+    triggerThunder(ctx);
+  } else {
+    ctx
+      .resume()
+      .then(() => {
+        if (isSoundEnabled && isAppActive()) triggerThunder(ctx);
+      })
+      .catch(() => {});
+  }
 }
 
 function connectWithDistantEcho(ctx, sourceNode, destNode) {
-  const delay = ctx.createDelay(0.5);
-  delay.delayTime.value = 0.22;
-  const echoFilter = ctx.createBiquadFilter();
-  echoFilter.type = 'lowpass';
-  echoFilter.frequency.value = 360;
-  const echoGain = ctx.createGain();
-  echoGain.gain.value = 0.28;
+  // 2-tap distant valley echo so the call carries from afar cleanly on phone speakers
+  const delay1 = ctx.createDelay(0.7);
+  delay1.delayTime.value = 0.22;
+  const delay2 = ctx.createDelay(0.7);
+  delay2.delayTime.value = 0.45;
+
+  const echoFilter1 = ctx.createBiquadFilter();
+  echoFilter1.type = 'lowpass';
+  echoFilter1.frequency.value = 640;
+
+  const echoFilter2 = ctx.createBiquadFilter();
+  echoFilter2.type = 'lowpass';
+  echoFilter2.frequency.value = 500;
+
+  const echoGain1 = ctx.createGain();
+  echoGain1.gain.value = 0.34;
+  const echoGain2 = ctx.createGain();
+  echoGain2.gain.value = 0.18;
 
   sourceNode.connect(destNode);
-  sourceNode.connect(delay);
-  delay.connect(echoFilter);
-  echoFilter.connect(echoGain);
-  echoGain.connect(destNode);
+
+  sourceNode.connect(delay1);
+  delay1.connect(echoFilter1);
+  echoFilter1.connect(echoGain1);
+  echoGain1.connect(destNode);
+
+  sourceNode.connect(delay2);
+  delay2.connect(echoFilter2);
+  echoFilter2.connect(echoGain2);
+  echoGain2.connect(destNode);
 }
 
-export function playDogBarkAndHowl() {
-  if (!isSoundEnabled || !isAppActive()) return;
-  const nowMs = Date.now();
-  if (nowMs < nextBarkAllowedAt) return;
-  nextBarkAllowedAt = nowMs + 4500;
-
-  const ctx = ensureContext();
-  if (!ctx) return;
-
+function triggerBarkAndHowl(ctx) {
   clearPendingHowl();
   const now = ctx.currentTime;
 
@@ -313,64 +422,97 @@ export function playDogBarkAndHowl() {
     const gain = ctx.createGain();
 
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(idx === 0 ? 310 : 275, start);
-    osc.frequency.exponentialRampToValueAtTime(135, start + 0.13);
+    osc.frequency.setValueAtTime(idx === 0 ? 330 : 290, start);
+    osc.frequency.exponentialRampToValueAtTime(145, start + 0.14);
 
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(440, start);
+    filter.frequency.setValueAtTime(750, start);
 
     gain.gain.setValueAtTime(0.0005, start);
-    gain.gain.linearRampToValueAtTime(0.016, start + 0.025);
-    gain.gain.exponentialRampToValueAtTime(0.0005, start + 0.15);
+    gain.gain.linearRampToValueAtTime(0.052, start + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0005, start + 0.16);
 
     osc.connect(filter);
     filter.connect(gain);
     connectWithDistantEcho(ctx, gain, ctx.destination);
 
     osc.start(start);
-    osc.stop(start + 0.17);
+    osc.stop(start + 0.18);
   });
 
-  // 2-second silent pause, then soft far-away howl
+  // 2-second silent pause, then soft far-away 1.8s howl
   howlTimeout = setTimeout(() => {
     howlTimeout = null;
     if (!isSoundEnabled || !isAppActive()) return;
     const c = ensureContext();
     if (!c) return;
 
-    const howlStart = c.currentTime;
-    const howlOsc = c.createOscillator();
-    const howlSub = c.createOscillator();
-    const howlFilter = c.createBiquadFilter();
-    const howlGain = c.createGain();
+    const playHowl = (hc) => {
+      const howlStart = hc.currentTime;
+      const howlOsc = hc.createOscillator();
+      const howlSub = hc.createOscillator();
+      const howlFilter = hc.createBiquadFilter();
+      const howlGain = hc.createGain();
 
-    howlOsc.type = 'triangle';
-    howlSub.type = 'sine';
+      howlOsc.type = 'triangle';
+      howlSub.type = 'sine';
 
-    howlOsc.frequency.setValueAtTime(240, howlStart);
-    howlOsc.frequency.exponentialRampToValueAtTime(410, howlStart + 0.52);
-    howlOsc.frequency.exponentialRampToValueAtTime(270, howlStart + 1.72);
+      howlOsc.frequency.setValueAtTime(255, howlStart);
+      howlOsc.frequency.exponentialRampToValueAtTime(430, howlStart + 0.52);
+      howlOsc.frequency.exponentialRampToValueAtTime(280, howlStart + 1.72);
 
-    howlSub.frequency.setValueAtTime(240, howlStart);
-    howlSub.frequency.exponentialRampToValueAtTime(410, howlStart + 0.52);
-    howlSub.frequency.exponentialRampToValueAtTime(270, howlStart + 1.72);
+      howlSub.frequency.setValueAtTime(255, howlStart);
+      howlSub.frequency.exponentialRampToValueAtTime(430, howlStart + 0.52);
+      howlSub.frequency.exponentialRampToValueAtTime(280, howlStart + 1.72);
 
-    howlFilter.type = 'lowpass';
-    howlFilter.frequency.setValueAtTime(460, howlStart);
+      howlFilter.type = 'lowpass';
+      howlFilter.frequency.setValueAtTime(760, howlStart);
 
-    howlGain.gain.setValueAtTime(0.0005, howlStart);
-    howlGain.gain.linearRampToValueAtTime(0.014, howlStart + 0.34);
-    howlGain.gain.setValueAtTime(0.012, howlStart + 1.05);
-    howlGain.gain.exponentialRampToValueAtTime(0.0005, howlStart + 1.82);
+      howlGain.gain.setValueAtTime(0.0005, howlStart);
+      howlGain.gain.linearRampToValueAtTime(0.048, howlStart + 0.34);
+      howlGain.gain.setValueAtTime(0.042, howlStart + 1.05);
+      howlGain.gain.exponentialRampToValueAtTime(0.0005, howlStart + 1.82);
 
-    howlOsc.connect(howlFilter);
-    howlSub.connect(howlFilter);
-    howlFilter.connect(howlGain);
-    connectWithDistantEcho(c, howlGain, c.destination);
+      howlOsc.connect(howlFilter);
+      howlSub.connect(howlFilter);
+      howlFilter.connect(howlGain);
+      connectWithDistantEcho(hc, howlGain, hc.destination);
 
-    howlOsc.start(howlStart);
-    howlSub.start(howlStart);
-    howlOsc.stop(howlStart + 1.88);
-    howlSub.stop(howlStart + 1.88);
+      howlOsc.start(howlStart);
+      howlSub.start(howlStart);
+      howlOsc.stop(howlStart + 1.88);
+      howlSub.stop(howlStart + 1.88);
+    };
+
+    if (c.state === 'running') {
+      playHowl(c);
+    } else {
+      c.resume()
+        .then(() => {
+          if (isSoundEnabled && isAppActive()) playHowl(c);
+        })
+        .catch(() => {});
+    }
   }, 2350);
+}
+
+export function playDogBarkAndHowl(force = false) {
+  if (!isSoundEnabled || !isAppActive()) return;
+  const nowMs = Date.now();
+  if (!force && nowMs < nextBarkAllowedAt) return;
+  nextBarkAllowedAt = nowMs + 4500;
+
+  const ctx = ensureContext();
+  if (!ctx) return;
+
+  if (ctx.state === 'running') {
+    triggerBarkAndHowl(ctx);
+  } else {
+    ctx
+      .resume()
+      .then(() => {
+        if (isSoundEnabled && isAppActive()) triggerBarkAndHowl(ctx);
+      })
+      .catch(() => {});
+  }
 }

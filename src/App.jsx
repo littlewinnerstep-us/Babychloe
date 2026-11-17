@@ -34,6 +34,7 @@ import {
   setSoundState,
   playThunderSound,
   playDogBarkAndHowl,
+  unlockAudioFromGesture,
 } from './utils/soundEngine';
 
 const STORAGE_MEMORIALS_KEY = 'evergreen_paws_memorials_v1';
@@ -202,15 +203,26 @@ export default function App() {
     setAtmosphere(pickRandomAtmosphere());
   };
 
+  const handleToggleSound = () => {
+    const next = !soundEnabled;
+    if (next) {
+      unlockAudioFromGesture();
+    }
+    setSoundEnabled(next);
+    setSoundState({ enabled: next, musicUrl, weather });
+  };
+
   const handleAudioFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    unlockAudioFromGesture();
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
         setMusicUrl(reader.result);
         setMusicInput('Uploaded audio track');
         setSoundEnabled(true);
+        setSoundState({ enabled: true, musicUrl: reader.result, weather });
       }
     };
     reader.readAsDataURL(file);
@@ -479,20 +491,15 @@ export default function App() {
           <div className="top-actions" style={{ position: 'relative' }}>
             <button
               type="button"
-              className="btn-ghost"
-              onClick={() => setSoundEnabled((s) => !s)}
-              title={soundEnabled ? 'Turn music & weather sound off' : 'Turn music & weather sound on'}
+              className={`top-music-btn ${soundEnabled ? 'is-on' : 'is-off'}`}
+              onClick={handleToggleSound}
+              title={soundEnabled ? 'Music & Sound ON (Tap to turn off)' : 'Music & Sound OFF (Tap to turn on)'}
+              aria-label={soundEnabled ? 'Music On' : 'Music Off'}
             >
-              {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
-              <span>{soundEnabled ? 'Music On' : 'Music Off'}</span>
-            </button>
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => setShowMusicModal(true)}
-              title="Background music link or upload"
-            >
-              <Music size={15} />
+              <span className="music-icon-wrap">
+                <Music size={16} />
+                {!soundEnabled && <span className="music-slash" aria-hidden="true" />}
+              </span>
             </button>
             <button type="button" className="btn-primary" onClick={handleOpenCreate}>
               <Plus size={15} /> Enshrine Pet
@@ -668,12 +675,24 @@ export default function App() {
               type="button"
               className="env-pill"
               onClick={() => {
-                if (!soundEnabled) setSoundEnabled(true);
-                setTimeout(() => playDogBarkAndHowl(), 60);
+                unlockAudioFromGesture();
+                if (!soundEnabled) {
+                  setSoundEnabled(true);
+                  setSoundState({ enabled: true, musicUrl, weather });
+                }
+                playDogBarkAndHowl(true);
               }}
               title="Hear distant dog bark & moonlight howl"
             >
               🐕 Bark/Howl
+            </button>
+            <button
+              type="button"
+              className="env-pill"
+              onClick={() => setShowMusicModal(true)}
+              title="Change background music link or upload audio"
+            >
+              <Music size={12} /> Music Track
             </button>
           </div>
         </div>
@@ -947,7 +966,7 @@ export default function App() {
                 <button
                   type="button"
                   className={soundEnabled ? 'btn-primary' : 'btn-ghost'}
-                  onClick={() => setSoundEnabled((s) => !s)}
+                  onClick={handleToggleSound}
                 >
                   {soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
                   {soundEnabled ? 'On' : 'Off'}
@@ -958,8 +977,11 @@ export default function App() {
                 className="form-grid"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  setMusicUrl(musicInput.trim());
+                  const nextUrl = musicInput.trim();
+                  unlockAudioFromGesture();
+                  setMusicUrl(nextUrl);
                   setSoundEnabled(true);
+                  setSoundState({ enabled: true, musicUrl: nextUrl, weather });
                   setShowMusicModal(false);
                 }}
               >
@@ -996,9 +1018,11 @@ export default function App() {
                 className="btn-ghost"
                 style={{ justifyContent: 'center' }}
                 onClick={() => {
+                  unlockAudioFromGesture();
                   setMusicUrl('');
                   setMusicInput('');
                   setSoundEnabled(true);
+                  setSoundState({ enabled: true, musicUrl: '', weather });
                   setShowMusicModal(false);
                 }}
               >
