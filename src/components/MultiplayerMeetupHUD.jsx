@@ -30,11 +30,12 @@ export default function MultiplayerMeetupHUD({
   showOutsideChat = true,
   friends = [],
   currentRoom = 'tombstone',
+  activeSpecies = 'Dog',
+  speciesEmoji = '🐕',
   hideBottomChatBar = false,
   onToggleMpOnline,
   onToggleOutsideChat,
   onToggleFriend,
-  onChangeMpRoom,
   isMuted = false,
   muteLabel = '',
   onCreateGroup,
@@ -48,17 +49,12 @@ export default function MultiplayerMeetupHUD({
   const [drawerTab, setDrawerTab] = useState('meetup'); // 'meetup' | 'group'
   const [chatInput, setChatInput] = useState('');
   const [groupChatInput, setGroupChatInput] = useState('');
-  const [roomInput, setRoomInput] = useState(mpRoomCode);
   const [newGroupName, setNewGroupName] = useState('');
   const [joinGroupCode, setJoinGroupCode] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedGroupCode, setCopiedGroupCode] = useState(false);
   const chatEndRef = useRef(null);
   const groupChatEndRef = useRef(null);
-
-  useEffect(() => {
-    setRoomInput(mpRoomCode);
-  }, [mpRoomCode]);
 
   const combinedFeed = useMemo(() => {
     const outside = showOutsideChat
@@ -107,10 +103,7 @@ export default function MultiplayerMeetupHUD({
     setGroupChatInput('');
   };
 
-  const handleRoomSubmit = (e) => {
-    e.preventDefault();
-    if (onChangeMpRoom) onChangeMpRoom(roomInput);
-  };
+  const latestThreeChat = useMemo(() => combinedFeed.slice(-3), [combinedFeed]);
 
   const handleCopyInvite = () => {
     const base =
@@ -157,6 +150,27 @@ export default function MultiplayerMeetupHUD({
           {showOutsideChat ? <MessageSquare size={14} /> : <MessageSquareOff size={14} />}
           <span>{showOutsideChat ? 'Outside: ON' : 'Outside: OFF'}</span>
         </button>
+      )}
+
+      {/* Read-Only Current Species Gates Indicator */}
+      <div className="world-gate-readonly-pill" aria-label={`Current sanctuary: ${activeSpecies} Gates`}>
+        <span>{speciesEmoji}</span>
+        <span>{activeSpecies} Gates</span>
+      </div>
+
+      {/* Latest 3 Chat Rows in Main View (Public & Group Chat) */}
+      {!hideBottomChatBar && latestThreeChat.length > 0 && (
+        <div className="world-chat-preview-3rows" aria-label="Recent chat messages">
+          {latestThreeChat.map((m) => (
+            <div key={m.id || `${m.time}-${m.senderName}`} className="world-chat-preview-row">
+              <strong style={{ color: m._isGroup ? '#9fe8ff' : m.isLocal ? '#ffd57e' : '#aeeac0' }}>
+                {m._isGroup ? '🔒 ' : ''}
+                {m.senderName || 'Visitor'}:
+              </strong>{' '}
+              <span>{m.text}</span>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Live Bottom Chat Bar inside Canvas Viewport */}
@@ -238,30 +252,35 @@ export default function MultiplayerMeetupHUD({
 
           {drawerTab === 'meetup' ? (
             <div className="form-grid" style={{ gap: 8 }}>
-              {/* Meetup Room Code + Invite Link */}
-              <form onSubmit={handleRoomSubmit} className="mp-inline-form">
-                <input
-                  type="text"
-                  className="input-control"
-                  maxLength={24}
-                  value={roomInput}
-                  onChange={(e) => setRoomInput(e.target.value.toUpperCase())}
-                  placeholder="Room code (e.g. PUBLIC)"
-                  style={{ padding: '6px 10px', fontSize: '0.78rem', textTransform: 'uppercase' }}
-                />
-                <button type="submit" className="btn-primary" style={{ padding: '5px 10px', fontSize: '0.74rem' }}>
-                  Join
-                </button>
+              {/* Fixed Public Room Info + Invite Link */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 6,
+                  padding: '6px 10px',
+                  borderRadius: 10,
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border-soft)',
+                  fontSize: '0.76rem',
+                }}
+              >
+                <span>
+                  <Lock size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                  Room: <strong>{mpRoomCode}</strong> (All Online)
+                </span>
                 <button
                   type="button"
                   className="btn-ghost"
                   onClick={handleCopyInvite}
                   title="Copy direct meetup invite link"
-                  style={{ padding: '5px 9px', fontSize: '0.74rem' }}
+                  style={{ padding: '4px 8px', fontSize: '0.72rem' }}
                 >
-                  {copiedLink ? <Check size={13} /> : <Copy size={13} />}
+                  {copiedLink ? <Check size={12} /> : <Copy size={12} />}
+                  {copiedLink ? 'Copied' : 'Invite'}
                 </button>
-              </form>
+              </div>
 
               {/* Online Visitors List */}
               <div>

@@ -118,6 +118,7 @@ export default function ParkWorld3D({
   moderationStatus = {},
   onChangeRoom,
   onSelectMemorial,
+  onRecordVisit,
   onPerformOffering,
   onLightningStrike,
   onRequireLogin,
@@ -166,6 +167,12 @@ export default function ParkWorld3D({
       setArmtipText('');
     }
   }, [nearbyMemorialId]);
+
+  useEffect(() => {
+    if (inspectedId && onRecordVisit) {
+      onRecordVisit(inspectedId);
+    }
+  }, [inspectedId, onRecordVisit]);
 
   const playerRef = useRef({
     x: 0,
@@ -1917,7 +1924,7 @@ export default function ParkWorld3D({
             onClick={walkOrOpenSpeciesGate}
             title="Walk to or open another species sanctuary gate"
           >
-            ⛩️ {getSpeciesEmoji(activeSpecies)} {activeSpecies} Gate
+            ⛩️ Other Gates
           </button>
           <button
             type="button"
@@ -2257,6 +2264,8 @@ export default function ParkWorld3D({
           showOutsideChat={showOutsideChat}
           friends={friends}
           currentRoom={activeRoom}
+          activeSpecies={activeSpecies}
+          speciesEmoji={getSpeciesEmoji(activeSpecies)}
           hideBottomChatBar={Boolean(inspectedMemorial || showMeetupPanel || nearSpeciesGate || nearPortal)}
           onToggleMpOnline={onToggleMpOnline}
           onToggleOutsideChat={onToggleOutsideChat}

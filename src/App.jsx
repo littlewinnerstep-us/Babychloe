@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Trees,
   Flame,
   Sparkles,
-  Search,
   Plus,
   Sun,
   Sunset,
@@ -58,12 +57,11 @@ import {
   sendMultiplayerEmote,
   publishSharedMemorial,
   syncAllLocalMemorials,
-  setMeetupRoom,
-  getMeetupRoom,
   isMultiplayerOnline,
   setMultiplayerOnline,
   getRegisteredAccounts,
   getUserRestrictionStatus,
+  normalizeAccountNameFix,
   getAdminConfig,
   getAdminNotifications,
   getActiveGroup,
@@ -84,6 +82,7 @@ const STORAGE_WEATHER_SOUND_KEY = 'evergreen_paws_weather_sound_v1';
 const STORAGE_VOLUMES_KEY = 'evergreen_paws_volumes_v1';
 const STORAGE_READ_NOTIFS_KEY = 'evergreen_paws_read_notifs_v1';
 const STORAGE_OUTSIDE_CHAT_KEY = 'evergreen_paws_outside_chat_v1';
+const STORAGE_VISITED_KEY = 'evergreen_paws_visited_v1';
 
 const VOLUME_CHANNELS = [
   { key: 'master', label: 'Master', emoji: '🔊' },
@@ -188,7 +187,9 @@ function loadSavedUser() {
     const raw = localStorage.getItem(STORAGE_USER_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return normalizeAccountNameFix(parsed);
+      }
     }
   } catch {
     // ignore corrupted storage
@@ -259,8 +260,10 @@ export default function App() {
   const [activeSpecies, setActiveSpecies] = useState('Dog');
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
   const [viewMode, setViewMode] = useState(loadSavedViewMode); // 'world3d' | 'world2d' | 'grid'
-  const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState(() => loadArrayPref(STORAGE_FAVORITES_KEY));
+  const [visitedMemorialIds, setVisitedMemorialIds] = useState(() =>
+    loadArrayPref(STORAGE_VISITED_KEY)
+  );
   const [friends, setFriends] = useState(() => loadArrayPref(STORAGE_FRIENDS_KEY));
   const [mpOnline, setMpOnline] = useState(isMultiplayerOnline);
   const [activeGroup, setActiveGroup] = useState(getActiveGroup);
@@ -290,6 +293,9 @@ export default function App() {
   );
 
   useEffect(() => {
+    if (currentUser && moderationStatus.account?.name && currentUser.name !== moderationStatus.account.name) {
+      setCurrentUser((prev) => (prev ? { ...prev, name: moderationStatus.account.name } : prev));
+    }
     if (currentUser && moderationStatus.loginBanned) {
       setCurrentUser(null);
       setSelectedMemorialId(null);
@@ -303,7 +309,7 @@ export default function App() {
 
   const [mpPeers, setMpPeers] = useState([]);
   const [mpStatus, setMpStatus] = useState('connecting');
-  const [mpRoomCode, setMpRoomCode] = useState(getMeetupRoom);
+  const mpRoomCode = 'PUBLIC';
   const mpNickname = currentUser?.name?.split(' ')[0] || currentUser?.username || 'Visitor';
   const [mpChatLog, setMpChatLog] = useState([]);
   const [remoteWorldEvent, setRemoteWorldEvent] = useState(null);
@@ -332,6 +338,21 @@ export default function App() {
       // ignore
     }
   }, [favorites]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_VISITED_KEY, JSON.stringify(visitedMemorialIds));
+    } catch {
+      // ignore
+    }
+  }, [visitedMemorialIds]);
+
+  const markMemorialVisited = useCallback((memorialId) => {
+    if (!memorialId) return;
+    setVisitedMemorialIds((prev) =>
+      prev.includes(memorialId) ? prev : [...prev, memorialId]
+    );
+  }, []);
 
   useEffect(() => {
     try {
@@ -454,7 +475,6 @@ export default function App() {
   );
 
   const filteredMemorials = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
     return visibleMemorials.filter((m) => {
       if (activeTab === 'tombstone' && m.space !== 'tombstone') return false;
       if (activeTab === 'ash-room' && m.space !== 'ash-room') return false;
@@ -464,13 +484,9 @@ export default function App() {
         if ((m.species || 'Dog') !== activeSpecies) return false;
       }
       if (showOnlyFavorites && !favorites.includes(m.id)) return false;
-      if (q) {
-        const hay = `${m.name || ''} ${m.breed || ''} ${m.species || ''} ${m.ownerName || ''} ${m.ownerUsername || ''} ${m.locationCode || ''}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
       return true;
     });
-  }, [visibleMemorials, activeTab, activeSpecies, showOnlyFavorites, favorites, searchQuery, currentUser]);
+  }, [visibleMemorials, activeTab, activeSpecies, showOnlyFavorites, favorites, currentUser]);
 
   const stats = useMemo(() => {
     const candles = visibleMemorials.reduce((sum, m) => sum + (m.candlesCount || 0), 0);
@@ -499,6 +515,7 @@ export default function App() {
       );
       return;
     }
+    markMemorialVisited(memorialId);
     setSelectedMemorialId(memorialId);
   };
 
@@ -843,12 +860,6 @@ export default function App() {
 
   const handleToggleOutsideChat = () => {
     setShowOutsideChat((v) => !v);
-  };
-
-  const handleChangeMpRoom = (nextRoom) => {
-    const clean = setMeetupRoom(nextRoom);
-    setMpRoomCode(clean);
-    setMpChatLog([]);
   };
 
   const handlePerformOffering = (memorialId, offering) => {
@@ -1280,6 +1291,10 @@ export default function App() {
               <strong>{stats.flowers}</strong>
               <span>Flowers &amp; Blossoms</span>
             </div>
+            <div className="stat-item">
+              <strong>{visitedMemorialIds.length}</strong>
+              <span>Pet Vigils Visited</span>
+            </div>
           </div>
         </section>
 
@@ -1417,18 +1432,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* Search, Favorites & Species Sanctuary Gate */}
+        {/* Favorites & Other Species Gates */}
         <div className="controls-row">
-          <div className="search-box">
-            <Search size={16} />
-            <input
-              type="search"
-              placeholder="Search pet name, breed, plot or niche..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-
           <div className="species-chips">
             <button
               type="button"
@@ -1441,9 +1446,9 @@ export default function App() {
               type="button"
               className="chip"
               onClick={() => setShowSpeciesGate(true)}
-              title="Open Species Sanctuary Gate to visit another species"
+              title="Open Species Sanctuary Gate list to visit another species"
             >
-              ⛩️ {getSpeciesEmoji(activeSpecies)} {activeSpecies} Gate
+              ⛩️ Other Gates
             </button>
           </div>
         </div>
@@ -1520,13 +1525,13 @@ export default function App() {
             onJoinGroup={handleJoinGroup}
             onExitGroup={handleExitGroup}
             onSendEmote={sendMultiplayerEmote}
-            onChangeMpRoom={handleChangeMpRoom}
             moderationStatus={moderationStatus}
             onChangeRoom={(r) => {
               setActiveRoom(r);
               setActiveTab(r);
             }}
             onSelectMemorial={handleOpenVisit}
+            onRecordVisit={markMemorialVisited}
             onPerformOffering={handlePerformOffering}
             onLightningStrike={playThunderSound}
             onRequireLogin={() => setShowAuthModal(true)}
@@ -1568,13 +1573,13 @@ export default function App() {
             onJoinGroup={handleJoinGroup}
             onExitGroup={handleExitGroup}
             onSendEmote={sendMultiplayerEmote}
-            onChangeMpRoom={handleChangeMpRoom}
             moderationStatus={moderationStatus}
             onChangeRoom={(r) => {
               setActiveRoom(r);
               setActiveTab(r);
             }}
             onSelectMemorial={handleOpenVisit}
+            onRecordVisit={markMemorialVisited}
             onPerformOffering={handlePerformOffering}
             onLightningStrike={playThunderSound}
             onRequireLogin={() => setShowAuthModal(true)}

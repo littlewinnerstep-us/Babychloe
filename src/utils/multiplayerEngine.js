@@ -31,15 +31,7 @@ let seqCounter = 0;
 function readInitialRoom() {
   try {
     if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const fromUrl = params.get('meetup')?.trim();
-      if (fromUrl) {
-        const clean = sanitizeRoomCode(fromUrl);
-        localStorage.setItem(STORAGE_ROOM_KEY, clean);
-        return clean;
-      }
-      const saved = localStorage.getItem(STORAGE_ROOM_KEY);
-      if (saved) return sanitizeRoomCode(saved);
+      localStorage.setItem(STORAGE_ROOM_KEY, 'PUBLIC');
     }
   } catch {
     // ignore storage errors
@@ -75,6 +67,20 @@ let isOnlineMode = (() => {
 
 const accountsMap = new Map(); // usernameLower -> accountObj
 
+export function normalizeAccountNameFix(acc) {
+  if (!acc || typeof acc !== 'object') return acc;
+  const uLower = String(acc.usernameLower || acc.username || '').trim().toLowerCase();
+  const nLower = String(acc.name || '').trim().toLowerCase();
+  if (uLower === 'fdfd' || nLower === 'fdfd') {
+    return {
+      ...acc,
+      name: 'baby',
+      updatedAt: Math.max(Number(acc.updatedAt) || 0, 1763400000000),
+    };
+  }
+  return acc;
+}
+
 function loadAccountsRegistry() {
   const seedDemo = {
     username: DEMO_USER.username || 'alex',
@@ -106,7 +112,7 @@ function loadAccountsRegistry() {
         if (Array.isArray(list)) {
           list.forEach((acc) => {
             if (acc && acc.usernameLower) {
-              accountsMap.set(acc.usernameLower, acc);
+              accountsMap.set(acc.usernameLower, normalizeAccountNameFix(acc));
             }
           });
         }
@@ -519,11 +525,15 @@ function handleIncomingPayload(msg) {
   if (msg.msgId && markSeen(msg.msgId)) return;
 
   if (msg.type === 'register_account' && msg.account && msg.account.usernameLower) {
-    const existing = accountsMap.get(msg.account.usernameLower);
-    if (!existing || (msg.account.updatedAt || 0) >= (existing.updatedAt || 0)) {
-      accountsMap.set(msg.account.usernameLower, msg.account);
+    const incomingFixed = normalizeAccountNameFix(msg.account);
+    const existing = accountsMap.get(incomingFixed.usernameLower);
+    if (!existing || (incomingFixed.updatedAt || 0) >= (existing.updatedAt || 0)) {
+      accountsMap.set(incomingFixed.usernameLower, incomingFixed);
       persistAccountsRegistry();
       notifyAccountsChanged();
+      if (msg.account.name !== incomingFixed.name) {
+        broadcastAccountRecord(incomingFixed);
+      }
     }
     return;
   }
@@ -1488,48 +1498,16 @@ export function sendMultiplayerAction(payload) {
   });
 }
 
-export function setMeetupRoom(nextCode) {
-  const clean = sanitizeRoomCode(nextCode);
-  if (clean === currentRoomCode) return clean;
-
-  // Leave old topic gracefully
-  const oldTopic = currentTopic();
-  publishPacket({ type: 'leave' });
-  sockets.forEach((entry) => {
-    if (entry.ready && entry.ws && entry.ws.readyState === WebSocket.OPEN) {
-      try {
-        entry.ws.send(buildMqttUnsubscribe(2, oldTopic));
-      } catch {
-        // ignore
-      }
-    }
-  });
-
-  currentRoomCode = clean;
+export function setMeetupRoom() {
+  currentRoomCode = 'PUBLIC';
   try {
-    localStorage.setItem(STORAGE_ROOM_KEY, clean);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_ROOM_KEY, 'PUBLIC');
+    }
   } catch {
     // ignore
   }
-
-  peersMap.clear();
-  notifyPeersChanged();
-
-  const newTopic = currentTopic();
-  sockets.forEach((entry) => {
-    if (entry.ready && entry.ws && entry.ws.readyState === WebSocket.OPEN) {
-      try {
-        entry.ws.send(buildMqttSubscribe(3, newTopic));
-      } catch {
-        // ignore
-      }
-    }
-  });
-
-  publishPacket({ type: 'request_presence' });
-  updateLocalPresence({ ...localState, force: true });
-  syncAllLocalMemorials(localMemorialsList, true);
-  return clean;
+  return 'PUBLIC';
 }
 
 export function getMeetupRoom() {
