@@ -127,9 +127,29 @@ export default function ParkWorld2D({
   const [nearSpeciesGate, setNearSpeciesGate] = useState(false);
   const [walkMessage, setWalkMessage] = useState('');
 
+  const pendingOpenGateRef = useRef(false);
+  const openSpeciesGateRef = useRef(null);
+
   const openSpeciesGate = () => {
     if (onOpenSpeciesGate) onOpenSpeciesGate();
     else setShowSpeciesGate(true);
+  };
+  openSpeciesGateRef.current = openSpeciesGate;
+
+  const walkOrOpenSpeciesGate = () => {
+    setInspectedId(null);
+    pendingOpenIdRef.current = null;
+    if (nearGateRef.current) {
+      pendingOpenGateRef.current = false;
+      openSpeciesGate();
+      return;
+    }
+    pendingOpenGateRef.current = true;
+    playerRef.current.targetX = 1085;
+    playerRef.current.targetY = 410;
+    playerRef.current.targetMemorialId = null;
+    setWalkMessage('Walking to Species Sanctuary Gate...');
+    setTimeout(() => setWalkMessage(''), 2200);
   };
 
   useEffect(() => {
@@ -491,6 +511,8 @@ export default function ParkWorld2D({
         p.targetX = null;
         p.targetY = null;
         p.targetMemorialId = null;
+        pendingOpenIdRef.current = null;
+        pendingOpenGateRef.current = false;
         const len = Math.hypot(vx, vy);
         vx /= len;
         vy /= len;
@@ -556,6 +578,13 @@ export default function ParkWorld2D({
       if (isNearGateNow !== nearGateRef.current) {
         nearGateRef.current = isNearGateNow;
         setNearSpeciesGate(isNearGateNow);
+      }
+      if (isNearGateNow && pendingOpenGateRef.current) {
+        pendingOpenGateRef.current = false;
+        p.targetX = null;
+        p.targetY = null;
+        p.moving = false;
+        if (openSpeciesGateRef.current) openSpeciesGateRef.current();
       }
 
       if (portalDist < 46 && now > p.portalCooldownUntil) {
@@ -1431,7 +1460,7 @@ export default function ParkWorld2D({
 
     // 1. Check if user clicked/tapped the Species Sanctuary Gate (East side at 1135, 410)
     if (worldX >= 1068 && worldX <= 1204 && worldY >= 335 && worldY <= 454) {
-      openSpeciesGate();
+      walkOrOpenSpeciesGate();
       return;
     }
 
@@ -1440,6 +1469,7 @@ export default function ParkWorld2D({
       (n) => Math.hypot(worldX - n.x, worldY - n.y) < 32
     );
     if (tappedNpc) {
+      pendingOpenGateRef.current = false;
       npcQuoteOffsetsRef.current[tappedNpc.id] = (npcQuoteOffsetsRef.current[tappedNpc.id] || 0) + 1;
       setWalkMessage(`💬 Listening to ${tappedNpc.name}...`);
       setTimeout(() => setWalkMessage(''), 1800);
@@ -1452,6 +1482,7 @@ export default function ParkWorld2D({
     );
 
     if (tappedMonument) {
+      pendingOpenGateRef.current = false;
       if (nearbyIdRef.current === tappedMonument.id) {
         setInspectedId(tappedMonument.id);
       } else {
@@ -1465,6 +1496,7 @@ export default function ParkWorld2D({
       }
     } else {
       pendingOpenIdRef.current = null;
+      pendingOpenGateRef.current = false;
       p.targetX = Math.max(46, Math.min(bounds.width - 46, worldX));
       p.targetY = Math.max(66, Math.min(bounds.height - 40, worldY));
       p.targetMemorialId = null;
@@ -1500,8 +1532,8 @@ export default function ParkWorld2D({
           <button
             type="button"
             className="btn-ghost"
-            onClick={openSpeciesGate}
-            title="Visit another species sanctuary gate"
+            onClick={walkOrOpenSpeciesGate}
+            title="Walk to or open another species sanctuary gate"
           >
             ⛩️ {getSpeciesEmoji(activeSpecies)} {activeSpecies} Gate
           </button>

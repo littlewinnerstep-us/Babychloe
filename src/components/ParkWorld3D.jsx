@@ -118,9 +118,28 @@ export default function ParkWorld3D({
   const [nearSpeciesGate, setNearSpeciesGate] = useState(false);
   const [walkMessage, setWalkMessage] = useState('');
 
+  const pendingOpenGateRef = useRef(false);
+  const openSpeciesGateRef = useRef(null);
+
   const openSpeciesGate = () => {
     if (onOpenSpeciesGate) onOpenSpeciesGate();
     else setShowSpeciesGate(true);
+  };
+  openSpeciesGateRef.current = openSpeciesGate;
+
+  const walkOrOpenSpeciesGate = () => {
+    setInspectedId(null);
+    pendingOpenIdRef.current = null;
+    if (nearGateRef.current) {
+      pendingOpenGateRef.current = false;
+      openSpeciesGate();
+      return;
+    }
+    pendingOpenGateRef.current = true;
+    playerRef.current.targetX = 415;
+    playerRef.current.targetZ = 0;
+    setWalkMessage('Walking to Species Sanctuary Gate...');
+    setTimeout(() => setWalkMessage(''), 2200);
   };
 
   useEffect(() => {
@@ -497,6 +516,8 @@ export default function ParkWorld3D({
       if (moveForward !== 0 || moveRight !== 0) {
         p.targetX = null;
         p.targetZ = null;
+        pendingOpenIdRef.current = null;
+        pendingOpenGateRef.current = false;
         let vx = dirX * moveForward + rightX * moveRight;
         let vz = dirZ * moveForward + rightZ * moveRight;
         const len = Math.hypot(vx, vz) || 1;
@@ -564,6 +585,13 @@ export default function ParkWorld3D({
       if (isNearGateNow !== nearGateRef.current) {
         nearGateRef.current = isNearGateNow;
         setNearSpeciesGate(isNearGateNow);
+      }
+      if (isNearGateNow && pendingOpenGateRef.current) {
+        pendingOpenGateRef.current = false;
+        p.targetX = null;
+        p.targetZ = null;
+        p.moving = false;
+        if (openSpeciesGateRef.current) openSpeciesGateRef.current();
       }
 
       if (portalDist < 44 && now > p.portalCooldownUntil) {
@@ -1660,14 +1688,14 @@ export default function ParkWorld3D({
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
-    // 1. Check Species Sanctuary Gate hit first
+    // 1. Check Species Sanctuary Gate hit first (walk nearby if far, open if already nearby)
     const gHit = gateScreenHitRef.current;
     if (
       gHit &&
       ((clickX >= gHit.minX && clickX <= gHit.maxX && clickY >= gHit.minY && clickY <= gHit.maxY) ||
         Math.hypot(clickX - gHit.sx, clickY - gHit.sy) < gHit.radius)
     ) {
-      openSpeciesGate();
+      walkOrOpenSpeciesGate();
       return;
     }
 
@@ -1676,6 +1704,7 @@ export default function ParkWorld3D({
       (n) => Math.hypot(clickX - n.sx, clickY - n.sy) < n.radius
     );
     if (npcHit) {
+      pendingOpenGateRef.current = false;
       npcQuoteOffsetsRef.current[npcHit.id] = (npcQuoteOffsetsRef.current[npcHit.id] || 0) + 1;
       setWalkMessage(`💬 Listening to ${npcHit.name}...`);
       setTimeout(() => setWalkMessage(''), 1800);
@@ -1687,6 +1716,7 @@ export default function ParkWorld3D({
       (h) => Math.hypot(clickX - h.sx, clickY - h.sy) < h.radius
     );
     if (hit) {
+      pendingOpenGateRef.current = false;
       if (nearbyIdRef.current === hit.id) {
         setInspectedId(hit.id);
       } else {
@@ -1704,6 +1734,7 @@ export default function ParkWorld3D({
     }
 
     pendingOpenIdRef.current = null;
+    pendingOpenGateRef.current = false;
 
     // Raycast click onto ground plane (wy = 0)
     const viewW = rect.width;
@@ -1771,8 +1802,8 @@ export default function ParkWorld3D({
           <button
             type="button"
             className="btn-ghost"
-            onClick={openSpeciesGate}
-            title="Visit another species sanctuary gate"
+            onClick={walkOrOpenSpeciesGate}
+            title="Walk to or open another species sanctuary gate"
           >
             ⛩️ {getSpeciesEmoji(activeSpecies)} {activeSpecies} Gate
           </button>
