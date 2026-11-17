@@ -14,6 +14,7 @@ import {
   Video,
   Maximize2,
   Minimize2,
+  Users,
 } from 'lucide-react';
 import { OFFERING_TYPES } from '../data/memorialData';
 import {
@@ -21,6 +22,12 @@ import {
   recordGivenToday,
   getDailyLimitNotice,
 } from '../utils/dailyLimits';
+import {
+  updateLocalPresence,
+  getPeersMap,
+  getLocalChatBubble,
+} from '../utils/multiplayerEngine';
+import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
 
 const AVATAR_STORAGE_KEY = 'evergreen_paws_avatar_v1';
 
@@ -163,6 +170,16 @@ export default function ParkWorld3D({
   season = 'spring',
   weather = 'clear',
   activeRoom,
+  mpPeers = [],
+  mpStatus = 'connecting',
+  mpRoomCode = 'PUBLIC',
+  mpNickname = 'Visitor',
+  mpChatLog = [],
+  remoteWorldEvent = null,
+  onSendChat,
+  onSendEmote,
+  onChangeMpRoom,
+  onChangeMpNickname,
   onChangeRoom,
   onSelectMemorial,
   onPerformOffering,
@@ -174,6 +191,7 @@ export default function ParkWorld3D({
   const [cameraMode, setCameraMode] = useState('follow');
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showAvatarPanel, setShowAvatarPanel] = useState(false);
+  const [showMeetupPanel, setShowMeetupPanel] = useState(false);
   const [nearbyMemorialId, setNearbyMemorialId] = useState(null);
   const [inspectedId, setInspectedId] = useState(null);
   const [armtipText, setArmtipText] = useState('');
@@ -233,6 +251,7 @@ export default function ParkWorld3D({
   const lightningCbRef = useRef(onLightningStrike);
   const avatarRef = useRef(avatar);
   const userRef = useRef(currentUser);
+  const mpNicknameRef = useRef(mpNickname);
   const nearbyIdRef = useRef(null);
   const pendingOpenIdRef = useRef(null);
   const nearPortalRef = useRef(false);
@@ -266,6 +285,26 @@ export default function ParkWorld3D({
   useEffect(() => {
     userRef.current = currentUser;
   }, [currentUser]);
+
+  useEffect(() => {
+    mpNicknameRef.current = mpNickname;
+  }, [mpNickname]);
+
+  useEffect(() => {
+    if (!remoteWorldEvent || remoteWorldEvent.room !== roomRef.current) return;
+    if (remoteWorldEvent.memorialId) {
+      const target = positionedRef.current.find((m) => m.id === remoteWorldEvent.memorialId);
+      if (target) {
+        spawnFloatingParticles(target.worldX, 34, target.worldZ, remoteWorldEvent.emoji || '✨', 6);
+      }
+    } else if (Number.isFinite(remoteWorldEvent.nx) && Number.isFinite(remoteWorldEvent.nz)) {
+      spawnFloatingParticles(remoteWorldEvent.nx, 38, remoteWorldEvent.nz, remoteWorldEvent.emoji || '✨', 6);
+    }
+    if (remoteWorldEvent.text) {
+      setWalkMessage(remoteWorldEvent.text);
+      setTimeout(() => setWalkMessage(''), 2600);
+    }
+  }, [remoteWorldEvent]);
 
   useEffect(() => {
     camRef.current.preset = cameraMode;
@@ -323,8 +362,28 @@ export default function ParkWorld3D({
   const triggerEmote = (emoji, label) => {
     const p = playerRef.current;
     spawnFloatingParticles(p.x, 42, p.z, emoji, 6);
+    if (onSendEmote) onSendEmote(emoji, label);
     setWalkMessage(label);
     setTimeout(() => setWalkMessage(''), 2200);
+  };
+
+  const handleWalkToPeer = (peer) => {
+    if (!peer) return;
+    if (peer.room && peer.room !== roomRef.current) {
+      roomRef.current = peer.room;
+      onChangeRoom(peer.room);
+    }
+    if (typeof window !== 'undefined' && window.innerWidth < 680) {
+      setShowMeetupPanel(false);
+    }
+    setTimeout(() => {
+      const p = playerRef.current;
+      p.portalCooldownUntil = performance.now() + 900;
+      p.targetX = Math.max(-480, Math.min(480, (peer.nx || 0) + 34));
+      p.targetZ = Math.max(-340, Math.min(340, (peer.nz || 0) + 28));
+      setWalkMessage(`Walking in 3D to ${peer.name}...`);
+      setTimeout(() => setWalkMessage(''), 2200);
+    }, 60);
   };
 
   const handleWalkToPet = (memorial) => {
@@ -511,6 +570,16 @@ export default function ParkWorld3D({
       }
 
       const room = roomRef.current;
+      updateLocalPresence({
+        name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
+        room,
+        nx: p.x,
+        nz: p.z,
+        facingX: p.facingX,
+        facingZ: p.facingZ,
+        moving: p.moving,
+        avatar: avatarRef.current,
+      });
       const portalZ = room === 'tombstone' ? -320 : 320;
       const portalDist = Math.hypot(p.x - 0, p.z - portalZ);
       const isNearPortalNow = portalDist < 95;
@@ -1141,6 +1210,95 @@ export default function ParkWorld3D({
         });
       });
 
+      // 4b. Remote Live Multiplayer Visitors
+      const nowMs = Date.now();
+      getPeersMap().forEach((peer) => {
+        if (peer.room !== room) return;
+        peer.rx += (peer.nx - peer.rx) * Math.min(1, dt * 10);
+        peer.rz += (peer.nz - peer.rz) * Math.min(1, dt * 10);
+        if (peer.moving) peer.bob = (peer.bob || 0) + dt * 12;
+
+        const pAv = peer.avatar || DEFAULT_AVATAR;
+        if (pAv.companion && pAv.companion !== 'none') {
+          const sx = peer.rx - (peer.facingX || 0) * 20;
+          const sz = peer.rz - (peer.facingZ || 0) * 20;
+          const sy = 10 + Math.sin(now * 0.005 + peer.rx) * 4;
+          pushEntity(sx, sz, () => {
+            const sp = project3D(sx, sy, sz);
+            if (sp) {
+              const glow = ctx.createRadialGradient(sp.sx, sp.sy, 2, sp.sx, sp.sy, 20 * sp.scale);
+              glow.addColorStop(0, 'rgba(182, 238, 255, 0.72)');
+              glow.addColorStop(1, 'rgba(182, 238, 255, 0)');
+              ctx.fillStyle = glow;
+              ctx.beginPath();
+              ctx.arc(sp.sx, sp.sy, 20 * sp.scale, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.font = `${Math.max(13, Math.round(17 * sp.scale))}px serif`;
+              ctx.textAlign = 'center';
+              const em = pAv.companion === 'cat' ? '🐈' : pAv.companion === 'bunny' ? '🐇' : '🐕';
+              ctx.fillText(em, sp.sx, sp.sy + 5);
+            }
+          });
+        }
+
+        const pBobY = peer.moving ? Math.abs(Math.sin(peer.bob || 0)) * 6 : 0;
+        pushEntity(peer.rx, peer.rz, () => {
+          const shadow = project3D(peer.rx, 0.5, peer.rz);
+          if (shadow) {
+            ctx.fillStyle = 'rgba(0,0,0,0.34)';
+            ctx.beginPath();
+            ctx.ellipse(shadow.sx, shadow.sy, 14 * shadow.scale, 7 * shadow.scale, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          draw3DBox(peer.rx, 2 + pBobY, peer.rz, 20, 28, 14, {
+            top: pAv.cloakColor || '#7c6a9a',
+            front: pAv.cloakColor || '#7c6a9a',
+            side: pAv.cloakColor || '#7c6a9a',
+            stroke: 'rgba(130, 245, 175, 0.75)',
+          });
+          const head = project3D(peer.rx, 37 + pBobY, peer.rz);
+          if (head) {
+            ctx.fillStyle = '#f5d2b8';
+            ctx.beginPath();
+            ctx.arc(head.sx, head.sy, 9.5 * head.scale, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = pAv.hairColor || '#2c221e';
+            ctx.beginPath();
+            ctx.arc(head.sx, head.sy - 2 * head.scale, 9.8 * head.scale, Math.PI, 0);
+            ctx.fill();
+
+            if (pAv.carryingLantern) {
+              ctx.font = `${Math.max(11, Math.round(14 * head.scale))}px serif`;
+              ctx.textAlign = 'center';
+              ctx.fillText('🏮', head.sx + 16 * head.scale, head.sy + 14 * head.scale);
+            }
+
+            const pTag = `🟢 ${peer.name || 'Visitor'}`;
+            ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
+            const ptw = ctx.measureText(pTag).width + 12;
+            const nameY = head.sy - 28 * head.scale - 14;
+            ctx.fillStyle = 'rgba(15, 22, 20, 0.84)';
+            ctx.fillRect(head.sx - ptw / 2, nameY, ptw, 16);
+            ctx.fillStyle = '#aef5c8';
+            ctx.textAlign = 'center';
+            ctx.fillText(pTag, head.sx, nameY + 12);
+
+            if (peer.chatText && nowMs < peer.chatExpiresAt) {
+              ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
+              const cw = ctx.measureText(peer.chatText).width + 18;
+              const bubbleY = nameY - 26;
+              ctx.fillStyle = 'rgba(20, 28, 25, 0.94)';
+              ctx.fillRect(head.sx - cw / 2, bubbleY, cw, 22);
+              ctx.strokeStyle = 'rgba(130, 245, 175, 0.8)';
+              ctx.lineWidth = 1.2;
+              ctx.strokeRect(head.sx - cw / 2, bubbleY, cw, 22);
+              ctx.fillStyle = '#ffffff';
+              ctx.fillText(peer.chatText, head.sx, bubbleY + 15);
+            }
+          }
+        });
+      });
+
       // 5. 3D Spirit Pet Companion
       const av = avatarRef.current;
       if (av.companion !== 'none') {
@@ -1199,14 +1357,29 @@ export default function ParkWorld3D({
             ctx.fillText('🏮', head.sx + 16 * head.scale, head.sy + 14 * head.scale);
           }
 
-          const tag = userRef.current?.name?.split(' ')[0] || 'Visitor';
+          const tag = mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor';
           ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
           const tw = ctx.measureText(tag).width + 12;
+          const myNameY = head.sy - 28 * head.scale - 14;
           ctx.fillStyle = 'rgba(15, 22, 20, 0.78)';
-          ctx.fillRect(head.sx - tw / 2, head.sy - 28 * head.scale - 14, tw, 16);
+          ctx.fillRect(head.sx - tw / 2, myNameY, tw, 16);
           ctx.fillStyle = '#ffe5b0';
           ctx.textAlign = 'center';
-          ctx.fillText(tag, head.sx, head.sy - 28 * head.scale - 2);
+          ctx.fillText(tag, head.sx, myNameY + 12);
+
+          const myBubble = getLocalChatBubble();
+          if (myBubble) {
+            ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
+            const cw = ctx.measureText(myBubble).width + 18;
+            const bubbleY = myNameY - 26;
+            ctx.fillStyle = 'rgba(20, 28, 25, 0.94)';
+            ctx.fillRect(head.sx - cw / 2, bubbleY, cw, 22);
+            ctx.strokeStyle = 'rgba(255, 213, 126, 0.85)';
+            ctx.lineWidth = 1.2;
+            ctx.strokeRect(head.sx - cw / 2, bubbleY, cw, 22);
+            ctx.fillStyle = '#fff8eb';
+            ctx.fillText(myBubble, head.sx, bubbleY + 15);
+          }
         }
       });
 
@@ -1515,6 +1688,13 @@ export default function ParkWorld3D({
           <button
             type="button"
             className="btn-ghost"
+            onClick={() => triggerEmote('👋', 'Waved hello to visitors')}
+          >
+            👋 Wave
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
             onClick={() => triggerEmote('🙏', 'Shared a quiet prayer')}
           >
             🙏 Pray
@@ -1528,8 +1708,22 @@ export default function ParkWorld3D({
           </button>
           <button
             type="button"
+            className={`btn-ghost ${showMeetupPanel ? 'active' : ''}`}
+            onClick={() => {
+              setShowAvatarPanel(false);
+              setShowMeetupPanel((v) => !v);
+            }}
+            title="Live multiplayer meetup, room code & chat"
+          >
+            <Users size={14} /> 🟢 Meetup ({mpPeers.length + 1})
+          </button>
+          <button
+            type="button"
             className="btn-ghost"
-            onClick={() => setShowAvatarPanel((v) => !v)}
+            onClick={() => {
+              setShowMeetupPanel(false);
+              setShowAvatarPanel((v) => !v);
+            }}
           >
             <UserCheck size={14} /> Avatar
           </button>
@@ -1850,6 +2044,23 @@ export default function ParkWorld3D({
             </div>
           </div>
         )}
+
+        <MultiplayerMeetupHUD
+          showDrawer={showMeetupPanel}
+          onCloseDrawer={() => setShowMeetupPanel(false)}
+          mpPeers={mpPeers}
+          mpStatus={mpStatus}
+          mpRoomCode={mpRoomCode}
+          mpNickname={mpNickname}
+          mpChatLog={mpChatLog}
+          currentRoom={activeRoom}
+          hideBottomChatBar={Boolean(inspectedMemorial || showMeetupPanel)}
+          onChangeMpRoom={onChangeMpRoom}
+          onChangeMpNickname={onChangeMpNickname}
+          onSendChat={onSendChat}
+          onSendEmote={(em, label) => triggerEmote(em, label)}
+          onWalkToPeer={handleWalkToPeer}
+        />
       </div>
     </div>
   );

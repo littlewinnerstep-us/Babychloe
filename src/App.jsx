@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Trees,
   Flame,
@@ -38,6 +38,16 @@ import {
   isAudioUnlocked,
   wasRecentlyUnlockedInGesture,
 } from './utils/soundEngine';
+import {
+  initMultiplayer,
+  sendMultiplayerAction,
+  sendMultiplayerChat,
+  sendMultiplayerEmote,
+  setMeetupRoom,
+  getMeetupRoom,
+  setMeetupNickname,
+  getMeetupNickname,
+} from './utils/multiplayerEngine';
 
 const STORAGE_MEMORIALS_KEY = 'evergreen_paws_memorials_v1';
 const STORAGE_USER_KEY = 'evergreen_paws_user_v1';
@@ -159,6 +169,20 @@ export default function App() {
   const [pendingCreate, setPendingCreate] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+
+  const [mpPeers, setMpPeers] = useState([]);
+  const [mpStatus, setMpStatus] = useState('connecting');
+  const [mpRoomCode, setMpRoomCode] = useState(getMeetupRoom);
+  const [mpNickname, setMpNickname] = useState(
+    () => getMeetupNickname() || currentUser?.name?.split(' ')[0] || 'Visitor'
+  );
+  const [mpChatLog, setMpChatLog] = useState([]);
+  const [remoteWorldEvent, setRemoteWorldEvent] = useState(null);
+  const memorialsRef = useRef(memorials);
+
+  useEffect(() => {
+    memorialsRef.current = memorials;
+  }, [memorials]);
 
   useEffect(() => {
     try {
@@ -352,8 +376,7 @@ export default function App() {
     setShowUserMenu(false);
   };
 
-  const handlePerformOffering = (memorialId, offering) => {
-    const visitorName = currentUser?.name || 'Kind Visitor';
+  const applyOfferingToState = (memorialId, offering, visitorName) => {
     setMemorials((prev) =>
       prev.map((m) => {
         if (m.id !== memorialId) return m;
@@ -370,7 +393,7 @@ export default function App() {
           activeOfferings: nextActive,
           offeringsLog: [
             {
-              id: `o-${Date.now()}`,
+              id: `o-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
               emoji: offering.emoji,
               label: offering.label,
               visitor: visitorName,
@@ -383,21 +406,140 @@ export default function App() {
     );
   };
 
-  const handleAddTribute = (memorialId, message) => {
-    const author = currentUser?.name || 'Kind Visitor';
+  const applyTributeToState = (memorialId, message, author) => {
     setMemorials((prev) =>
       prev.map((m) =>
         m.id === memorialId
           ? {
               ...m,
               tributes: [
-                { id: `t-${Date.now()}`, author, message, date: 'Just now' },
+                {
+                  id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                  author,
+                  message,
+                  date: 'Just now',
+                },
                 ...(m.tributes || []),
               ],
             }
           : m
       )
     );
+  };
+
+  useEffect(() => {
+    initMultiplayer({
+      onPeersChange: (peers) => setMpPeers(peers),
+      onStatusChange: (status) => setMpStatus(status),
+      onChatMessage: (msg) => {
+        setMpChatLog((prev) => [...prev, msg].slice(-40));
+      },
+      onRemoteEvent: (evt) => {
+        if (!evt) return;
+        if (evt.kind === 'offering' && evt.memorialId && evt.offering) {
+          applyOfferingToState(evt.memorialId, evt.offering, evt.senderName || 'Visitor');
+          const petName =
+            evt.petName ||
+            memorialsRef.current.find((m) => m.id === evt.memorialId)?.name ||
+            'a companion';
+          setRemoteWorldEvent({
+            id: evt.id,
+            kind: 'offering',
+            peerId: evt.peerId,
+            room: evt.room,
+            nx: evt.nx,
+            nz: evt.nz,
+            memorialId: evt.memorialId,
+            emoji: evt.offering.emoji || '🌸',
+            text: `✨ ${evt.senderName} ${evt.offering.blessing || 'left an offering'} for ${petName}`,
+          });
+        } else if (evt.kind === 'tribute' && evt.memorialId && evt.message) {
+          applyTributeToState(evt.memorialId, evt.message, evt.senderName || 'Visitor');
+          const petName =
+            evt.petName ||
+            memorialsRef.current.find((m) => m.id === evt.memorialId)?.name ||
+            'a companion';
+          setRemoteWorldEvent({
+            id: evt.id,
+            kind: 'tribute',
+            peerId: evt.peerId,
+            room: evt.room,
+            nx: evt.nx,
+            nz: evt.nz,
+            memorialId: evt.memorialId,
+            emoji: '💌',
+            text: `💌 ${evt.senderName} left a message for ${petName}`,
+          });
+        } else if (evt.kind === 'create_memorial' && evt.memorial) {
+          setMemorials((prev) =>
+            prev.some((m) => m.id === evt.memorial.id) ? prev : [evt.memorial, ...prev]
+          );
+          setRemoteWorldEvent({
+            id: evt.id,
+            kind: 'create_memorial',
+            peerId: evt.peerId,
+            room: evt.memorial.space || evt.room,
+            nx: evt.nx,
+            nz: evt.nz,
+            emoji: '🕯️',
+            text: `🕯️ ${evt.senderName} enshrined ${evt.memorial.name}`,
+          });
+        } else if (evt.kind === 'emote') {
+          setRemoteWorldEvent({
+            id: evt.id,
+            kind: 'emote',
+            peerId: evt.peerId,
+            room: evt.room,
+            nx: evt.nx,
+            nz: evt.nz,
+            emoji: evt.emoji || '✨',
+            text: `${evt.senderName}: ${evt.label || evt.emoji}`,
+          });
+        }
+      },
+    });
+  }, []);
+
+  const handleSendMpChat = (text) => {
+    const msg = sendMultiplayerChat(text);
+    if (msg) {
+      setMpChatLog((prev) => [...prev, msg].slice(-40));
+    }
+  };
+
+  const handleChangeMpRoom = (nextRoom) => {
+    const clean = setMeetupRoom(nextRoom);
+    setMpRoomCode(clean);
+    setMpChatLog([]);
+  };
+
+  const handleChangeMpNickname = (nextName) => {
+    const saved = setMeetupNickname(nextName);
+    setMpNickname(saved || currentUser?.name?.split(' ')[0] || 'Visitor');
+  };
+
+  const handlePerformOffering = (memorialId, offering) => {
+    const visitorName = mpNickname || currentUser?.name || 'Kind Visitor';
+    const petName = memorials.find((m) => m.id === memorialId)?.name || 'a companion';
+    applyOfferingToState(memorialId, offering, visitorName);
+    sendMultiplayerAction({
+      kind: 'offering',
+      memorialId,
+      offering,
+      petName,
+    });
+  };
+
+  const handleAddTribute = (memorialId, message) => {
+    const author = mpNickname || currentUser?.name || 'Kind Visitor';
+    const petName = memorials.find((m) => m.id === memorialId)?.name || 'a companion';
+    applyTributeToState(memorialId, message, author);
+    sendMultiplayerAction({
+      kind: 'tribute',
+      memorialId,
+      message,
+      petName,
+    });
   };
 
   const handleAddMemory = (memorialId, memory) => {
@@ -421,6 +563,12 @@ export default function App() {
 
   const handleCreateMemorial = (newMemorial) => {
     setMemorials((prev) => [newMemorial, ...prev]);
+    if (newMemorial.visibility !== 'private') {
+      sendMultiplayerAction({
+        kind: 'create_memorial',
+        memorial: newMemorial,
+      });
+    }
     setShowCreateModal(false);
     setActiveTab(newMemorial.space === 'ash-room' ? 'ash-room' : 'tombstone');
     setActiveRoom(newMemorial.space === 'ash-room' ? 'ash-room' : 'tombstone');
@@ -777,6 +925,16 @@ export default function App() {
             season={season}
             weather={weather}
             activeRoom={activeRoom}
+            mpPeers={mpPeers}
+            mpStatus={mpStatus}
+            mpRoomCode={mpRoomCode}
+            mpNickname={mpNickname}
+            mpChatLog={mpChatLog}
+            remoteWorldEvent={remoteWorldEvent}
+            onSendChat={handleSendMpChat}
+            onSendEmote={sendMultiplayerEmote}
+            onChangeMpRoom={handleChangeMpRoom}
+            onChangeMpNickname={handleChangeMpNickname}
             onChangeRoom={(r) => {
               setActiveRoom(r);
               setActiveTab(r);
@@ -794,6 +952,16 @@ export default function App() {
             season={season}
             weather={weather}
             activeRoom={activeRoom}
+            mpPeers={mpPeers}
+            mpStatus={mpStatus}
+            mpRoomCode={mpRoomCode}
+            mpNickname={mpNickname}
+            mpChatLog={mpChatLog}
+            remoteWorldEvent={remoteWorldEvent}
+            onSendChat={handleSendMpChat}
+            onSendEmote={sendMultiplayerEmote}
+            onChangeMpRoom={handleChangeMpRoom}
+            onChangeMpNickname={handleChangeMpNickname}
             onChangeRoom={(r) => {
               setActiveRoom(r);
               setActiveTab(r);

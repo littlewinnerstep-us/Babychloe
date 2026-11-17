@@ -11,6 +11,7 @@ import {
   DoorOpen,
   Maximize2,
   Minimize2,
+  Users,
 } from 'lucide-react';
 import { OFFERING_TYPES } from '../data/memorialData';
 import {
@@ -18,6 +19,12 @@ import {
   recordGivenToday,
   getDailyLimitNotice,
 } from '../utils/dailyLimits';
+import {
+  updateLocalPresence,
+  getPeersMap,
+  getLocalChatBubble,
+} from '../utils/multiplayerEngine';
+import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
 
 const AVATAR_STORAGE_KEY = 'evergreen_paws_avatar_v1';
 
@@ -202,6 +209,16 @@ export default function ParkWorld2D({
   season = 'spring',
   weather = 'clear',
   activeRoom,
+  mpPeers = [],
+  mpStatus = 'connecting',
+  mpRoomCode = 'PUBLIC',
+  mpNickname = 'Visitor',
+  mpChatLog = [],
+  remoteWorldEvent = null,
+  onSendChat,
+  onSendEmote,
+  onChangeMpRoom,
+  onChangeMpNickname,
   onChangeRoom,
   onSelectMemorial,
   onPerformOffering,
@@ -212,6 +229,7 @@ export default function ParkWorld2D({
   const [avatar, setAvatar] = useState(loadAvatarPrefs);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showAvatarPanel, setShowAvatarPanel] = useState(false);
+  const [showMeetupPanel, setShowMeetupPanel] = useState(false);
   const [nearbyMemorialId, setNearbyMemorialId] = useState(null);
   const [inspectedId, setInspectedId] = useState(null);
   const [armtipText, setArmtipText] = useState('');
@@ -258,6 +276,7 @@ export default function ParkWorld2D({
   const lightningCbRef = useRef(onLightningStrike);
   const avatarRef = useRef(avatar);
   const userRef = useRef(currentUser);
+  const mpNicknameRef = useRef(mpNickname);
   const nearbyIdRef = useRef(null);
   const pendingOpenIdRef = useRef(null);
   const nearPortalRef = useRef(false);
@@ -295,6 +314,26 @@ export default function ParkWorld2D({
   useEffect(() => {
     userRef.current = currentUser;
   }, [currentUser]);
+
+  useEffect(() => {
+    mpNicknameRef.current = mpNickname;
+  }, [mpNickname]);
+
+  useEffect(() => {
+    if (!remoteWorldEvent || remoteWorldEvent.room !== roomRef.current) return;
+    if (remoteWorldEvent.memorialId) {
+      const target = positionedRef.current.find((m) => m.id === remoteWorldEvent.memorialId);
+      if (target) {
+        spawnFloatingParticles(target.worldX, target.worldY - 22, remoteWorldEvent.emoji || '✨', 6);
+      }
+    } else if (Number.isFinite(remoteWorldEvent.nx) && Number.isFinite(remoteWorldEvent.nz)) {
+      spawnFloatingParticles(600 + remoteWorldEvent.nx, 410 + remoteWorldEvent.nz - 16, remoteWorldEvent.emoji || '✨', 6);
+    }
+    if (remoteWorldEvent.text) {
+      setWalkMessage(remoteWorldEvent.text);
+      setTimeout(() => setWalkMessage(''), 2600);
+    }
+  }, [remoteWorldEvent]);
 
   // Synchronize player spawn when room changes externally (tabs or portal)
   useEffect(() => {
@@ -357,8 +396,30 @@ export default function ParkWorld2D({
   const triggerEmote = (emoji, label) => {
     const p = playerRef.current;
     spawnFloatingParticles(p.x, p.y - 16, emoji, 6);
+    if (onSendEmote) onSendEmote(emoji, label);
     setWalkMessage(label);
     setTimeout(() => setWalkMessage(''), 2200);
+  };
+
+  const handleWalkToPeer = (peer) => {
+    if (!peer) return;
+    if (peer.room && peer.room !== roomRef.current) {
+      roomRef.current = peer.room;
+      onChangeRoom(peer.room);
+    }
+    if (typeof window !== 'undefined' && window.innerWidth < 680) {
+      setShowMeetupPanel(false);
+    }
+    setTimeout(() => {
+      const p = playerRef.current;
+      const bounds = WORLD_BOUNDS[roomRef.current] || WORLD_BOUNDS.tombstone;
+      p.portalCooldownUntil = performance.now() + 900;
+      p.targetX = Math.max(46, Math.min(bounds.width - 46, 600 + (peer.nx || 0) + 34));
+      p.targetY = Math.max(66, Math.min(bounds.height - 40, 410 + (peer.nz || 0) + 28));
+      p.targetMemorialId = null;
+      setWalkMessage(`Walking to ${peer.name}...`);
+      setTimeout(() => setWalkMessage(''), 2200);
+    }, 60);
   };
 
   const handleWalkToPet = (memorial) => {
@@ -525,6 +586,17 @@ export default function ParkWorld2D({
       // Clamp player within room boundaries
       p.x = Math.max(46, Math.min(bounds.width - 46, p.x));
       p.y = Math.max(66, Math.min(bounds.height - 40, p.y));
+
+      updateLocalPresence({
+        name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
+        room,
+        nx: p.x - 600,
+        nz: p.y - 410,
+        facingX: p.facingX,
+        facingZ: p.facingY,
+        moving: p.moving,
+        avatar: avatarRef.current,
+      });
 
       // Record player history for spirit pet trailing
       if (p.moving || p.history.length === 0) {
@@ -1036,6 +1108,104 @@ export default function ParkWorld2D({
       });
 
       // ====================
+      // DRAW REMOTE MULTIPLAYER VISITORS
+      // ====================
+      const nowMs = Date.now();
+      getPeersMap().forEach((peer) => {
+        if (peer.room !== room) return;
+        peer.rx += (peer.nx - peer.rx) * Math.min(1, dt * 10);
+        peer.rz += (peer.nz - peer.rz) * Math.min(1, dt * 10);
+        if (peer.moving) peer.bob = (peer.bob || 0) + dt * 12;
+
+        const px = 600 + peer.rx;
+        const py = 410 + peer.rz;
+        const pAv = peer.avatar || DEFAULT_AVATAR;
+        const pBob = peer.moving ? Math.abs(Math.sin(peer.bob || 0)) * 4 : 0;
+
+        if (pAv.companion && pAv.companion !== 'none') {
+          const sx = px - (peer.facingX || 0) * 20;
+          const sy = py - (peer.facingZ || 0) * 14 + Math.sin(now * 0.005 + px) * 3;
+          const spGlow = ctx.createRadialGradient(sx, sy, 2, sx, sy, 18);
+          spGlow.addColorStop(0, 'rgba(182, 238, 255, 0.65)');
+          spGlow.addColorStop(1, 'rgba(182, 238, 255, 0)');
+          ctx.fillStyle = spGlow;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 18, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.font = '16px serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(
+            pAv.companion === 'cat' ? '🐈' : pAv.companion === 'bunny' ? '🐇' : '🐕',
+            sx,
+            sy + 6
+          );
+        }
+
+        if (pAv.carryingLantern) {
+          const plg = ctx.createRadialGradient(px, py - 6, 4, px, py - 6, 60);
+          plg.addColorStop(0, 'rgba(255, 212, 128, 0.3)');
+          plg.addColorStop(1, 'rgba(255, 212, 128, 0)');
+          ctx.fillStyle = plg;
+          ctx.beginPath();
+          ctx.arc(px, py - 6, 60, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = 'rgba(0,0,0,0.34)';
+        ctx.beginPath();
+        ctx.ellipse(px, py + 16, 13, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = pAv.cloakColor || '#7c6a9a';
+        drawRoundedRect(ctx, px - 10, py - 8 - pBob, 20, 22, 7);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(130, 245, 175, 0.78)';
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+
+        ctx.fillStyle = '#f5d2b8';
+        ctx.beginPath();
+        ctx.arc(px, py - 16 - pBob, 9.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = pAv.hairColor || '#2c221e';
+        ctx.beginPath();
+        ctx.arc(px, py - 18 - pBob, 9.8, Math.PI, 0);
+        ctx.fill();
+
+        if (pAv.carryingLantern) {
+          ctx.font = '13px serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('🏮', px + 15, py + 2 - pBob);
+        }
+
+        const pTag = `🟢 ${peer.name || 'Visitor'}`;
+        ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
+        const ptw = ctx.measureText(pTag).width + 12;
+        const pNameY = py - 44 - pBob;
+        ctx.fillStyle = 'rgba(15, 22, 20, 0.84)';
+        drawRoundedRect(ctx, px - ptw / 2, pNameY, ptw, 16, 6);
+        ctx.fill();
+        ctx.fillStyle = '#aef5c8';
+        ctx.textAlign = 'center';
+        ctx.fillText(pTag, px, pNameY + 12);
+
+        if (peer.chatText && nowMs < peer.chatExpiresAt) {
+          ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
+          const cw = ctx.measureText(peer.chatText).width + 18;
+          const bubbleY = pNameY - 26;
+          ctx.fillStyle = 'rgba(20, 28, 25, 0.94)';
+          drawRoundedRect(ctx, px - cw / 2, bubbleY, cw, 22, 8);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(130, 245, 175, 0.8)';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(peer.chatText, px, bubbleY + 15);
+        }
+      });
+
+      // ====================
       // DRAW CLICK DESTINATION RING
       // ====================
       if (p.targetX !== null && p.targetY !== null) {
@@ -1122,15 +1292,31 @@ export default function ParkWorld2D({
       }
 
       // Player Name Tag
-      const label = userRef.current?.name?.split(' ')[0] || 'Visitor';
+      const label = mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor';
       ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
       const lw = ctx.measureText(label).width + 12;
+      const myNameY = p.y - 44 - bobOffset;
       ctx.fillStyle = 'rgba(15, 22, 20, 0.78)';
-      drawRoundedRect(ctx, p.x - lw / 2, p.y - 44 - bobOffset, lw, 16, 6);
+      drawRoundedRect(ctx, p.x - lw / 2, myNameY, lw, 16, 6);
       ctx.fill();
       ctx.fillStyle = '#ffe5b0';
       ctx.textAlign = 'center';
-      ctx.fillText(label, p.x, p.y - 32 - bobOffset);
+      ctx.fillText(label, p.x, myNameY + 12);
+
+      const myBubble = getLocalChatBubble();
+      if (myBubble) {
+        ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
+        const cw = ctx.measureText(myBubble).width + 18;
+        const bubbleY = myNameY - 26;
+        ctx.fillStyle = 'rgba(20, 28, 25, 0.94)';
+        drawRoundedRect(ctx, p.x - cw / 2, bubbleY, cw, 22, 8);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 213, 126, 0.85)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.fillStyle = '#fff8eb';
+        ctx.fillText(myBubble, p.x, bubbleY + 15);
+      }
 
       // ====================
       // FLOATING PARTICLES
@@ -1381,6 +1567,13 @@ export default function ParkWorld2D({
           <button
             type="button"
             className="btn-ghost"
+            onClick={() => triggerEmote('👋', 'Waved hello to visitors')}
+          >
+            👋 Wave
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
             onClick={() => triggerEmote('🙏', 'Shared a quiet moment of remembrance')}
           >
             🙏 Pray
@@ -1394,8 +1587,22 @@ export default function ParkWorld2D({
           </button>
           <button
             type="button"
+            className={`btn-ghost ${showMeetupPanel ? 'active' : ''}`}
+            onClick={() => {
+              setShowAvatarPanel(false);
+              setShowMeetupPanel((v) => !v);
+            }}
+            title="Live multiplayer meetup, room code & chat"
+          >
+            <Users size={14} /> 🟢 Meetup ({mpPeers.length + 1})
+          </button>
+          <button
+            type="button"
             className="btn-ghost"
-            onClick={() => setShowAvatarPanel((v) => !v)}
+            onClick={() => {
+              setShowMeetupPanel(false);
+              setShowAvatarPanel((v) => !v);
+            }}
           >
             <UserCheck size={14} /> Avatar
           </button>
@@ -1711,6 +1918,23 @@ export default function ParkWorld2D({
             </div>
           </div>
         )}
+
+        <MultiplayerMeetupHUD
+          showDrawer={showMeetupPanel}
+          onCloseDrawer={() => setShowMeetupPanel(false)}
+          mpPeers={mpPeers}
+          mpStatus={mpStatus}
+          mpRoomCode={mpRoomCode}
+          mpNickname={mpNickname}
+          mpChatLog={mpChatLog}
+          currentRoom={activeRoom}
+          hideBottomChatBar={Boolean(inspectedMemorial || showMeetupPanel)}
+          onChangeMpRoom={onChangeMpRoom}
+          onChangeMpNickname={onChangeMpNickname}
+          onSendChat={onSendChat}
+          onSendEmote={(em, label) => triggerEmote(em, label)}
+          onWalkToPeer={handleWalkToPeer}
+        />
       </div>
     </div>
   );
