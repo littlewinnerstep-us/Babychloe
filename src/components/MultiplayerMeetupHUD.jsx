@@ -1,5 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Users, X, Send, Copy, Check, Navigation, UserPlus, UserCheck, Wifi, WifiOff } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Users,
+  X,
+  Send,
+  Copy,
+  Check,
+  Navigation,
+  UserPlus,
+  UserCheck,
+  Wifi,
+  WifiOff,
+  Lock,
+  LogOut,
+  MessageSquare,
+  MessageSquareOff,
+} from 'lucide-react';
 
 export default function MultiplayerMeetupHUD({
   showDrawer,
@@ -10,22 +25,37 @@ export default function MultiplayerMeetupHUD({
   mpRoomCode = 'PUBLIC',
   mpNickname = 'Visitor',
   mpChatLog = [],
+  activeGroup = null,
+  groupChatLog = [],
+  showOutsideChat = true,
   friends = [],
   currentRoom = 'tombstone',
   hideBottomChatBar = false,
   onToggleMpOnline,
+  onToggleOutsideChat,
   onToggleFriend,
   onChangeMpRoom,
   onChangeMpNickname,
+  onCreateGroup,
+  onJoinGroup,
+  onExitGroup,
+  onSendGroupChat,
   onSendChat,
   onSendEmote,
   onWalkToPeer,
 }) {
+  const [drawerTab, setDrawerTab] = useState('meetup'); // 'meetup' | 'group'
   const [chatInput, setChatInput] = useState('');
+  const [groupChatInput, setGroupChatInput] = useState('');
   const [roomInput, setRoomInput] = useState(mpRoomCode);
   const [nickInput, setNickInput] = useState(mpNickname);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [joinGroupCode, setJoinGroupCode] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedGroupCode, setCopiedGroupCode] = useState(false);
+  const [nickFeedback, setNickFeedback] = useState('');
   const chatEndRef = useRef(null);
+  const groupChatEndRef = useRef(null);
 
   useEffect(() => {
     setRoomInput(mpRoomCode);
@@ -35,18 +65,51 @@ export default function MultiplayerMeetupHUD({
     setNickInput(mpNickname);
   }, [mpNickname]);
 
+  const combinedFeed = useMemo(() => {
+    const outside = showOutsideChat
+      ? mpChatLog.map((m) => ({ ...m, _isGroup: false }))
+      : [];
+    const group = activeGroup
+      ? groupChatLog.map((m) => ({ ...m, _isGroup: true }))
+      : [];
+    return [...outside, ...group].sort((a, b) => (a.time || 0) - (b.time || 0));
+  }, [mpChatLog, groupChatLog, activeGroup, showOutsideChat]);
+
   useEffect(() => {
-    if (showDrawer && chatEndRef.current) {
+    if (showDrawer && drawerTab === 'meetup' && chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [mpChatLog, showDrawer]);
+  }, [combinedFeed, showDrawer, drawerTab]);
+
+  useEffect(() => {
+    if (showDrawer && drawerTab === 'group' && groupChatEndRef.current) {
+      groupChatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [groupChatLog, showDrawer, drawerTab]);
+
+  const groupMembers = useMemo(() => {
+    if (!activeGroup?.id) return [];
+    return mpPeers.filter((p) => p.groupId === activeGroup.id);
+  }, [mpPeers, activeGroup]);
 
   const handleChatSubmit = (e) => {
     e.preventDefault();
     const text = chatInput.trim();
     if (!text) return;
-    if (onSendChat) onSendChat(text);
+    if (activeGroup && onSendGroupChat) {
+      onSendGroupChat(text);
+    } else if (onSendChat) {
+      onSendChat(text);
+    }
     setChatInput('');
+  };
+
+  const handleGroupChatSubmit = (e) => {
+    e.preventDefault();
+    const text = groupChatInput.trim();
+    if (!text || !activeGroup || !onSendGroupChat) return;
+    onSendGroupChat(text);
+    setGroupChatInput('');
   };
 
   const handleRoomSubmit = (e) => {
@@ -56,7 +119,14 @@ export default function MultiplayerMeetupHUD({
 
   const handleNickSubmit = (e) => {
     e.preventDefault();
-    if (onChangeMpNickname) onChangeMpNickname(nickInput);
+    if (!onChangeMpNickname) return;
+    const res = onChangeMpNickname(nickInput);
+    if (res && res.error) {
+      setNickFeedback(res.error);
+      setTimeout(() => setNickFeedback(''), 3000);
+    } else {
+      setNickFeedback('');
+    }
   };
 
   const handleCopyInvite = () => {
@@ -72,8 +142,40 @@ export default function MultiplayerMeetupHUD({
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
+  const handleCopyGroupCode = () => {
+    if (!activeGroup?.id) return;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(activeGroup.id).catch(() => {});
+    }
+    setCopiedGroupCode(true);
+    setTimeout(() => setCopiedGroupCode(false), 2000);
+  };
+
+  const formatTime = (ms) => {
+    if (!ms) return '';
+    return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
     <>
+      {/* On-screen Outside Group Chat Toggle Icon Button */}
+      {onToggleOutsideChat && (
+        <button
+          type="button"
+          className={`world-outside-chat-btn ${showOutsideChat ? 'is-on' : 'is-off'}`}
+          onClick={onToggleOutsideChat}
+          title={
+            showOutsideChat
+              ? 'Outside-group chat visible (tap to mute/hide outside chat)'
+              : 'Outside-group chat hidden (tap to read outside chat)'
+          }
+          aria-label="Toggle outside group chat visibility"
+        >
+          {showOutsideChat ? <MessageSquare size={14} /> : <MessageSquareOff size={14} />}
+          <span>{showOutsideChat ? 'Outside: ON' : 'Outside: OFF'}</span>
+        </button>
+      )}
+
       {/* Live Bottom Chat Bar inside Canvas Viewport */}
       {!hideBottomChatBar && (
         <form className="world-chat-bar" onSubmit={handleChatSubmit}>
@@ -82,7 +184,11 @@ export default function MultiplayerMeetupHUD({
             maxLength={140}
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
-            placeholder={`💬 Chat in ${mpRoomCode} (${mpPeers.length + 1} online)...`}
+            placeholder={
+              activeGroup
+                ? `🔒 Group "${activeGroup.name}" chat (${groupMembers.length + 1} members)...`
+                : `💬 Chat in ${mpRoomCode} (${mpPeers.length + 1} online)...`
+            }
             aria-label="Park meetup chat message"
           />
           <button type="submit" className="world-chat-send" aria-label="Send message">
@@ -91,7 +197,7 @@ export default function MultiplayerMeetupHUD({
         </form>
       )}
 
-      {/* Meetup & Visitors Drawer */}
+      {/* Meetup & Group Chat Drawer */}
       {showDrawer && (
         <div className="mp-drawer">
           <div className="modal-header" style={{ marginBottom: 8 }}>
@@ -127,170 +233,355 @@ export default function MultiplayerMeetupHUD({
             </div>
           </div>
 
-          <div className="form-grid" style={{ gap: 8 }}>
-            {/* Display Name */}
-            <form onSubmit={handleNickSubmit} className="mp-inline-form">
-              <input
-                type="text"
-                className="input-control"
-                maxLength={20}
-                value={nickInput}
-                onChange={(e) => setNickInput(e.target.value)}
-                placeholder="Your visitor name"
-                style={{ padding: '6px 10px', fontSize: '0.78rem' }}
-              />
-              <button type="submit" className="btn-ghost" style={{ padding: '5px 10px', fontSize: '0.74rem' }}>
-                Name
-              </button>
-            </form>
+          <div className="modal-tabs" style={{ marginBottom: 8 }}>
+            <button
+              type="button"
+              className={`modal-tab ${drawerTab === 'meetup' ? 'active' : ''}`}
+              onClick={() => setDrawerTab('meetup')}
+            >
+              🌐 Room &amp; Visitors
+            </button>
+            <button
+              type="button"
+              className={`modal-tab ${drawerTab === 'group' ? 'active' : ''}`}
+              onClick={() => setDrawerTab('group')}
+            >
+              🔒 Group Chat {activeGroup ? `(${groupMembers.length + 1})` : ''}
+            </button>
+          </div>
 
-            {/* Meetup Room Code + Invite Link */}
-            <form onSubmit={handleRoomSubmit} className="mp-inline-form">
-              <input
-                type="text"
-                className="input-control"
-                maxLength={24}
-                value={roomInput}
-                onChange={(e) => setRoomInput(e.target.value.toUpperCase())}
-                placeholder="Room code (e.g. PUBLIC)"
-                style={{ padding: '6px 10px', fontSize: '0.78rem', textTransform: 'uppercase' }}
-              />
-              <button type="submit" className="btn-primary" style={{ padding: '5px 10px', fontSize: '0.74rem' }}>
-                Join
-              </button>
-              <button
-                type="button"
-                className="btn-ghost"
-                onClick={handleCopyInvite}
-                title="Copy direct meetup invite link"
-                style={{ padding: '5px 9px', fontSize: '0.74rem' }}
-              >
-                {copiedLink ? <Check size={13} /> : <Copy size={13} />}
-              </button>
-            </form>
-
-            {/* Online Visitors List */}
-            <div>
-              <div className="field-label" style={{ marginBottom: 4 }}>
-                Visitors Here ({mpPeers.length + 1})
-              </div>
-              <div className="mp-visitors-list">
-                <div className="mp-visitor-row is-self">
-                  <span>
-                    🟢 <strong>{mpNickname || 'Visitor'}</strong> (You)
-                  </span>
-                  <span className="mp-room-tag">
-                    {currentRoom === 'ash-room' ? '🏛️ Ash Room' : '🌿 Garden'}
-                  </span>
+          {drawerTab === 'meetup' ? (
+            <div className="form-grid" style={{ gap: 8 }}>
+              {/* Display Name */}
+              <form onSubmit={handleNickSubmit} className="mp-inline-form">
+                <input
+                  type="text"
+                  className="input-control"
+                  maxLength={32}
+                  value={nickInput}
+                  onChange={(e) => setNickInput(e.target.value)}
+                  placeholder="Text-only display name"
+                  style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                />
+                <button type="submit" className="btn-ghost" style={{ padding: '5px 10px', fontSize: '0.74rem' }}>
+                  Name
+                </button>
+              </form>
+              {nickFeedback && (
+                <div className="armtip-notif" style={{ fontSize: '0.72rem', padding: '5px 8px' }}>
+                  {nickFeedback}
                 </div>
+              )}
 
-                {mpPeers.map((peer) => {
-                  const isFriend = friends.some(
-                    (f) => f.toLowerCase() === (peer.name || '').toLowerCase()
-                  );
-                  return (
-                    <div key={peer.peerId} className="mp-visitor-row">
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                        <span
-                          className="mp-cloak-dot"
-                          style={{ background: peer.avatar?.cloakColor || '#4a7c59' }}
-                        />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {peer.avatar?.gender === 'boy' ? '👦' : '👩'} {peer.name}
-                        </span>
-                      </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                        <span className="mp-room-tag">
-                          {peer.room === 'ash-room' ? '🏛️' : '🌿'}
-                        </span>
-                        {onToggleFriend && (
-                          <button
-                            type="button"
-                            className={isFriend ? 'btn-primary' : 'btn-ghost'}
-                            style={{ padding: '3px 6px', fontSize: '0.68rem' }}
-                            onClick={() => onToggleFriend(peer.name)}
-                            title={isFriend ? 'Friend added (tap to remove)' : 'Add Friend'}
-                          >
-                            {isFriend ? <UserCheck size={10} /> : <UserPlus size={10} />}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="btn-primary"
-                          style={{ padding: '3px 8px', fontSize: '0.7rem' }}
-                          onClick={() => onWalkToPeer && onWalkToPeer(peer)}
-                          title={`Walk to ${peer.name}`}
-                        >
-                          <Navigation size={10} /> Meet
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {mpPeers.length === 0 && (
-                  <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', padding: '4px 2px' }}>
-                    Open in another tab or share your link with friends in room <strong>{mpRoomCode}</strong> to meet up!
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Quick Emotes */}
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-              {[
-                ['👋', 'Waved hello'],
-                ['🙏', 'Sent prayers'],
-                ['🌸', 'Shared blossoms'],
-                ['🕯️', 'Lit a vigil'],
-                ['❤️', 'Sent love'],
-              ].map(([em, label]) => (
+              {/* Meetup Room Code + Invite Link */}
+              <form onSubmit={handleRoomSubmit} className="mp-inline-form">
+                <input
+                  type="text"
+                  className="input-control"
+                  maxLength={24}
+                  value={roomInput}
+                  onChange={(e) => setRoomInput(e.target.value.toUpperCase())}
+                  placeholder="Room code (e.g. PUBLIC)"
+                  style={{ padding: '6px 10px', fontSize: '0.78rem', textTransform: 'uppercase' }}
+                />
+                <button type="submit" className="btn-primary" style={{ padding: '5px 10px', fontSize: '0.74rem' }}>
+                  Join
+                </button>
                 <button
-                  key={em}
                   type="button"
                   className="btn-ghost"
-                  style={{ padding: '3px 8px', fontSize: '0.76rem' }}
-                  onClick={() => onSendEmote && onSendEmote(em, label)}
+                  onClick={handleCopyInvite}
+                  title="Copy direct meetup invite link"
+                  style={{ padding: '5px 9px', fontSize: '0.74rem' }}
                 >
-                  {em}
+                  {copiedLink ? <Check size={13} /> : <Copy size={13} />}
                 </button>
-              ))}
-            </div>
+              </form>
 
-            {/* Chat Log */}
-            <div className="mp-chat-feed">
-              {mpChatLog.length === 0 ? (
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                  No chat messages yet — say hello below!
+              {/* Online Visitors List */}
+              <div>
+                <div className="field-label" style={{ marginBottom: 4 }}>
+                  Visitors Here ({mpPeers.length + 1})
                 </div>
-              ) : (
-                mpChatLog.map((m) => (
-                  <div key={m.id} className="mp-chat-line">
-                    <strong style={{ color: m.isLocal ? 'var(--accent-warm)' : 'var(--accent)' }}>
-                      {m.senderName}:
-                    </strong>{' '}
-                    <span>{m.text}</span>
+                <div className="mp-visitors-list">
+                  <div className="mp-visitor-row is-self">
+                    <span>
+                      🟢 <strong>{mpNickname || 'Visitor'}</strong> (You)
+                    </span>
+                    <span className="mp-room-tag">
+                      {currentRoom === 'ash-room' ? '🏛️ Ash Room' : '🌿 Garden'}
+                    </span>
                   </div>
-                ))
-              )}
-              <div ref={chatEndRef} />
-            </div>
 
-            <form onSubmit={handleChatSubmit} className="mp-inline-form">
-              <input
-                type="text"
-                className="input-control"
-                maxLength={140}
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Type chat message..."
-                style={{ padding: '6px 10px', fontSize: '0.78rem' }}
-              />
-              <button type="submit" className="btn-primary" style={{ padding: '6px 11px', fontSize: '0.75rem' }}>
-                <Send size={12} />
-              </button>
-            </form>
-          </div>
+                  {mpPeers.map((peer) => {
+                    const isFriend = friends.some(
+                      (f) => f.toLowerCase() === (peer.name || '').toLowerCase()
+                    );
+                    const inSameGroup = activeGroup && peer.groupId === activeGroup.id;
+                    return (
+                      <div key={peer.peerId} className="mp-visitor-row">
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                          <span
+                            className="mp-cloak-dot"
+                            style={{ background: peer.avatar?.cloakColor || '#4a7c59' }}
+                          />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {peer.avatar?.gender === 'boy' ? '👦' : '👩'} {peer.name}
+                            {inSameGroup ? ' 🔒' : ''}
+                          </span>
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                          <span className="mp-room-tag">
+                            {peer.room === 'ash-room' ? '🏛️' : '🌿'}
+                          </span>
+                          {onToggleFriend && (
+                            <button
+                              type="button"
+                              className={isFriend ? 'btn-primary' : 'btn-ghost'}
+                              style={{ padding: '3px 6px', fontSize: '0.68rem' }}
+                              onClick={() => onToggleFriend(peer.name)}
+                              title={isFriend ? 'Friend added (tap to remove)' : 'Add Friend'}
+                            >
+                              {isFriend ? <UserCheck size={10} /> : <UserPlus size={10} />}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            style={{ padding: '3px 8px', fontSize: '0.7rem' }}
+                            onClick={() => onWalkToPeer && onWalkToPeer(peer)}
+                            title={`Walk to ${peer.name}`}
+                          >
+                            <Navigation size={10} /> Meet
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {mpPeers.length === 0 && (
+                    <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', padding: '4px 2px' }}>
+                      Open in another tab or share your link with friends in room <strong>{mpRoomCode}</strong> to meet up!
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Quick Emotes */}
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                {[
+                  ['👋', 'Waved hello'],
+                  ['🙏', 'Sent prayers'],
+                  ['🌸', 'Shared blossoms'],
+                  ['🕯️', 'Lit a vigil'],
+                  ['❤️', 'Sent love'],
+                ].map(([em, label]) => (
+                  <button
+                    key={em}
+                    type="button"
+                    className="btn-ghost"
+                    style={{ padding: '3px 8px', fontSize: '0.76rem' }}
+                    onClick={() => onSendEmote && onSendEmote(em, label)}
+                  >
+                    {em}
+                  </button>
+                ))}
+              </div>
+
+              {/* Combined Park & Group Chat Feed */}
+              <div className="mp-chat-feed">
+                {combinedFeed.length === 0 ? (
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {showOutsideChat
+                      ? 'No chat messages yet — say hello below!'
+                      : 'Outside chat is muted. Switch Outside: ON or join a Group Chat.'}
+                  </div>
+                ) : (
+                  combinedFeed.map((m) => (
+                    <div key={m.id} className="mp-chat-line">
+                      {m._isGroup && (
+                        <span style={{ color: '#ffd57e', fontWeight: 700, fontSize: '0.68rem', marginRight: 4 }}>
+                          [Group]
+                        </span>
+                      )}
+                      <strong style={{ color: m.isLocal ? 'var(--accent-warm)' : 'var(--accent)' }}>
+                        {m.senderName}:
+                      </strong>{' '}
+                      <span>{m.text}</span>
+                    </div>
+                  ))
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              <form onSubmit={handleChatSubmit} className="mp-inline-form">
+                <input
+                  type="text"
+                  className="input-control"
+                  maxLength={140}
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder={activeGroup ? 'Send to group members...' : 'Type public park chat...'}
+                  style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                />
+                <button type="submit" className="btn-primary" style={{ padding: '6px 11px', fontSize: '0.75rem' }}>
+                  <Send size={12} />
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div className="form-grid" style={{ gap: 8 }}>
+              {!activeGroup ? (
+                <>
+                  <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                    <Lock size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                    Create or join a private group chat (unlimited members). Only group members can read group messages.
+                    Oldest messages auto-delete after 23 minutes.
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (onCreateGroup) onCreateGroup(newGroupName);
+                      setNewGroupName('');
+                    }}
+                    className="mp-inline-form"
+                  >
+                    <input
+                      type="text"
+                      className="input-control"
+                      maxLength={28}
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      placeholder="New group name (e.g. Memory Circle)"
+                      style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                    />
+                    <button type="submit" className="btn-primary" style={{ padding: '5px 10px', fontSize: '0.74rem' }}>
+                      Create
+                    </button>
+                  </form>
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (joinGroupCode.trim() && onJoinGroup) {
+                        onJoinGroup(joinGroupCode.trim());
+                        setJoinGroupCode('');
+                      }
+                    }}
+                    className="mp-inline-form"
+                  >
+                    <input
+                      type="text"
+                      className="input-control"
+                      maxLength={24}
+                      value={joinGroupCode}
+                      onChange={(e) => setJoinGroupCode(e.target.value.toUpperCase())}
+                      placeholder="Join by Group Code (e.g. GRP-MEMORY-A1B2)"
+                      style={{ padding: '6px 10px', fontSize: '0.78rem', textTransform: 'uppercase' }}
+                    />
+                    <button type="submit" className="btn-ghost" style={{ padding: '5px 10px', fontSize: '0.74rem' }}>
+                      Join
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <>
+                  <div
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: 10,
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid rgba(255, 213, 126, 0.38)',
+                      fontSize: '0.76rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                      <strong>🔒 {activeGroup.name}</strong>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        style={{ padding: '3px 7px', fontSize: '0.7rem', color: '#f38b8b' }}
+                        onClick={onExitGroup}
+                        title="Exit group chat anytime"
+                      >
+                        <LogOut size={11} /> Exit Group
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                      <span>Code: <strong>{activeGroup.id}</strong></span>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        style={{ padding: '2px 7px', fontSize: '0.68rem' }}
+                        onClick={handleCopyGroupCode}
+                      >
+                        {copiedGroupCode ? <Check size={11} /> : <Copy size={11} />}
+                        {copiedGroupCode ? 'Copied' : 'Copy Code'}
+                      </button>
+                    </div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: 3 }}>
+                      Members online: {groupMembers.length + 1} (Unlimited capacity) &bull; Messages auto-delete after 23m
+                    </div>
+                  </div>
+
+                  {/* Group Members List */}
+                  <div className="mp-visitors-list" style={{ maxHeight: 82 }}>
+                    <div className="mp-visitor-row is-self">
+                      <span>🟢 <strong>{mpNickname || 'Visitor'}</strong> (You)</span>
+                      <span className="mp-room-tag">{currentRoom === 'ash-room' ? '🏛️' : '🌿'}</span>
+                    </div>
+                    {groupMembers.map((gm) => (
+                      <div key={gm.peerId} className="mp-visitor-row">
+                        <span>{gm.avatar?.gender === 'boy' ? '👦' : '👩'} {gm.name}</span>
+                        <span className="mp-room-tag">{gm.room === 'ash-room' ? '🏛️' : '🌿'}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Full Group Chat History (auto-deleted oldest after 23 min) */}
+                  <div className="field-label" style={{ marginBottom: 0 }}>
+                    Group Chat History (Auto-clears after 23 min)
+                  </div>
+                  <div className="mp-chat-feed" style={{ maxHeight: 150 }}>
+                    {groupChatLog.length === 0 ? (
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        Private group history is empty — only members of {activeGroup.name} can read this chat.
+                      </div>
+                    ) : (
+                      groupChatLog.map((m) => (
+                        <div key={m.id} className="mp-chat-line">
+                          <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)', marginRight: 4 }}>
+                            {formatTime(m.time)}
+                          </span>
+                          <strong style={{ color: m.isLocal ? 'var(--accent-warm)' : 'var(--accent)' }}>
+                            {m.senderName}:
+                          </strong>{' '}
+                          <span>{m.text}</span>
+                        </div>
+                      ))
+                    )}
+                    <div ref={groupChatEndRef} />
+                  </div>
+
+                  <form onSubmit={handleGroupChatSubmit} className="mp-inline-form">
+                    <input
+                      type="text"
+                      className="input-control"
+                      maxLength={240}
+                      value={groupChatInput}
+                      onChange={(e) => setGroupChatInput(e.target.value)}
+                      placeholder={`Message ${activeGroup.name} members...`}
+                      style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                    />
+                    <button type="submit" className="btn-primary" style={{ padding: '6px 11px', fontSize: '0.75rem' }}>
+                      <Send size={12} />
+                    </button>
+                  </form>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </>

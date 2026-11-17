@@ -9,13 +9,18 @@ let harpUriCache = null;
 const weatherUriCache = {};
 let barkHowlUriCache = null;
 let owlUriCache = null;
+let birdUriCache = null;
 let thunderUriCache = null;
 
 let musicEl = null;
-let weatherEl = null;
+let weatherEls = [null, null];
+let activeWeatherSlot = 0;
+let weatherFadeTimer = null;
 let barkEl = null;
 let owlEl = null;
-let thunderEl = null;
+let birdEl = null;
+let thunderEls = [null, null];
+let thunderSlot = 0;
 
 let currentMusicSrc = '';
 let currentWeatherSrc = '';
@@ -25,6 +30,7 @@ let isSoundEnabled = true;
 let isWeatherSoundEnabled = true;
 let currentWeather = 'clear';
 let currentRoom = 'tombstone';
+let currentAtmosphere = 'dusk';
 let isAppForeground = typeof document === 'undefined' ? true : !document.hidden;
 
 export const DEFAULT_SOUND_VOLUMES = {
@@ -34,6 +40,7 @@ export const DEFAULT_SOUND_VOLUMES = {
   thunder: 0.7,
   bark: 0.55,
   owl: 0.5,
+  bird: 0.55,
 };
 
 let soundVolumes = { ...DEFAULT_SOUND_VOLUMES };
@@ -48,9 +55,9 @@ function getEffectiveVol(key) {
   return clampVol(soundVolumes.master * (soundVolumes[key] ?? 1));
 }
 
-function applyElementVolume(el, key) {
+function applyElementVolume(el, key, multiplier = 1) {
   if (!el) return;
-  const eff = getEffectiveVol(key);
+  const eff = clampVol(soundVolumes.master * (soundVolumes[key] ?? 1) * multiplier);
   try {
     el.volume = eff;
   } catch {
@@ -61,21 +68,29 @@ function applyElementVolume(el, key) {
 
 function applyAllVolumes() {
   applyElementVolume(musicEl, 'music');
-  applyElementVolume(weatherEl, 'weather');
+  weatherEls.forEach((wEl, idx) => {
+    if (wEl && !weatherFadeTimer) {
+      applyElementVolume(wEl, 'weather', idx === activeWeatherSlot ? 1 : 0);
+    }
+  });
   applyElementVolume(barkEl, 'bark');
   applyElementVolume(owlEl, 'owl');
-  applyElementVolume(thunderEl, 'thunder');
+  applyElementVolume(birdEl, 'bird');
+  thunderEls.forEach((tEl) => applyElementVolume(tEl, 'thunder'));
 }
 
 let audioUnlocked = false;
 let unlockedAtMs = 0;
 let barkPlayGen = 0;
 let owlPlayGen = 0;
+let birdPlayGen = 0;
 let thunderPlayGen = 0;
 let nextBarkAllowedAt = 0;
 let nextOwlAllowedAt = 0;
+let nextBirdAllowedAt = 0;
 let natureCallTimer = null;
 let nextNatureCallIsOwl = false;
+let prewarmStarted = false;
 
 function isAppActive() {
   if (!isAppForeground) return false;
@@ -107,10 +122,13 @@ function createMediaEl(loop, volumeKey) {
 function ensureElements() {
   if (typeof window === 'undefined') return;
   if (!musicEl) musicEl = createMediaEl(true, 'music');
-  if (!weatherEl) weatherEl = createMediaEl(true, 'weather');
+  if (!weatherEls[0]) weatherEls[0] = createMediaEl(true, 'weather');
+  if (!weatherEls[1]) weatherEls[1] = createMediaEl(true, 'weather');
   if (!barkEl) barkEl = createMediaEl(false, 'bark');
   if (!owlEl) owlEl = createMediaEl(false, 'owl');
-  if (!thunderEl) thunderEl = createMediaEl(false, 'thunder');
+  if (!birdEl) birdEl = createMediaEl(false, 'bird');
+  if (!thunderEls[0]) thunderEls[0] = createMediaEl(false, 'thunder');
+  if (!thunderEls[1]) thunderEls[1] = createMediaEl(false, 'thunder');
   applyAllVolumes();
 }
 
@@ -420,6 +438,85 @@ function getThunderUri() {
   return thunderUriCache;
 }
 
+function getMorningBirdUri() {
+  if (birdUriCache) return birdUriCache;
+
+  const duration = 3.2;
+  const totalSamples = Math.floor(SAMPLE_RATE * duration);
+  const dry = new Float32Array(totalSamples);
+
+  // Gentle morning songbird chirps & cheerful soft garden trills
+  const chirps = [
+    { startSec: 0.08, durSec: 0.14, f0: 2150, f1: 2780, sweep: 1 },
+    { startSec: 0.27, durSec: 0.13, f0: 2450, f1: 3050, sweep: 1 },
+    { startSec: 0.48, durSec: 0.22, f0: 2820, f1: 2320, sweep: -1 },
+    { startSec: 1.18, durSec: 0.12, f0: 1980, f1: 2560, sweep: 1 },
+    { startSec: 1.36, durSec: 0.18, f0: 2380, f1: 2940, sweep: 1 },
+    { startSec: 1.62, durSec: 0.26, f0: 2760, f1: 2240, sweep: -1 },
+    { startSec: 2.38, durSec: 0.14, f0: 2260, f1: 2860, sweep: 1 },
+    { startSec: 2.58, durSec: 0.20, f0: 2680, f1: 3120, sweep: 1 },
+  ];
+
+  for (const c of chirps) {
+    const startIdx = Math.floor(c.startSec * SAMPLE_RATE);
+    const len = Math.floor(c.durSec * SAMPLE_RATE);
+    let phase = 0;
+    for (let j = 0; j < len; j += 1) {
+      const t = j / SAMPLE_RATE;
+      const ratio = j / len;
+      const vibrato = Math.sin(2 * Math.PI * 26 * t) * 42;
+      const freq = c.f0 + (c.f1 - c.f0) * Math.sin(ratio * Math.PI * 0.65) + vibrato;
+      phase += (2 * Math.PI * freq) / SAMPLE_RATE;
+
+      const attack = Math.min(1, t / 0.025);
+      const release = Math.min(1, (c.durSec - t) / 0.055);
+      const env = attack * Math.max(0, release);
+      const wave = 0.78 * Math.sin(phase) + 0.18 * Math.sin(phase * 2);
+      dry[startIdx + j] += wave * env * 0.2;
+    }
+  }
+
+  const out = new Float32Array(totalSamples);
+  const d1 = Math.floor(0.18 * SAMPLE_RATE);
+  const d2 = Math.floor(0.36 * SAMPLE_RATE);
+  let lp = 0;
+  for (let i = 0; i < totalSamples; i += 1) {
+    const wet =
+      dry[i] +
+      (i >= d1 ? dry[i - d1] * 0.28 : 0) +
+      (i >= d2 ? dry[i - d2] * 0.14 : 0);
+    lp = 0.74 * lp + 0.26 * wet;
+    out[i] = lp;
+  }
+
+  birdUriCache = encodeWavDataUri(out, SAMPLE_RATE);
+  return birdUriCache;
+}
+
+function prewarmAudioUris() {
+  if (prewarmStarted || typeof window === 'undefined') return;
+  prewarmStarted = true;
+  const tasks = [
+    () => getHarpLoopUri(),
+    () => getWeatherUri('rain'),
+    () => getWeatherUri('windy'),
+    () => getWeatherUri('thunderstorm'),
+    () => getMorningBirdUri(),
+    () => getBarkHowlUri(),
+    () => getOwlHootUri(),
+    () => getThunderUri(),
+  ];
+  tasks.forEach((fn, i) => {
+    setTimeout(() => {
+      try {
+        fn();
+      } catch {
+        // ignore
+      }
+    }, i * 45);
+  });
+}
+
 function primeOneShotEl(el, uri, getGen, volKey) {
   if (!el || el._primed || !el.paused) return;
   el._primed = true;
@@ -444,17 +541,27 @@ function primeOneShotEl(el, uri, getGen, volKey) {
     });
 }
 
+function safePause(el) {
+  if (el && !el.paused) {
+    try {
+      el.pause();
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function stopWeatherFade() {
+  if (weatherFadeTimer) {
+    clearInterval(weatherFadeTimer);
+    weatherFadeTimer = null;
+  }
+}
+
 function pauseAllAudio() {
   stopNatureCallLoop();
-  [musicEl, weatherEl, barkEl, owlEl, thunderEl].forEach((el) => {
-    if (el && !el.paused) {
-      try {
-        el.pause();
-      } catch {
-        // ignore
-      }
-    }
-  });
+  stopWeatherFade();
+  [musicEl, weatherEls[0], weatherEls[1], barkEl, owlEl, birdEl, thunderEls[0], thunderEls[1]].forEach(safePause);
 }
 
 function shouldPlayWeatherAudio() {
@@ -480,7 +587,9 @@ function scheduleNextNatureCall(delayMs) {
   natureCallTimer = setTimeout(() => {
     natureCallTimer = null;
     if (!isSoundEnabled || !isAppActive()) return;
-    if (nextNatureCallIsOwl) {
+    if (currentAtmosphere === 'morning') {
+      playMorningBird(false);
+    } else if (nextNatureCallIsOwl) {
       nextNatureCallIsOwl = false;
       playOwlHoot(false);
     } else {
@@ -493,8 +602,64 @@ function scheduleNextNatureCall(delayMs) {
 function startNatureCallLoopIfIdle() {
   if (!isSoundEnabled || !isAppActive()) return;
   if (natureCallTimer) return;
-  const initialPause = 1800 + Math.floor(Math.random() * 2200);
+  const initialPause = 1500 + Math.floor(Math.random() * 2000);
   scheduleNextNatureCall(initialPause);
+}
+
+function syncWeatherCrossfade() {
+  const shouldPlay = shouldPlayWeatherAudio() && getEffectiveVol('weather') > 0.001;
+  const curEl = weatherEls[activeWeatherSlot];
+  const altSlot = activeWeatherSlot === 0 ? 1 : 0;
+  const nextEl = weatherEls[altSlot];
+
+  if (!shouldPlay) {
+    stopWeatherFade();
+    currentWeatherSrc = '';
+    safePause(curEl);
+    safePause(nextEl);
+    return;
+  }
+
+  const targetWeather = getWeatherUri(currentWeather);
+  // If already playing this exact weather smoothly, just ensure volume & playing without restarting
+  if (currentWeatherSrc === targetWeather && curEl && !curEl.paused && !weatherFadeTimer) {
+    applyElementVolume(curEl, 'weather', 1);
+    return;
+  }
+
+  // Smooth crossfade from curEl -> nextEl with zero lag or interruption
+  currentWeatherSrc = targetWeather;
+  if (!nextEl) return;
+
+  if (curEl && curEl.paused) {
+    // Nothing playing yet: start curEl cleanly
+    if (curEl.src !== targetWeather) curEl.src = targetWeather;
+    applyElementVolume(curEl, 'weather', 1);
+    curEl.play().catch(() => {});
+    return;
+  }
+
+  stopWeatherFade();
+  if (nextEl.src !== targetWeather) nextEl.src = targetWeather;
+  applyElementVolume(nextEl, 'weather', 0.02);
+  nextEl.play().catch(() => {});
+
+  const oldEl = curEl;
+  const newSlot = altSlot;
+  let step = 0;
+  const totalSteps = 8;
+  weatherFadeTimer = setInterval(() => {
+    step += 1;
+    const progress = Math.min(1, step / totalSteps);
+    applyElementVolume(nextEl, 'weather', progress);
+    applyElementVolume(oldEl, 'weather', 1 - progress);
+    if (step >= totalSteps) {
+      stopWeatherFade();
+      safePause(oldEl);
+      activeWeatherSlot = newSlot;
+      applyElementVolume(nextEl, 'weather', 1);
+    }
+  }, 40);
 }
 
 function syncActiveAudio(fromGesture = false) {
@@ -514,13 +679,7 @@ function syncActiveAudio(fromGesture = false) {
     }
     applyElementVolume(musicEl, 'music');
     if (getEffectiveVol('music') <= 0.001) {
-      if (!musicEl.paused) {
-        try {
-          musicEl.pause();
-        } catch {
-          // ignore
-        }
-      }
+      safePause(musicEl);
     } else if (musicEl.paused) {
       musicEl
         .play()
@@ -547,24 +706,14 @@ function syncActiveAudio(fromGesture = false) {
     }
   }
 
-  if (weatherEl) {
-    if (shouldPlayWeatherAudio() && getEffectiveVol('weather') > 0.001) {
-      const targetWeather = getWeatherUri(currentWeather);
-      if (currentWeatherSrc !== targetWeather) {
-        currentWeatherSrc = targetWeather;
-        weatherEl.src = targetWeather;
-      }
-      applyElementVolume(weatherEl, 'weather');
-      if (weatherEl.paused) {
-        weatherEl.play().catch(() => {});
-      }
-    } else if (!weatherEl.paused) {
-      try {
-        weatherEl.pause();
-      } catch {
-        // ignore
-      }
-    }
+  syncWeatherCrossfade();
+
+  // Enforce morning vs dusk/night nature separation immediately
+  if (currentAtmosphere === 'morning') {
+    safePause(barkEl);
+    safePause(owlEl);
+  } else {
+    safePause(birdEl);
   }
 
   startNatureCallLoopIfIdle();
@@ -583,13 +732,16 @@ export function unlockAudioFromGesture() {
   isAppForeground = typeof document === 'undefined' ? true : !document.hidden;
   setPlaybackAudioSession();
   ensureElements();
+  prewarmAudioUris();
 
   if (isSoundEnabled && isAppActive()) {
     unlockedAtMs = Date.now();
     syncActiveAudio(true);
     primeOneShotEl(barkEl, getBarkHowlUri(), () => barkPlayGen, 'bark');
     primeOneShotEl(owlEl, getOwlHootUri(), () => owlPlayGen, 'owl');
-    primeOneShotEl(thunderEl, getThunderUri(), () => thunderPlayGen, 'thunder');
+    primeOneShotEl(birdEl, getMorningBirdUri(), () => birdPlayGen, 'bird');
+    primeOneShotEl(thunderEls[0], getThunderUri(), () => thunderPlayGen, 'thunder');
+    primeOneShotEl(thunderEls[1], getThunderUri(), () => thunderPlayGen, 'thunder');
   }
 }
 
@@ -635,8 +787,9 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   const handleGestureUnlock = () => {
     isAppForeground = !document.hidden;
     if (isSoundEnabled && isAppActive()) {
+      const curW = weatherEls[activeWeatherSlot];
       const needsMusic = getEffectiveVol('music') > 0.001 && (!musicEl || musicEl.paused);
-      const needsWeather = shouldPlayWeatherAudio() && getEffectiveVol('weather') > 0.001 && (!weatherEl || weatherEl.paused);
+      const needsWeather = shouldPlayWeatherAudio() && getEffectiveVol('weather') > 0.001 && (!curW || curW.paused);
       if (!audioUnlocked || needsMusic || needsWeather) {
         unlockAudioFromGesture();
       }
@@ -655,13 +808,16 @@ export function setSoundState({
   musicUrl = '',
   weather = 'clear',
   room = 'tombstone',
+  atmosphere = 'dusk',
   volumes,
 }) {
+  const prevAtm = currentAtmosphere;
   isSoundEnabled = Boolean(enabled);
   isWeatherSoundEnabled = Boolean(weatherSoundEnabled);
   savedMusicUrl = (musicUrl || '').trim();
   currentWeather = weather;
   currentRoom = room;
+  currentAtmosphere = atmosphere || 'dusk';
   if (volumes && typeof volumes === 'object') {
     const next = { ...soundVolumes };
     Object.keys(DEFAULT_SOUND_VOLUMES).forEach((key) => {
@@ -670,6 +826,9 @@ export function setSoundState({
     soundVolumes = next;
   }
   applyAllVolumes();
+  if (prevAtm !== currentAtmosphere) {
+    stopNatureCallLoop();
+  }
   syncActiveAudio(false);
 }
 
@@ -684,26 +843,75 @@ export function playThunderSound() {
     return;
   }
   ensureElements();
-  if (!thunderEl) return;
+  thunderSlot = thunderSlot === 0 ? 1 : 0;
+  const tEl = thunderEls[thunderSlot];
+  if (!tEl) return;
 
   setPlaybackAudioSession();
   thunderPlayGen += 1;
-  thunderEl._primed = true;
-  applyElementVolume(thunderEl, 'thunder');
+  tEl._primed = true;
+  applyElementVolume(tEl, 'thunder');
   const uri = getThunderUri();
-  if (thunderEl.src !== uri) {
-    thunderEl.src = uri;
+  if (tEl.src !== uri) {
+    tEl.src = uri;
   }
   try {
-    thunderEl.currentTime = 0;
+    tEl.currentTime = 0;
   } catch {
     // ignore
   }
-  thunderEl.play().catch(() => {});
+  tEl.play().catch(() => {});
+}
+
+export function playMorningBird(force = false) {
+  if (!isSoundEnabled || !isAppActive()) return;
+  if (!force && currentAtmosphere !== 'morning') return;
+  if (getEffectiveVol('bird') <= 0.001) {
+    if (!force && currentAtmosphere === 'morning') {
+      scheduleNextNatureCall(3200 + Math.floor(Math.random() * 2800));
+    }
+    return;
+  }
+  const nowMs = Date.now();
+  if (!force && nowMs < nextBirdAllowedAt) return;
+  nextBirdAllowedAt = nowMs + 3200;
+
+  ensureElements();
+  if (!birdEl) return;
+
+  safePause(barkEl);
+  safePause(owlEl);
+
+  setPlaybackAudioSession();
+  birdPlayGen += 1;
+  birdEl._primed = true;
+  applyElementVolume(birdEl, 'bird');
+  const uri = getMorningBirdUri();
+  if (birdEl.src !== uri) {
+    birdEl.src = uri;
+  }
+  try {
+    birdEl.currentTime = 0;
+  } catch {
+    // ignore
+  }
+  birdEl.play().catch(() => {});
+
+  if (currentAtmosphere === 'morning') {
+    // 3.2s bird song + gentle 2.5-5.5s calm morning interval
+    scheduleNextNatureCall(3200 + 2500 + Math.floor(Math.random() * 3000));
+  }
 }
 
 export function playDogBarkAndHowl(force = false) {
   if (!isSoundEnabled || !isAppActive()) return;
+  // Bark & howl sound must NOT come out in morning — play gentle morning bird instead
+  if (currentAtmosphere === 'morning') {
+    safePause(barkEl);
+    safePause(owlEl);
+    playMorningBird(force);
+    return;
+  }
   if (getEffectiveVol('bark') <= 0.001) {
     if (force) return;
     nextNatureCallIsOwl = true;
@@ -718,13 +926,8 @@ export function playDogBarkAndHowl(force = false) {
   if (!barkEl) return;
 
   // Never mix owl & bark/howl at the same time
-  if (owlEl && !owlEl.paused) {
-    try {
-      owlEl.pause();
-    } catch {
-      // ignore
-    }
-  }
+  safePause(owlEl);
+  safePause(birdEl);
 
   setPlaybackAudioSession();
   barkPlayGen += 1;
@@ -748,6 +951,13 @@ export function playDogBarkAndHowl(force = false) {
 
 export function playOwlHoot(force = false) {
   if (!isSoundEnabled || !isAppActive()) return;
+  // Owl sound must NOT come out in morning — play gentle morning bird instead
+  if (currentAtmosphere === 'morning') {
+    safePause(barkEl);
+    safePause(owlEl);
+    playMorningBird(force);
+    return;
+  }
   if (getEffectiveVol('owl') <= 0.001) {
     if (force) return;
     nextNatureCallIsOwl = false;
@@ -762,13 +972,8 @@ export function playOwlHoot(force = false) {
   if (!owlEl) return;
 
   // Never mix owl & bark/howl at the same time
-  if (barkEl && !barkEl.paused) {
-    try {
-      barkEl.pause();
-    } catch {
-      // ignore
-    }
-  }
+  safePause(barkEl);
+  safePause(birdEl);
 
   setPlaybackAudioSession();
   owlPlayGen += 1;

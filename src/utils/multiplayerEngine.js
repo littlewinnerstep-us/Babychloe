@@ -10,11 +10,19 @@ const BROKERS = [
 
 const TOPIC_PREFIX = 'evergreen-paws-park/v2/room/';
 const ACCOUNTS_TOPIC_PREFIX = 'evergreen-paws-park/v2/accounts/';
+const ADMIN_CONFIG_TOPIC = 'evergreen-paws-park/v2/admin/config';
+const ADMIN_NOTIF_TOPIC_PREFIX = 'evergreen-paws-park/v2/admin/notif/';
+const GROUP_TOPIC_PREFIX = 'evergreen-paws-park/v2/group/';
 const STORAGE_ROOM_KEY = 'evergreen_paws_meetup_room_v1';
 const STORAGE_NICKNAME_KEY = 'evergreen_paws_nickname_v1';
 const STORAGE_ONLINE_KEY = 'evergreen_paws_mp_online_v1';
 const STORAGE_ACCOUNTS_KEY = 'evergreen_paws_accounts_v1';
+const STORAGE_ADMIN_CONFIG_KEY = 'evergreen_paws_admin_config_v1';
+const STORAGE_ADMIN_NOTIFS_KEY = 'evergreen_paws_admin_notifs_v1';
+const STORAGE_GROUP_KEY = 'evergreen_paws_group_v1';
+const STORAGE_GROUP_CHAT_KEY = 'evergreen_paws_group_chat_v1';
 const PEER_TIMEOUT_MS = 45000;
+export const GROUP_MSG_TTL_MS = 23 * 60 * 1000;
 const STARTER_IDS = new Set(['mem-barnaby', 'mem-mochi', 'mem-koda', 'mem-clover', 'mem-luna', 'mem-yuzu', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6']);
 
 const myPeerId = `mp_${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`;
@@ -82,9 +90,21 @@ function loadAccountsRegistry() {
     name: DEMO_USER.name || 'Alex Rivera',
     email: DEMO_USER.email || 'demo@evergreenpaws.com',
     gender: DEMO_USER.gender || 'boy',
+    role: 'user',
+    avatar: null,
+  };
+  const seedAdmin = {
+    username: 'admin',
+    usernameLower: 'admin',
+    password: 'admin123',
+    name: 'Sanctuary Admin',
+    email: 'admin@evergreenpaws.com',
+    gender: 'girl',
+    role: 'admin',
     avatar: null,
   };
   accountsMap.set(seedDemo.usernameLower, seedDemo);
+  accountsMap.set(seedAdmin.usernameLower, seedAdmin);
   try {
     if (typeof window !== 'undefined') {
       const raw = localStorage.getItem(STORAGE_ACCOUNTS_KEY);
@@ -119,12 +139,81 @@ function persistAccountsRegistry() {
 
 loadAccountsRegistry();
 
+let adminConfig = (() => {
+  const fallback = { globalMusicUrl: '', showDemoLogin: false, updatedAt: 0 };
+  try {
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem(STORAGE_ADMIN_CONFIG_KEY);
+      if (raw) return { ...fallback, ...JSON.parse(raw) };
+    }
+  } catch {
+    // ignore
+  }
+  return fallback;
+})();
+
+const notificationsMap = new Map(); // id -> notification
+(() => {
+  try {
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem(STORAGE_ADMIN_NOTIFS_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          arr.forEach((n) => {
+            if (n && n.id) notificationsMap.set(n.id, n);
+          });
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+})();
+
+let activeGroup = (() => {
+  try {
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem(STORAGE_GROUP_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.id) return parsed;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+})();
+
+let groupChatMessages = (() => {
+  try {
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem(STORAGE_GROUP_CHAT_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          const cutoff = Date.now() - GROUP_MSG_TTL_MS;
+          return arr.filter((m) => m && m.time > cutoff);
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+})();
+
 let callbacks = {
   onPeersChange: null,
   onChatMessage: null,
   onRemoteEvent: null,
   onSyncMemorial: null,
   onStatusChange: null,
+  onAdminConfigChange: null,
+  onNotificationsChange: null,
+  onGroupChatChange: null,
+  onGroupChange: null,
 };
 
 const peersMap = new Map(); // peerId -> peer state
@@ -357,6 +446,79 @@ function markSeen(msgId) {
   return false;
 }
 
+function saveAdminConfig(nextCfg) {
+  adminConfig = nextCfg;
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_ADMIN_CONFIG_KEY, JSON.stringify(adminConfig));
+    }
+  } catch {
+    // ignore
+  }
+  if (typeof callbacks.onAdminConfigChange === 'function') {
+    callbacks.onAdminConfigChange({ ...adminConfig });
+  }
+}
+
+function saveNotifications() {
+  const list = Array.from(notificationsMap.values()).sort((a, b) => (b.time || 0) - (a.time || 0));
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_ADMIN_NOTIFS_KEY, JSON.stringify(list));
+    }
+  } catch {
+    // ignore
+  }
+  if (typeof callbacks.onNotificationsChange === 'function') {
+    callbacks.onNotificationsChange(list);
+  }
+}
+
+function persistGroupChat() {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_GROUP_CHAT_KEY, JSON.stringify(groupChatMessages));
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function pruneExpiredGroupMessages() {
+  const cutoff = Date.now() - GROUP_MSG_TTL_MS;
+  const filtered = groupChatMessages.filter(
+    (m) => m && m.time > cutoff && (!activeGroup || m.groupId === activeGroup.id)
+  );
+  if (filtered.length !== groupChatMessages.length) {
+    groupChatMessages = filtered;
+    persistGroupChat();
+    if (typeof callbacks.onGroupChatChange === 'function') {
+      callbacks.onGroupChatChange([...groupChatMessages]);
+    }
+  }
+  return groupChatMessages;
+}
+
+function broadcastGlobalTopic(topic, payloadObj, retain = false) {
+  if (broadcastChan) {
+    try {
+      broadcastChan.postMessage(payloadObj);
+    } catch {
+      // ignore
+    }
+  }
+  const pkt = buildMqttPublish(topic, payloadObj, retain);
+  sockets.forEach((entry) => {
+    if (entry.ready && entry.ws && entry.ws.readyState === WebSocket.OPEN) {
+      try {
+        entry.ws.send(pkt);
+      } catch {
+        // ignore
+      }
+    }
+  });
+}
+
 function handleIncomingPayload(msg) {
   if (!msg || typeof msg !== 'object') return;
   if (!msg.peerId || msg.peerId === myPeerId) return;
@@ -367,6 +529,56 @@ function handleIncomingPayload(msg) {
     if (!existing || (msg.account.updatedAt || 0) >= (existing.updatedAt || 0)) {
       accountsMap.set(msg.account.usernameLower, msg.account);
       persistAccountsRegistry();
+    }
+    return;
+  }
+
+  if (msg.type === 'admin_config' && msg.config) {
+    if ((msg.config.updatedAt || 0) >= (adminConfig.updatedAt || 0)) {
+      saveAdminConfig({ ...adminConfig, ...msg.config });
+    }
+    return;
+  }
+
+  if (msg.type === 'admin_notification' && msg.notification && msg.notification.id) {
+    if (msg.deleted) {
+      notificationsMap.delete(msg.notification.id);
+    } else {
+      notificationsMap.set(msg.notification.id, msg.notification);
+    }
+    saveNotifications();
+    return;
+  }
+
+  if (msg.type === 'group_chat') {
+    if (!activeGroup || !msg.groupId || msg.groupId !== activeGroup.id) return;
+    if (!isOnlineMode) return;
+    const now = Date.now();
+    const text = String(msg.text || '').trim().slice(0, 240);
+    if (!text) return;
+    const entryMsg = {
+      id: msg.msgId || `${msg.peerId}_${now}`,
+      groupId: msg.groupId,
+      groupName: msg.groupName || activeGroup.name,
+      peerId: msg.peerId,
+      senderName: msg.senderName || peersMap.get(msg.peerId)?.name || 'Visitor',
+      text,
+      room: msg.room || 'tombstone',
+      time: msg.ts || now,
+      isLocal: false,
+      isGroup: true,
+    };
+    const peer = peersMap.get(msg.peerId);
+    if (peer) {
+      peer.chatText = text;
+      peer.chatExpiresAt = now + 7000;
+      peer.chatIsGroup = true;
+      peer.lastSeen = now;
+    }
+    groupChatMessages = [...pruneExpiredGroupMessages(), entryMsg];
+    persistGroupChat();
+    if (typeof callbacks.onGroupChatChange === 'function') {
+      callbacks.onGroupChatChange([...groupChatMessages]);
     }
     return;
   }
@@ -411,8 +623,10 @@ function handleIncomingPayload(msg) {
 
     if (existing) {
       const roomChanged = existing.room !== msg.room;
+      const groupChanged = (existing.groupId || '') !== (msg.groupId || '');
       existing.name = msg.name || existing.name || 'Visitor';
       existing.room = msg.room || 'tombstone';
+      existing.groupId = msg.groupId || '';
       existing.nx = nx;
       existing.nz = nz;
       if (roomChanged) {
@@ -424,7 +638,7 @@ function handleIncomingPayload(msg) {
       existing.moving = Boolean(msg.moving);
       if (msg.avatar) existing.avatar = msg.avatar;
       existing.lastSeen = now;
-      if (roomChanged || existing.name !== msg.name) {
+      if (roomChanged || groupChanged || existing.name !== msg.name) {
         notifyPeersChanged();
       }
     } else {
@@ -432,6 +646,7 @@ function handleIncomingPayload(msg) {
         peerId: msg.peerId,
         name: msg.name || 'Visitor',
         room: msg.room || 'tombstone',
+        groupId: msg.groupId || '',
         nx,
         nz,
         rx: nx,
@@ -448,6 +663,7 @@ function handleIncomingPayload(msg) {
         },
         chatText: '',
         chatExpiresAt: 0,
+        chatIsGroup: false,
         lastSeen: now,
       });
       notifyPeersChanged();
@@ -462,6 +678,7 @@ function handleIncomingPayload(msg) {
     if (peer) {
       peer.chatText = text;
       peer.chatExpiresAt = now + 7000;
+      peer.chatIsGroup = false;
       peer.lastSeen = now;
     }
     if (typeof callbacks.onChatMessage === 'function') {
@@ -520,6 +737,11 @@ function processMqttBuffer(entry) {
       try {
         entry.ws.send(buildMqttSubscribe(1, currentTopic()));
         entry.ws.send(buildMqttSubscribe(4, `${ACCOUNTS_TOPIC_PREFIX}+`));
+        entry.ws.send(buildMqttSubscribe(5, ADMIN_CONFIG_TOPIC));
+        entry.ws.send(buildMqttSubscribe(6, `${ADMIN_NOTIF_TOPIC_PREFIX}+`));
+        if (activeGroup?.id) {
+          entry.ws.send(buildMqttSubscribe(7, `${GROUP_TOPIC_PREFIX}${activeGroup.id}`));
+        }
         if (isOnlineMode) {
           publishPacket({ type: 'request_presence' });
           updateLocalPresence({ ...localState, force: true });
@@ -656,6 +878,7 @@ export function initMultiplayer(nextCallbacks = {}) {
         }
       }
       if (changed) notifyPeersChanged();
+      pruneExpiredGroupMessages();
     }, 3000);
   }
 
@@ -714,6 +937,37 @@ export function isUsernameTaken(username) {
   return accountsMap.has(clean);
 }
 
+export function validateTextOnlyDisplayName(rawName) {
+  const collapsed = String(rawName || '').trim().replace(/\s+/g, ' ');
+  if (!collapsed || collapsed.length < 2) {
+    return { ok: false, clean: collapsed, error: 'Display name must be at least 2 characters.' };
+  }
+  if (collapsed.length > 32) {
+    return { ok: false, clean: collapsed, error: 'Display name must be 32 characters or fewer.' };
+  }
+  if (!/^[\p{L} ]+$/u.test(collapsed)) {
+    return {
+      ok: false,
+      clean: collapsed,
+      error: 'Display name must be text only (letters and spaces only — no numbers, symbols, or emojis).',
+    };
+  }
+  return { ok: true, clean: collapsed, error: '' };
+}
+
+export function isDisplayNameTaken(displayName, excludeUsernameLower = '') {
+  const cleanLower = String(displayName || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  const excl = String(excludeUsernameLower || '').trim().toLowerCase();
+  if (!cleanLower) return false;
+  for (const acc of accountsMap.values()) {
+    if (excl && acc.usernameLower === excl) continue;
+    if ((acc.name || '').trim().replace(/\s+/g, ' ').toLowerCase() === cleanLower) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function broadcastAccountRecord(account) {
   seqCounter += 1;
   const msg = {
@@ -724,23 +978,7 @@ function broadcastAccountRecord(account) {
     account,
   };
   markSeen(msg.msgId);
-  if (broadcastChan) {
-    try {
-      broadcastChan.postMessage(msg);
-    } catch {
-      // ignore
-    }
-  }
-  const pkt = buildMqttPublish(`${ACCOUNTS_TOPIC_PREFIX}${account.usernameLower}`, msg, true);
-  sockets.forEach((entry) => {
-    if (entry.ready && entry.ws && entry.ws.readyState === WebSocket.OPEN) {
-      try {
-        entry.ws.send(pkt);
-      } catch {
-        // ignore
-      }
-    }
-  });
+  broadcastGlobalTopic(`${ACCOUNTS_TOPIC_PREFIX}${account.usernameLower}`, msg, true);
 }
 
 export function registerAccount({ username, password, name, email = '', gender = 'girl', avatar = null }) {
@@ -755,6 +993,13 @@ export function registerAccount({ username, password, name, email = '', gender =
   if (accountsMap.has(cleanLower)) {
     return { ok: false, error: `Username "${cleanUser}" is already taken. Please pick another.` };
   }
+  const dnCheck = validateTextOnlyDisplayName(name);
+  if (!dnCheck.ok) {
+    return { ok: false, error: dnCheck.error };
+  }
+  if (isDisplayNameTaken(dnCheck.clean)) {
+    return { ok: false, error: `Display name "${dnCheck.clean}" is already taken. Please choose another.` };
+  }
   if (!password || String(password).length < 4) {
     return { ok: false, error: 'Password must be at least 4 characters.' };
   }
@@ -764,9 +1009,10 @@ export function registerAccount({ username, password, name, email = '', gender =
     username: cleanUser,
     usernameLower: cleanLower,
     password: String(password),
-    name: String(name || cleanUser).trim() || cleanUser,
+    name: dnCheck.clean,
     email: cleanEmail,
     gender: gender === 'boy' ? 'boy' : 'girl',
+    role: 'user',
     avatar: avatar || null,
     updatedAt: Date.now(),
   };
@@ -801,6 +1047,42 @@ export function authenticateAccount(usernameOrEmail, password) {
   return { ok: true, user: found };
 }
 
+export function verifyAdminCredentials(username, password) {
+  const res = authenticateAccount(username, password);
+  if (!res.ok) return res;
+  if (res.user.role !== 'admin' && res.user.usernameLower !== 'admin') {
+    return { ok: false, error: 'This account does not have Administrator privileges.' };
+  }
+  return { ok: true, user: res.user };
+}
+
+export function updateAccountDisplayName(usernameOrEmail, rawDisplayName) {
+  const key = String(usernameOrEmail || '').trim().toLowerCase();
+  let found = accountsMap.get(key);
+  if (!found) {
+    for (const acc of accountsMap.values()) {
+      if ((acc.email || '').toLowerCase() === key) {
+        found = acc;
+        break;
+      }
+    }
+  }
+  if (!found) return { ok: false, error: 'Account not found.' };
+
+  const dnCheck = validateTextOnlyDisplayName(rawDisplayName);
+  if (!dnCheck.ok) {
+    return { ok: false, error: dnCheck.error };
+  }
+  if (isDisplayNameTaken(dnCheck.clean, found.usernameLower)) {
+    return { ok: false, error: `Display name "${dnCheck.clean}" is already taken.` };
+  }
+  const updated = { ...found, name: dnCheck.clean, updatedAt: Date.now() };
+  accountsMap.set(found.usernameLower, updated);
+  persistAccountsRegistry();
+  broadcastAccountRecord(updated);
+  return { ok: true, user: updated };
+}
+
 export function updateAccountProfile(usernameOrEmail, patch) {
   const key = String(usernameOrEmail || '').trim().toLowerCase();
   let found = accountsMap.get(key);
@@ -813,11 +1095,234 @@ export function updateAccountProfile(usernameOrEmail, patch) {
     }
   }
   if (!found) return null;
-  const updated = { ...found, ...patch, updatedAt: Date.now() };
+  // Enforce immutable username, role, and gender on existing accounts
+  const safePatch = { ...patch };
+  delete safePatch.username;
+  delete safePatch.usernameLower;
+  delete safePatch.gender;
+  delete safePatch.role;
+  if (safePatch.name !== undefined) {
+    const check = validateTextOnlyDisplayName(safePatch.name);
+    if (!check.ok || isDisplayNameTaken(check.clean, found.usernameLower)) {
+      delete safePatch.name;
+    } else {
+      safePatch.name = check.clean;
+    }
+  }
+  const updated = { ...found, ...safePatch, updatedAt: Date.now() };
   accountsMap.set(found.usernameLower, updated);
   persistAccountsRegistry();
   broadcastAccountRecord(updated);
   return updated;
+}
+
+export function getAdminConfig() {
+  return { ...adminConfig };
+}
+
+export function publishAdminConfig(patch) {
+  const next = {
+    ...adminConfig,
+    ...patch,
+    updatedAt: Date.now(),
+  };
+  saveAdminConfig(next);
+  seqCounter += 1;
+  const msg = {
+    type: 'admin_config',
+    peerId: myPeerId,
+    msgId: `${myPeerId}_${seqCounter}`,
+    ts: Date.now(),
+    config: next,
+  };
+  markSeen(msg.msgId);
+  broadcastGlobalTopic(ADMIN_CONFIG_TOPIC, msg, true);
+  return next;
+}
+
+export function getAdminNotifications() {
+  return Array.from(notificationsMap.values()).sort((a, b) => (b.time || 0) - (a.time || 0));
+}
+
+export function publishAdminNotification({ category = 'News', title = '', message = '' }) {
+  const cleanTitle = String(title || '').trim();
+  const cleanMsg = String(message || '').trim();
+  if (!cleanTitle || !cleanMsg) {
+    return { ok: false, error: 'Title and message are required.' };
+  }
+  const cleanCat = category === 'Update' ? 'Update' : 'News';
+  const notif = {
+    id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    category: cleanCat,
+    title: cleanTitle,
+    message: cleanMsg,
+    time: Date.now(),
+  };
+  notificationsMap.set(notif.id, notif);
+  saveNotifications();
+
+  seqCounter += 1;
+  const pktPayload = {
+    type: 'admin_notification',
+    peerId: myPeerId,
+    msgId: `${myPeerId}_${seqCounter}`,
+    ts: Date.now(),
+    notification: notif,
+  };
+  markSeen(pktPayload.msgId);
+  broadcastGlobalTopic(`${ADMIN_NOTIF_TOPIC_PREFIX}${notif.id}`, pktPayload, true);
+  return { ok: true, notification: notif };
+}
+
+export function deleteAdminNotification(id) {
+  const existing = notificationsMap.get(id);
+  if (!existing) return;
+  notificationsMap.delete(id);
+  saveNotifications();
+
+  seqCounter += 1;
+  const pktPayload = {
+    type: 'admin_notification',
+    peerId: myPeerId,
+    msgId: `${myPeerId}_${seqCounter}`,
+    ts: Date.now(),
+    deleted: true,
+    notification: { id },
+  };
+  markSeen(pktPayload.msgId);
+  broadcastGlobalTopic(`${ADMIN_NOTIF_TOPIC_PREFIX}${id}`, pktPayload, true);
+}
+
+export function getActiveGroup() {
+  return activeGroup ? { ...activeGroup } : null;
+}
+
+export function getGroupChatHistory() {
+  return [...pruneExpiredGroupMessages()];
+}
+
+function subscribeGroupTopic(groupId) {
+  if (!groupId) return;
+  const topic = `${GROUP_TOPIC_PREFIX}${groupId}`;
+  sockets.forEach((entry) => {
+    if (entry.ready && entry.ws && entry.ws.readyState === WebSocket.OPEN) {
+      try {
+        entry.ws.send(buildMqttSubscribe(7, topic));
+      } catch {
+        // ignore
+      }
+    }
+  });
+}
+
+function unsubscribeGroupTopic(groupId) {
+  if (!groupId) return;
+  const topic = `${GROUP_TOPIC_PREFIX}${groupId}`;
+  sockets.forEach((entry) => {
+    if (entry.ready && entry.ws && entry.ws.readyState === WebSocket.OPEN) {
+      try {
+        entry.ws.send(buildMqttUnsubscribe(8, topic));
+      } catch {
+        // ignore
+      }
+    }
+  });
+}
+
+export function createGroupChat(groupNameInput) {
+  const raw = String(groupNameInput || '').trim() || 'Sanctuary Group';
+  const code = sanitizeRoomCode(`GRP-${raw.replace(/[^A-Za-z0-9]/g, '').slice(0, 6) || 'CHAT'}-${Math.random().toString(36).slice(2, 6)}`);
+  return joinGroupChat(code, raw);
+}
+
+export function joinGroupChat(groupCodeInput, groupNameInput = '') {
+  const cleanId = sanitizeRoomCode(groupCodeInput);
+  if (!cleanId) return null;
+  if (activeGroup && activeGroup.id !== cleanId) {
+    unsubscribeGroupTopic(activeGroup.id);
+  }
+  const nextGroup = {
+    id: cleanId,
+    name: String(groupNameInput || '').trim() || cleanId,
+    joinedAt: Date.now(),
+  };
+  activeGroup = nextGroup;
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_GROUP_KEY, JSON.stringify(activeGroup));
+    }
+  } catch {
+    // ignore
+  }
+  groupChatMessages = pruneExpiredGroupMessages().filter((m) => m.groupId === activeGroup.id);
+  persistGroupChat();
+  subscribeGroupTopic(activeGroup.id);
+  if (typeof callbacks.onGroupChange === 'function') callbacks.onGroupChange({ ...activeGroup });
+  if (typeof callbacks.onGroupChatChange === 'function') callbacks.onGroupChatChange([...groupChatMessages]);
+  updateLocalPresence({ ...localState, force: true });
+  return { ...activeGroup };
+}
+
+export function exitGroupChat() {
+  if (!activeGroup) return;
+  const oldId = activeGroup.id;
+  unsubscribeGroupTopic(oldId);
+  activeGroup = null;
+  groupChatMessages = [];
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(STORAGE_GROUP_KEY);
+      localStorage.removeItem(STORAGE_GROUP_CHAT_KEY);
+    }
+  } catch {
+    // ignore
+  }
+  if (typeof callbacks.onGroupChange === 'function') callbacks.onGroupChange(null);
+  if (typeof callbacks.onGroupChatChange === 'function') callbacks.onGroupChatChange([]);
+  updateLocalPresence({ ...localState, force: true });
+}
+
+export function sendGroupChatMessage(text) {
+  if (!activeGroup || !activeGroup.id) return null;
+  const clean = String(text || '').trim().slice(0, 240);
+  if (!clean) return null;
+  const now = Date.now();
+  localChatBubble = { text: clean, expiresAt: now + 7000, isGroup: true };
+
+  seqCounter += 1;
+  const msgId = `${myPeerId}_${seqCounter}`;
+  const payload = {
+    type: 'group_chat',
+    groupId: activeGroup.id,
+    groupName: activeGroup.name,
+    peerId: myPeerId,
+    senderName: localState.name,
+    room: localState.room,
+    text: clean,
+    msgId,
+    ts: now,
+  };
+  markSeen(msgId);
+  broadcastGlobalTopic(`${GROUP_TOPIC_PREFIX}${activeGroup.id}`, payload, false);
+
+  const localEntry = {
+    id: msgId,
+    groupId: activeGroup.id,
+    groupName: activeGroup.name,
+    peerId: myPeerId,
+    senderName: localState.name,
+    text: clean,
+    room: localState.room,
+    time: now,
+    isLocal: true,
+    isGroup: true,
+  };
+  groupChatMessages = [...pruneExpiredGroupMessages(), localEntry];
+  persistGroupChat();
+  if (typeof callbacks.onGroupChatChange === 'function') {
+    callbacks.onGroupChatChange([...groupChatMessages]);
+  }
+  return localEntry;
 }
 
 export function updateLocalPresence({
@@ -832,9 +1337,11 @@ export function updateLocalPresence({
   force = false,
 }) {
   const effectiveName = (customNickname || name || 'Visitor').trim() || 'Visitor';
+  const curGroupId = activeGroup?.id || '';
   localState = {
     name: effectiveName,
     room: room || 'tombstone',
+    groupId: curGroupId,
     nx: Math.round(nx || 0),
     nz: Math.round(nz || 0),
     facingX: Number((facingX || 0).toFixed(2)),
@@ -847,6 +1354,7 @@ export function updateLocalPresence({
   const snapshot = JSON.stringify([
     localState.name,
     localState.room,
+    localState.groupId,
     localState.nx,
     localState.nz,
     localState.moving,
@@ -863,6 +1371,7 @@ export function updateLocalPresence({
       type: 'presence',
       name: localState.name,
       room: localState.room,
+      groupId: localState.groupId,
       nx: localState.nx,
       nz: localState.nz,
       facingX: localState.facingX,
@@ -877,7 +1386,7 @@ export function sendMultiplayerChat(text) {
   const clean = String(text || '').trim().slice(0, 140);
   if (!clean) return null;
   const now = Date.now();
-  localChatBubble = { text: clean, expiresAt: now + 7000 };
+  localChatBubble = { text: clean, expiresAt: now + 7000, isGroup: false };
 
   publishPacket({
     type: 'chat',
@@ -894,6 +1403,7 @@ export function sendMultiplayerChat(text) {
     room: localState.room,
     time: now,
     isLocal: true,
+    isGroup: false,
   };
 }
 

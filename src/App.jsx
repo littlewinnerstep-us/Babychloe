@@ -20,7 +20,8 @@ import {
   VolumeX,
   Music,
   Shuffle,
-  Upload,
+  Bell,
+  ShieldCheck,
   X,
 } from 'lucide-react';
 import {
@@ -35,6 +36,8 @@ import VisitMemorialModal from './components/VisitMemorialModal';
 import CreateMemorialModal from './components/CreateMemorialModal';
 import AuthModal from './components/AuthModal';
 import SpeciesGateModal from './components/SpeciesGateModal';
+import AdminBackendModal from './components/AdminBackendModal';
+import NotificationsModal from './components/NotificationsModal';
 import {
   DEFAULT_SOUND_VOLUMES,
   setSoundState,
@@ -42,6 +45,7 @@ import {
   playThunderSound,
   playDogBarkAndHowl,
   playOwlHoot,
+  playMorningBird,
   unlockAudioFromGesture,
   isAudioUnlocked,
   wasRecentlyUnlockedInGesture,
@@ -59,24 +63,37 @@ import {
   getMeetupNickname,
   isMultiplayerOnline,
   setMultiplayerOnline,
-  updateAccountProfile,
+  updateAccountDisplayName,
+  validateTextOnlyDisplayName,
+  isDisplayNameTaken,
+  getRegisteredAccounts,
+  getAdminConfig,
+  getAdminNotifications,
+  getActiveGroup,
+  getGroupChatHistory,
+  createGroupChat,
+  joinGroupChat,
+  exitGroupChat,
+  sendGroupChatMessage,
 } from './utils/multiplayerEngine';
 
 const STORAGE_MEMORIALS_KEY = 'evergreen_paws_memorials_v1';
 const STORAGE_USER_KEY = 'evergreen_paws_user_v1';
 const STORAGE_VIEWMODE_KEY = 'evergreen_paws_viewmode_v1';
-const STORAGE_MUSIC_URL_KEY = 'evergreen_paws_music_url_v1';
 const STORAGE_FAVORITES_KEY = 'evergreen_paws_favorites_v1';
 const STORAGE_FRIENDS_KEY = 'evergreen_paws_friends_v1';
 const STORAGE_WEATHER_FX_KEY = 'evergreen_paws_weather_fx_v1';
 const STORAGE_WEATHER_SOUND_KEY = 'evergreen_paws_weather_sound_v1';
 const STORAGE_VOLUMES_KEY = 'evergreen_paws_volumes_v1';
+const STORAGE_READ_NOTIFS_KEY = 'evergreen_paws_read_notifs_v1';
+const STORAGE_OUTSIDE_CHAT_KEY = 'evergreen_paws_outside_chat_v1';
 
 const VOLUME_CHANNELS = [
   { key: 'master', label: 'Master', emoji: '🔊' },
   { key: 'music', label: 'Music', emoji: '🎵' },
   { key: 'weather', label: 'Weather', emoji: '🌧️' },
   { key: 'thunder', label: 'Thunder', emoji: '⚡' },
+  { key: 'bird', label: 'Birds', emoji: '🐦' },
   { key: 'bark', label: 'Bark/Howl', emoji: '🐕' },
   { key: 'owl', label: 'Owl', emoji: '🦉' },
 ];
@@ -230,11 +247,15 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundVolumes, setSoundVolumesState] = useState(loadVolumePrefs);
   const [showSpeciesGate, setShowSpeciesGate] = useState(false);
-  const [musicUrl, setMusicUrl] = useState(loadSavedMusicUrl);
-  const [musicInput, setMusicInput] = useState(loadSavedMusicUrl);
-  const [showMusicModal, setShowMusicModal] = useState(false);
+  const [adminConfig, setAdminConfig] = useState(getAdminConfig);
+  const [notifications, setNotifications] = useState(getAdminNotifications);
+  const [readNotifIds, setReadNotifIds] = useState(() => loadArrayPref(STORAGE_READ_NOTIFS_KEY));
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState('tombstone'); // 'tombstone' | 'ash-room' | 'sanctuary'
   const [activeRoom, setActiveRoom] = useState('tombstone'); // 'tombstone' | 'ash-room'
+  const [walkToRoomRequest, setWalkToRoomRequest] = useState(null);
   const [activeSpecies, setActiveSpecies] = useState('Dog');
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
   const [viewMode, setViewMode] = useState(loadSavedViewMode); // 'world3d' | 'world2d' | 'grid'
@@ -242,6 +263,12 @@ export default function App() {
   const [favorites, setFavorites] = useState(() => loadArrayPref(STORAGE_FAVORITES_KEY));
   const [friends, setFriends] = useState(() => loadArrayPref(STORAGE_FRIENDS_KEY));
   const [mpOnline, setMpOnline] = useState(isMultiplayerOnline);
+  const [activeGroup, setActiveGroup] = useState(getActiveGroup);
+  const [groupChatLog, setGroupChatLog] = useState(getGroupChatHistory);
+  const [showOutsideChat, setShowOutsideChat] = useState(() =>
+    loadBoolPref(STORAGE_OUTSIDE_CHAT_KEY, true)
+  );
+  const [accountMenuFeedback, setAccountMenuFeedback] = useState('');
 
   const [selectedMemorialId, setSelectedMemorialId] = useState(null);
   const [pendingMemorialId, setPendingMemorialId] = useState(null);
@@ -272,20 +299,14 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_MUSIC_URL_KEY, musicUrl);
-    } catch {
-      // ignore storage errors
-    }
-  }, [musicUrl]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem(STORAGE_WEATHER_FX_KEY, String(weatherEffectsEnabled));
       localStorage.setItem(STORAGE_WEATHER_SOUND_KEY, String(weatherSoundEnabled));
+      localStorage.setItem(STORAGE_OUTSIDE_CHAT_KEY, String(showOutsideChat));
+      localStorage.setItem(STORAGE_READ_NOTIFS_KEY, JSON.stringify(readNotifIds));
     } catch {
       // ignore
     }
-  }, [weatherEffectsEnabled, weatherSoundEnabled]);
+  }, [weatherEffectsEnabled, weatherSoundEnabled, showOutsideChat, readNotifIds]);
 
   useEffect(() => {
     try {
@@ -312,18 +333,19 @@ export default function App() {
     setSoundVolumes(soundVolumes);
   }, [soundVolumes]);
 
-  const buildAudioState = (enabledOverride = soundEnabled, musicOverride = musicUrl) => ({
+  const buildAudioState = (enabledOverride = soundEnabled) => ({
     enabled: enabledOverride,
     weatherSoundEnabled: weatherEffectsEnabled && weatherSoundEnabled,
-    musicUrl: musicOverride,
+    musicUrl: adminConfig?.globalMusicUrl || '',
     weather: weatherEffectsEnabled ? weather : 'clear',
     room: activeRoom,
+    atmosphere,
     volumes: soundVolumes,
   });
 
   useEffect(() => {
     setSoundState(buildAudioState());
-  }, [soundEnabled, weatherEffectsEnabled, weatherSoundEnabled, musicUrl, weather, activeRoom, soundVolumes]);
+  }, [soundEnabled, weatherEffectsEnabled, weatherSoundEnabled, adminConfig?.globalMusicUrl, weather, activeRoom, atmosphere, soundVolumes]);
 
   useEffect(() => {
     if (!randomWeather) return undefined;
@@ -361,7 +383,8 @@ export default function App() {
     if (soundEnabled && (!isAudioUnlocked() || wasRecentlyUnlockedInGesture(350))) {
       setSoundState(buildAudioState(true));
       unlockAudioFromGesture();
-      playDogBarkAndHowl(true);
+      if (atmosphere === 'morning') playMorningBird(true);
+      else playDogBarkAndHowl(true);
       return;
     }
     const next = !soundEnabled;
@@ -370,23 +393,6 @@ export default function App() {
     if (next) {
       unlockAudioFromGesture();
     }
-  };
-
-  const handleAudioFileUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setSoundState(buildAudioState(true));
-    unlockAudioFromGesture();
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setMusicUrl(reader.result);
-        setMusicInput('Uploaded audio track');
-        setSoundEnabled(true);
-        setSoundState(buildAudioState(true, reader.result));
-      }
-    };
-    reader.readAsDataURL(file);
   };
 
   useEffect(() => {
@@ -509,25 +515,24 @@ export default function App() {
     }
   };
 
-  const handleChangeCharacterGender = (nextGender) => {
-    const clean = nextGender === 'boy' ? 'boy' : 'girl';
-    setCurrentUser((prev) => (prev ? { ...prev, gender: clean } : prev));
-    if (currentUser) {
-      updateAccountProfile(currentUser.username || currentUser.email, { gender: clean });
-    }
-    syncAvatarGenderToStorage(clean, false);
+  const showLockedGenderNotice = () => {
+    setAccountMenuFeedback('Character gender cannot be changed after account creation.');
+    setTimeout(() => setAccountMenuFeedback(''), 3200);
   };
 
   const handleSaveAccountName = (e) => {
     e.preventDefault();
-    const clean = editAccountName.trim();
-    if (!clean) return;
-    setCurrentUser((prev) => (prev ? { ...prev, name: clean } : prev));
-    if (currentUser) {
-      updateAccountProfile(currentUser.username || currentUser.email, { name: clean });
+    if (!currentUser) return;
+    const res = updateAccountDisplayName(currentUser.username || currentUser.email, editAccountName);
+    if (!res.ok) {
+      setAccountMenuFeedback(res.error);
+      setTimeout(() => setAccountMenuFeedback(''), 3200);
+      return;
     }
+    setAccountMenuFeedback('');
+    setCurrentUser((prev) => (prev ? { ...prev, name: res.user.name } : prev));
     if (!getMeetupNickname()) {
-      setMpNickname(clean.split(' ')[0] || 'Visitor');
+      setMpNickname(res.user.name.split(' ')[0] || 'Visitor');
     }
   };
 
@@ -712,6 +717,18 @@ export default function App() {
       onSyncMemorial: (memorial) => {
         setMemorials((prev) => mergeIncomingMemorial(prev, memorial));
       },
+      onAdminConfigChange: (cfg) => {
+        setAdminConfig(cfg);
+      },
+      onNotificationsChange: (list) => {
+        setNotifications(list);
+      },
+      onGroupChange: (grp) => {
+        setActiveGroup(grp);
+      },
+      onGroupChatChange: (msgs) => {
+        setGroupChatLog(msgs);
+      },
       onRemoteEvent: (evt) => {
         if (!evt) return;
         if (evt.kind === 'offering' && evt.memorialId && evt.offering) {
@@ -784,6 +801,30 @@ export default function App() {
     }
   };
 
+  const handleSendGroupChat = (text) => {
+    sendGroupChatMessage(text);
+  };
+
+  const handleCreateGroup = (groupName) => {
+    const grp = createGroupChat(groupName);
+    if (grp) setActiveGroup(grp);
+  };
+
+  const handleJoinGroup = (groupCode) => {
+    const grp = joinGroupChat(groupCode);
+    if (grp) setActiveGroup(grp);
+  };
+
+  const handleExitGroup = () => {
+    exitGroupChat();
+    setActiveGroup(null);
+    setGroupChatLog([]);
+  };
+
+  const handleToggleOutsideChat = () => {
+    setShowOutsideChat((v) => !v);
+  };
+
   const handleChangeMpRoom = (nextRoom) => {
     const clean = setMeetupRoom(nextRoom);
     setMpRoomCode(clean);
@@ -791,8 +832,22 @@ export default function App() {
   };
 
   const handleChangeMpNickname = (nextName) => {
-    const saved = setMeetupNickname(nextName);
+    const dnCheck = validateTextOnlyDisplayName(nextName);
+    if (!dnCheck.ok) {
+      return { ok: false, error: dnCheck.error };
+    }
+    const myLower = (currentUser?.username || '').toLowerCase();
+    if (isDisplayNameTaken(dnCheck.clean, myLower)) {
+      return { ok: false, error: `Display name "${dnCheck.clean}" is already taken.` };
+    }
+    if (currentUser) {
+      const res = updateAccountDisplayName(currentUser.username || currentUser.email, dnCheck.clean);
+      if (!res.ok) return res;
+      setCurrentUser((prev) => (prev ? { ...prev, name: res.user.name } : prev));
+    }
+    const saved = setMeetupNickname(dnCheck.clean);
     setMpNickname(saved || currentUser?.name?.split(' ')[0] || 'Visitor');
+    return { ok: true };
   };
 
   const handlePerformOffering = (memorialId, offering) => {
@@ -865,6 +920,17 @@ export default function App() {
   };
 
   const handleSelectNavTab = (tab) => {
+    if (
+      (tab === 'tombstone' || tab === 'ash-room') &&
+      viewMode !== 'grid' &&
+      activeTab !== 'sanctuary' &&
+      activeRoom !== tab
+    ) {
+      // Walk character to the room portal/gate before changing location
+      setWalkToRoomRequest(tab);
+      return;
+    }
+    setWalkToRoomRequest(null);
     setActiveTab(tab);
     if (tab === 'tombstone' || tab === 'ash-room') {
       setActiveRoom(tab);
@@ -939,6 +1005,32 @@ export default function App() {
           <div className="top-actions" style={{ position: 'relative' }}>
             <button
               type="button"
+              className="top-music-btn notif-bell-btn"
+              onClick={() => {
+                setShowNotificationsModal(true);
+                setReadNotifIds((prev) => Array.from(new Set([...prev, ...notifications.map((n) => n.id)])));
+              }}
+              title="Sanctuary News & Updates"
+              aria-label="Notifications"
+            >
+              <Bell size={16} />
+              {notifications.some((n) => !readNotifIds.includes(n.id)) && (
+                <span className="notif-badge" aria-hidden="true">
+                  {notifications.filter((n) => !readNotifIds.includes(n.id)).length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              className="top-music-btn"
+              onClick={() => setShowAdminModal(true)}
+              title="Admin Backend"
+              aria-label="Admin Backend"
+            >
+              <ShieldCheck size={16} />
+            </button>
+            <button
+              type="button"
               className={`top-music-btn ${soundEnabled ? 'is-on' : 'is-off'}`}
               onClick={handleToggleSound}
               title={soundEnabled ? 'Music & Sound ON (Tap to turn off)' : 'Music & Sound OFF (Tap to turn on)'}
@@ -997,20 +1089,20 @@ export default function App() {
                     {currentUser.gender === 'boy' ? '👦' : '👩'} {currentUser.name}
                   </div>
                   <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)' }}>
-                    {currentUser.email}
+                    @{currentUser.username || currentUser.email} (permanent)
                   </div>
                 </div>
 
                 <div>
                   <div className="field-label" style={{ marginBottom: 4 }}>
-                    Edit Character
+                    Character Gender (Permanent)
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button
                       type="button"
                       className={currentUser.gender !== 'boy' ? 'btn-primary' : 'btn-ghost'}
                       style={{ flex: 1, justifyContent: 'center', padding: '6px 8px', fontSize: '0.76rem' }}
-                      onClick={() => handleChangeCharacterGender('girl')}
+                      onClick={showLockedGenderNotice}
                     >
                       👩 Girl
                     </button>
@@ -1018,7 +1110,7 @@ export default function App() {
                       type="button"
                       className={currentUser.gender === 'boy' ? 'btn-primary' : 'btn-ghost'}
                       style={{ flex: 1, justifyContent: 'center', padding: '6px 8px', fontSize: '0.76rem' }}
-                      onClick={() => handleChangeCharacterGender('boy')}
+                      onClick={showLockedGenderNotice}
                     >
                       👦 Boy
                     </button>
@@ -1032,7 +1124,7 @@ export default function App() {
                     maxLength={32}
                     value={editAccountName}
                     onChange={(e) => setEditAccountName(e.target.value)}
-                    placeholder="Display name"
+                    placeholder="Text-only display name"
                     style={{ padding: '5px 8px', fontSize: '0.76rem' }}
                   />
                   <button
@@ -1043,6 +1135,12 @@ export default function App() {
                     Save
                   </button>
                 </form>
+
+                {accountMenuFeedback && (
+                  <div className="armtip-notif" style={{ fontSize: '0.72rem', padding: '6px 8px' }}>
+                    {accountMenuFeedback}
+                  </div>
+                )}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.76rem' }}>
                   <span>Presence Mode</span>
@@ -1063,14 +1161,16 @@ export default function App() {
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  style={{ borderRadius: 10, justifyContent: 'flex-start' }}
-                  onClick={handleResetDemo}
-                >
-                  <RotateCcw size={14} /> Reset Demo Data
-                </button>
+                {adminConfig?.showDemoLogin && (
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    style={{ borderRadius: 10, justifyContent: 'flex-start' }}
+                    onClick={handleResetDemo}
+                  >
+                    <RotateCcw size={14} /> Reset Demo Data
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn-ghost"
@@ -1202,44 +1302,54 @@ export default function App() {
             >
               {weatherSoundEnabled ? '🔊 Weather Sound: ON' : '🔇 Weather Sound: OFF'}
             </button>
-            <button
-              type="button"
-              className="env-pill"
-              onClick={() => {
-                if (!soundEnabled) {
-                  setSoundEnabled(true);
-                }
-                setSoundState(buildAudioState(true));
-                unlockAudioFromGesture();
-                playDogBarkAndHowl(true);
-              }}
-              title="Hear distant dog bark & moonlight howl"
-            >
-              🐕 Bark/Howl
-            </button>
-            <button
-              type="button"
-              className="env-pill"
-              onClick={() => {
-                if (!soundEnabled) {
-                  setSoundEnabled(true);
-                }
-                setSoundState(buildAudioState(true));
-                unlockAudioFromGesture();
-                playOwlHoot(true);
-              }}
-              title="Hear distant owl hoot"
-            >
-              🦉 Owl
-            </button>
-            <button
-              type="button"
-              className="env-pill"
-              onClick={() => setShowMusicModal(true)}
-              title="Change background music link or upload audio"
-            >
-              <Music size={12} /> Music Track
-            </button>
+            {atmosphere === 'morning' ? (
+              <button
+                type="button"
+                className="env-pill"
+                onClick={() => {
+                  if (!soundEnabled) setSoundEnabled(true);
+                  setSoundState(buildAudioState(true));
+                  unlockAudioFromGesture();
+                  playMorningBird(true);
+                }}
+                title="Hear gentle morning songbirds"
+              >
+                🐦 Morning Birds
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="env-pill"
+                  onClick={() => {
+                    if (!soundEnabled) {
+                      setSoundEnabled(true);
+                    }
+                    setSoundState(buildAudioState(true));
+                    unlockAudioFromGesture();
+                    playDogBarkAndHowl(true);
+                  }}
+                  title="Hear distant dog bark & moonlight howl (Dusk/Night)"
+                >
+                  🐕 Bark/Howl
+                </button>
+                <button
+                  type="button"
+                  className="env-pill"
+                  onClick={() => {
+                    if (!soundEnabled) {
+                      setSoundEnabled(true);
+                    }
+                    setSoundState(buildAudioState(true));
+                    unlockAudioFromGesture();
+                    playOwlHoot(true);
+                  }}
+                  title="Hear distant owl hoot (Dusk/Night)"
+                >
+                  🦉 Owl
+                </button>
+              </>
+            )}
           </div>
 
           <div className="volume-mixer-row" aria-label="Sound volume controls">
@@ -1341,24 +1451,33 @@ export default function App() {
             onOpenSpeciesGate={() => setShowSpeciesGate(true)}
             currentUser={currentUser}
             characterGender={currentUser?.gender}
-            onChangeCharacterGender={handleChangeCharacterGender}
             atmosphere={atmosphere}
             season={season}
             weather={weatherEffectsEnabled ? weather : 'clear'}
             activeRoom={activeRoom}
+            walkToRoomRequest={walkToRoomRequest}
+            onClearWalkToRoomRequest={() => setWalkToRoomRequest(null)}
             mpPeers={mpPeers}
             mpStatus={mpStatus}
             mpOnline={mpOnline}
             mpRoomCode={mpRoomCode}
             mpNickname={mpNickname}
             mpChatLog={mpChatLog}
+            activeGroup={activeGroup}
+            groupChatLog={groupChatLog}
+            showOutsideChat={showOutsideChat}
             favorites={favorites}
             friends={friends}
             remoteWorldEvent={remoteWorldEvent}
             onToggleMpOnline={handleToggleMpOnline}
+            onToggleOutsideChat={handleToggleOutsideChat}
             onToggleFavorite={handleToggleFavorite}
             onToggleFriend={handleToggleFriend}
             onSendChat={handleSendMpChat}
+            onSendGroupChat={handleSendGroupChat}
+            onCreateGroup={handleCreateGroup}
+            onJoinGroup={handleJoinGroup}
+            onExitGroup={handleExitGroup}
             onSendEmote={sendMultiplayerEmote}
             onChangeMpRoom={handleChangeMpRoom}
             onChangeMpNickname={handleChangeMpNickname}
@@ -1380,24 +1499,33 @@ export default function App() {
             onOpenSpeciesGate={() => setShowSpeciesGate(true)}
             currentUser={currentUser}
             characterGender={currentUser?.gender}
-            onChangeCharacterGender={handleChangeCharacterGender}
             atmosphere={atmosphere}
             season={season}
             weather={weatherEffectsEnabled ? weather : 'clear'}
             activeRoom={activeRoom}
+            walkToRoomRequest={walkToRoomRequest}
+            onClearWalkToRoomRequest={() => setWalkToRoomRequest(null)}
             mpPeers={mpPeers}
             mpStatus={mpStatus}
             mpOnline={mpOnline}
             mpRoomCode={mpRoomCode}
             mpNickname={mpNickname}
             mpChatLog={mpChatLog}
+            activeGroup={activeGroup}
+            groupChatLog={groupChatLog}
+            showOutsideChat={showOutsideChat}
             favorites={favorites}
             friends={friends}
             remoteWorldEvent={remoteWorldEvent}
             onToggleMpOnline={handleToggleMpOnline}
+            onToggleOutsideChat={handleToggleOutsideChat}
             onToggleFavorite={handleToggleFavorite}
             onToggleFriend={handleToggleFriend}
             onSendChat={handleSendMpChat}
+            onSendGroupChat={handleSendGroupChat}
+            onCreateGroup={handleCreateGroup}
+            onJoinGroup={handleJoinGroup}
+            onExitGroup={handleExitGroup}
             onSendEmote={sendMultiplayerEmote}
             onChangeMpRoom={handleChangeMpRoom}
             onChangeMpNickname={handleChangeMpNickname}
@@ -1416,11 +1544,11 @@ export default function App() {
               Sign In to Enter Your Personal Sanctuary
             </h4>
             <p style={{ margin: '0 0 16px', fontSize: '0.88rem' }}>
-              Log in with your email or try the 1-tap demo account to visit Barnaby’s Tombstone and
-              Mochi’s Ash Niche, or enshrine your own beloved pet.
+              Sign in with your username and password or create an account to visit and tend to your
+              beloved pets’ tombstones and ash niches.
             </p>
             <button type="button" className="btn-primary" onClick={() => setShowAuthModal(true)}>
-              <LogIn size={15} /> Sign In / Instant Demo
+              <LogIn size={15} /> Sign In / Create Account
             </button>
           </div>
         ) : filteredMemorials.length === 0 ? (
@@ -1552,6 +1680,7 @@ export default function App() {
 
       {showAuthModal && (
         <AuthModal
+          showDemoLogin={Boolean(adminConfig?.showDemoLogin)}
           onClose={() => {
             setShowAuthModal(false);
             setPendingMemorialId(null);
@@ -1561,101 +1690,24 @@ export default function App() {
         />
       )}
 
-      {showMusicModal && (
-        <div className="modal-backdrop" onClick={() => setShowMusicModal(false)}>
-          <div className="modal-panel narrow" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.6rem', margin: 0 }}>
-                  Sanctuary Background Music
-                </h2>
-                <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  Paste a music link, upload an audio file, or use the built-in harp melody
-                </p>
-              </div>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => setShowMusicModal(false)}
-                aria-label="Close music settings"
-              >
-                <X size={16} />
-              </button>
-            </div>
+      {showNotificationsModal && (
+        <NotificationsModal
+          notifications={notifications}
+          readIds={readNotifIds}
+          onClose={() => setShowNotificationsModal(false)}
+        />
+      )}
 
-            <div className="form-grid">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--bg-elevated)', borderRadius: 12 }}>
-                <span style={{ fontSize: '0.86rem', fontWeight: 600 }}>
-                  Music &amp; Weather Sound
-                </span>
-                <button
-                  type="button"
-                  className={soundEnabled ? 'btn-primary' : 'btn-ghost'}
-                  onClick={handleToggleSound}
-                >
-                  {soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
-                  {soundEnabled ? 'On' : 'Off'}
-                </button>
-              </div>
-
-              <form
-                className="form-grid"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const nextUrl = musicInput.trim();
-                  setMusicUrl(nextUrl);
-                  setSoundEnabled(true);
-                  setSoundState(buildAudioState(true, nextUrl));
-                  unlockAudioFromGesture();
-                  setShowMusicModal(false);
-                }}
-              >
-                <div>
-                  <label className="field-label">Music Link (MP3 / OGG / Audio URL)</label>
-                  <input
-                    type="url"
-                    className="input-control"
-                    placeholder="https://example.com/peaceful-piano.mp3"
-                    value={musicInput.startsWith('data:') ? '' : musicInput}
-                    onChange={(e) => setMusicInput(e.target.value)}
-                  />
-                </div>
-                <button type="submit" className="btn-primary" style={{ justifyContent: 'center' }}>
-                  <Music size={14} /> Save Link &amp; Play
-                </button>
-              </form>
-
-              <div>
-                <label className="field-label">Or Upload Audio File from Device</label>
-                <label className="btn-ghost" style={{ cursor: 'pointer', justifyContent: 'center', width: '100%' }}>
-                  <Upload size={14} /> Choose Audio File (.mp3, .wav, .m4a, .ogg)
-                  <input
-                    type="file"
-                    accept="audio/*"
-                    style={{ display: 'none' }}
-                    onChange={handleAudioFileUpload}
-                  />
-                </label>
-              </div>
-
-              <button
-                type="button"
-                className="btn-ghost"
-                style={{ justifyContent: 'center' }}
-                onClick={() => {
-                  setMusicUrl('');
-                  setMusicInput('');
-                  setSoundEnabled(true);
-                  setSoundState(buildAudioState(true, ''));
-                  unlockAudioFromGesture();
-                  setShowMusicModal(false);
-                }}
-              >
-                Use Built-in Sanctuary Harp Melody
-              </button>
-            </div>
-          </div>
-        </div>
+      {showAdminModal && (
+        <AdminBackendModal
+          adminAuthenticated={adminAuthenticated}
+          onSetAdminAuthenticated={setAdminAuthenticated}
+          adminConfig={adminConfig}
+          notifications={notifications}
+          totalMemorials={visibleMemorials.length}
+          totalAccounts={getRegisteredAccounts().length}
+          onClose={() => setShowAdminModal(false)}
+        />
       )}
 
       {showSpeciesGate && (

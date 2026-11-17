@@ -87,24 +87,32 @@ export default function ParkWorld2D({
   onOpenSpeciesGate,
   currentUser,
   characterGender,
-  onChangeCharacterGender,
   atmosphere,
   season = 'spring',
   weather = 'clear',
   activeRoom,
+  walkToRoomRequest = null,
+  onClearWalkToRoomRequest,
   mpPeers = [],
   mpStatus = 'connecting',
   mpOnline = true,
   mpRoomCode = 'PUBLIC',
   mpNickname = 'Visitor',
   mpChatLog = [],
+  activeGroup = null,
+  groupChatLog = [],
+  showOutsideChat = true,
   favorites = [],
   friends = [],
   remoteWorldEvent = null,
   onToggleMpOnline,
-  onToggleFavorite,
+  onToggleOutsideChat,
   onToggleFriend,
   onSendChat,
+  onSendGroupChat,
+  onCreateGroup,
+  onJoinGroup,
+  onExitGroup,
   onSendEmote,
   onChangeMpRoom,
   onChangeMpNickname,
@@ -197,6 +205,8 @@ export default function ParkWorld2D({
   const pendingOpenIdRef = useRef(null);
   const nearPortalRef = useRef(false);
   const nearGateRef = useRef(false);
+  const showOutsideChatRef = useRef(showOutsideChat);
+  showOutsideChatRef.current = showOutsideChat;
   const npcQuoteOffsetsRef = useRef({});
   const npcPosListRef = useRef([]);
   const roomHeightRef = useRef(820);
@@ -298,6 +308,27 @@ export default function ParkWorld2D({
       p.history = [];
     }
   }, [activeRoom]);
+
+  useEffect(() => {
+    if (!walkToRoomRequest || walkToRoomRequest === roomRef.current) {
+      if (walkToRoomRequest && onClearWalkToRoomRequest) onClearWalkToRoomRequest();
+      return;
+    }
+    const p = playerRef.current;
+    const bounds = WORLD_BOUNDS[roomRef.current] || WORLD_BOUNDS.tombstone;
+    pendingOpenGateRef.current = false;
+    pendingOpenIdRef.current = null;
+    p.targetMemorialId = null;
+    p.targetX = bounds.portalX;
+    p.targetY = bounds.portalY;
+    setWalkMessage(
+      walkToRoomRequest === 'ash-room'
+        ? 'Walking to Ash Room Archway...'
+        : 'Walking to Tombstone Garden Exit...'
+    );
+    setTimeout(() => setWalkMessage(''), 2400);
+    if (onClearWalkToRoomRequest) onClearWalkToRoomRequest();
+  }, [walkToRoomRequest, onClearWalkToRoomRequest]);
 
   // Compute positioned memorials per room deterministically with generous spacing (>= 195px)
   const positionedMemorials = useMemo(() => {
@@ -1166,18 +1197,19 @@ export default function ParkWorld2D({
         ctx.textAlign = 'center';
         ctx.fillText(pTag, px, pNameY + 12);
 
-        if (peer.chatText && nowMs < peer.chatExpiresAt) {
+        if (peer.chatText && nowMs < peer.chatExpiresAt && (peer.chatIsGroup || showOutsideChatRef.current)) {
           ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
-          const cw = ctx.measureText(peer.chatText).width + 18;
+          const displayChat = peer.chatIsGroup ? `🔒 ${peer.chatText}` : peer.chatText;
+          const cw = ctx.measureText(displayChat).width + 18;
           const bubbleY = pNameY - 26;
           ctx.fillStyle = 'rgba(20, 28, 25, 0.94)';
           drawRoundedRect(ctx, px - cw / 2, bubbleY, cw, 22, 8);
           ctx.fill();
-          ctx.strokeStyle = 'rgba(130, 245, 175, 0.8)';
+          ctx.strokeStyle = peer.chatIsGroup ? 'rgba(255, 213, 126, 0.88)' : 'rgba(130, 245, 175, 0.8)';
           ctx.lineWidth = 1.2;
           ctx.stroke();
           ctx.fillStyle = '#ffffff';
-          ctx.fillText(peer.chatText, px, bubbleY + 15);
+          ctx.fillText(displayChat, px, bubbleY + 15);
         }
       });
 
@@ -1461,6 +1493,22 @@ export default function ParkWorld2D({
     // 1. Check if user clicked/tapped the Species Sanctuary Gate (East side at 1135, 410)
     if (worldX >= 1068 && worldX <= 1204 && worldY >= 335 && worldY <= 454) {
       walkOrOpenSpeciesGate();
+      return;
+    }
+
+    // 1b. Check if user clicked/tapped the Room Archway / Portal — walk to gate before changing location
+    if (Math.hypot(worldX - bounds.portalX, worldY - bounds.portalY) < 76) {
+      pendingOpenGateRef.current = false;
+      pendingOpenIdRef.current = null;
+      p.targetMemorialId = null;
+      p.targetX = bounds.portalX;
+      p.targetY = bounds.portalY;
+      setWalkMessage(
+        room === 'tombstone'
+          ? 'Walking to Ash Room Archway...'
+          : 'Walking to Tombstone Garden Exit...'
+      );
+      setTimeout(() => setWalkMessage(''), 2200);
       return;
     }
 
@@ -1815,7 +1863,6 @@ export default function ParkWorld2D({
             avatar={avatar}
             userPets={userPets}
             onUpdateAvatar={(patch) => setAvatar((a) => ({ ...a, ...patch }))}
-            onChangeCharacterGender={onChangeCharacterGender}
             onClose={() => setShowAvatarPanel(false)}
           />
         )}
@@ -1829,13 +1876,21 @@ export default function ParkWorld2D({
           mpRoomCode={mpRoomCode}
           mpNickname={mpNickname}
           mpChatLog={mpChatLog}
+          activeGroup={activeGroup}
+          groupChatLog={groupChatLog}
+          showOutsideChat={showOutsideChat}
           friends={friends}
           currentRoom={activeRoom}
           hideBottomChatBar={Boolean(inspectedMemorial || showMeetupPanel || nearSpeciesGate || nearPortal)}
           onToggleMpOnline={onToggleMpOnline}
+          onToggleOutsideChat={onToggleOutsideChat}
           onToggleFriend={onToggleFriend}
           onChangeMpRoom={onChangeMpRoom}
           onChangeMpNickname={onChangeMpNickname}
+          onCreateGroup={onCreateGroup}
+          onJoinGroup={onJoinGroup}
+          onExitGroup={onExitGroup}
+          onSendGroupChat={onSendGroupChat}
           onSendChat={onSendChat}
           onSendEmote={(em, label) => triggerEmote(em, label)}
           onWalkToPeer={handleWalkToPeer}

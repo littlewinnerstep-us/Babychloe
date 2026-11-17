@@ -77,24 +77,33 @@ export default function ParkWorld3D({
   onOpenSpeciesGate,
   currentUser,
   characterGender,
-  onChangeCharacterGender,
   atmosphere,
   season = 'spring',
   weather = 'clear',
   activeRoom,
+  walkToRoomRequest = null,
+  onClearWalkToRoomRequest,
   mpPeers = [],
   mpStatus = 'connecting',
   mpOnline = true,
   mpRoomCode = 'PUBLIC',
   mpNickname = 'Visitor',
   mpChatLog = [],
+  activeGroup = null,
+  groupChatLog = [],
+  showOutsideChat = true,
   favorites = [],
   friends = [],
   remoteWorldEvent = null,
   onToggleMpOnline,
+  onToggleOutsideChat,
   onToggleFavorite,
   onToggleFriend,
   onSendChat,
+  onSendGroupChat,
+  onCreateGroup,
+  onJoinGroup,
+  onExitGroup,
   onSendEmote,
   onChangeMpRoom,
   onChangeMpNickname,
@@ -185,7 +194,10 @@ export default function ParkWorld3D({
 
   const screenHitsRef = useRef([]);
   const gateScreenHitRef = useRef(null);
+  const portalScreenHitRef = useRef(null);
   const npcScreenHitsRef = useRef([]);
+  const showOutsideChatRef = useRef(showOutsideChat);
+  showOutsideChatRef.current = showOutsideChat;
   const npcQuoteOffsetsRef = useRef({});
   const particlesRef = useRef([]);
   const weatherParticlesRef = useRef([]);
@@ -296,6 +308,26 @@ export default function ParkWorld3D({
       p.history = [];
     }
   }, [activeRoom]);
+
+  useEffect(() => {
+    if (!walkToRoomRequest || walkToRoomRequest === roomRef.current) {
+      if (walkToRoomRequest && onClearWalkToRoomRequest) onClearWalkToRoomRequest();
+      return;
+    }
+    const p = playerRef.current;
+    const portalZ = roomRef.current === 'tombstone' ? -320 : 320;
+    pendingOpenGateRef.current = false;
+    pendingOpenIdRef.current = null;
+    p.targetX = 0;
+    p.targetZ = portalZ;
+    setWalkMessage(
+      walkToRoomRequest === 'ash-room'
+        ? 'Walking to Ash Room Archway...'
+        : 'Walking to Tombstone Garden Exit...'
+    );
+    setTimeout(() => setWalkMessage(''), 2400);
+    if (onClearWalkToRoomRequest) onClearWalkToRoomRequest();
+  }, [walkToRoomRequest, onClearWalkToRoomRequest]);
 
   const positionedMemorials = useMemo(() => {
     const sortSeq = (a, b) => {
@@ -933,6 +965,7 @@ export default function ParkWorld3D({
       };
 
       // 1. Portal Archway
+      let nextPortalHit = null;
       pushEntity(0, portalZ, () => {
         if (room === 'tombstone') {
           draw3DBox(-44, 0, portalZ, 22, 88, 22, {
@@ -956,6 +989,12 @@ export default function ParkWorld3D({
             ctx.beginPath();
             ctx.ellipse(pMid.sx, pMid.sy, 32 * pMid.scale, 38 * pMid.scale, 0, 0, Math.PI * 2);
             ctx.fill();
+            nextPortalHit = {
+              sx: pMid.sx,
+              sy: pMid.sy,
+              radius: Math.max(58, 72 * pMid.scale),
+              portalZ,
+            };
           }
           if (labelPt) {
             ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
@@ -979,6 +1018,15 @@ export default function ParkWorld3D({
             front: '#446b50',
             side: '#2d4a36',
           });
+          const pMid = project3D(0, 38, portalZ);
+          if (pMid) {
+            nextPortalHit = {
+              sx: pMid.sx,
+              sy: pMid.sy,
+              radius: Math.max(56, 68 * pMid.scale),
+              portalZ,
+            };
+          }
           if (labelPt) {
             ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
             ctx.fillStyle = '#d7f4db';
@@ -1399,17 +1447,18 @@ export default function ParkWorld3D({
             ctx.textAlign = 'center';
             ctx.fillText(pTag, head.sx, nameY + 12);
 
-            if (peer.chatText && nowMs < peer.chatExpiresAt) {
+            if (peer.chatText && nowMs < peer.chatExpiresAt && (peer.chatIsGroup || showOutsideChatRef.current)) {
               ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
-              const cw = ctx.measureText(peer.chatText).width + 18;
+              const displayChat = peer.chatIsGroup ? `🔒 ${peer.chatText}` : peer.chatText;
+              const cw = ctx.measureText(displayChat).width + 18;
               const bubbleY = nameY - 26;
               ctx.fillStyle = 'rgba(20, 28, 25, 0.94)';
               ctx.fillRect(head.sx - cw / 2, bubbleY, cw, 22);
-              ctx.strokeStyle = 'rgba(130, 245, 175, 0.8)';
+              ctx.strokeStyle = peer.chatIsGroup ? 'rgba(255, 213, 126, 0.88)' : 'rgba(130, 245, 175, 0.8)';
               ctx.lineWidth = 1.2;
               ctx.strokeRect(head.sx - cw / 2, bubbleY, cw, 22);
               ctx.fillStyle = '#ffffff';
-              ctx.fillText(peer.chatText, head.sx, bubbleY + 15);
+              ctx.fillText(displayChat, head.sx, bubbleY + 15);
             }
           }
         });
@@ -1513,6 +1562,7 @@ export default function ParkWorld3D({
       screenHitsRef.current = newScreenHits;
       npcScreenHitsRef.current = newNpcHits;
       gateScreenHitRef.current = nextGateHit;
+      portalScreenHitRef.current = nextPortalHit;
 
       // Render wrapped NPC speech bubbles cleanly above 3D world geometry
       npcSpeechQueue.forEach((sb) => {
@@ -1696,6 +1746,22 @@ export default function ParkWorld3D({
         Math.hypot(clickX - gHit.sx, clickY - gHit.sy) < gHit.radius)
     ) {
       walkOrOpenSpeciesGate();
+      return;
+    }
+
+    // 1b. Check Portal Archway hit — walk character to the portal archway before changing room
+    const pHit = portalScreenHitRef.current;
+    if (pHit && Math.hypot(clickX - pHit.sx, clickY - pHit.sy) < pHit.radius) {
+      pendingOpenGateRef.current = false;
+      pendingOpenIdRef.current = null;
+      playerRef.current.targetX = 0;
+      playerRef.current.targetZ = pHit.portalZ;
+      setWalkMessage(
+        roomRef.current === 'tombstone'
+          ? 'Walking to Ash Room Archway...'
+          : 'Walking to Tombstone Garden Exit...'
+      );
+      setTimeout(() => setWalkMessage(''), 2200);
       return;
     }
 
@@ -2114,7 +2180,6 @@ export default function ParkWorld3D({
             avatar={avatar}
             userPets={userPets}
             onUpdateAvatar={(patch) => setAvatar((a) => ({ ...a, ...patch }))}
-            onChangeCharacterGender={onChangeCharacterGender}
             onClose={() => setShowAvatarPanel(false)}
           />
         )}
@@ -2128,13 +2193,21 @@ export default function ParkWorld3D({
           mpRoomCode={mpRoomCode}
           mpNickname={mpNickname}
           mpChatLog={mpChatLog}
+          activeGroup={activeGroup}
+          groupChatLog={groupChatLog}
+          showOutsideChat={showOutsideChat}
           friends={friends}
           currentRoom={activeRoom}
           hideBottomChatBar={Boolean(inspectedMemorial || showMeetupPanel || nearSpeciesGate || nearPortal)}
           onToggleMpOnline={onToggleMpOnline}
+          onToggleOutsideChat={onToggleOutsideChat}
           onToggleFriend={onToggleFriend}
           onChangeMpRoom={onChangeMpRoom}
           onChangeMpNickname={onChangeMpNickname}
+          onCreateGroup={onCreateGroup}
+          onJoinGroup={onJoinGroup}
+          onExitGroup={onExitGroup}
+          onSendGroupChat={onSendGroupChat}
           onSendChat={onSendChat}
           onSendEmote={(em, label) => triggerEmote(em, label)}
           onWalkToPeer={handleWalkToPeer}

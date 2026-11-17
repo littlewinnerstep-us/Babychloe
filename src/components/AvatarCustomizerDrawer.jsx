@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import {
   AVATAR_STYLES,
@@ -12,9 +12,15 @@ export default function AvatarCustomizerDrawer({
   avatar,
   userPets = [],
   onUpdateAvatar,
-  onChangeCharacterGender,
   onClose,
 }) {
+  const [genderArmTip, setGenderArmTip] = useState('');
+
+  const handleLockedGenderClick = () => {
+    setGenderArmTip('Character gender cannot be changed after account creation.');
+    setTimeout(() => setGenderArmTip(''), 3200);
+  };
+
   return (
     <div className="world-avatar-drawer" style={{ maxHeight: 'calc(100% - 24px)', overflowY: 'auto' }}>
       <div className="modal-header" style={{ marginBottom: 10 }}>
@@ -32,29 +38,28 @@ export default function AvatarCustomizerDrawer({
 
       <div className="form-grid" style={{ gap: 10 }}>
         <div>
-          <div className="field-label">Character Type</div>
+          <div className="field-label">Character Type (Permanent)</div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button
               type="button"
               className={`chip ${(avatar.gender || 'girl') !== 'boy' ? 'active' : ''}`}
-              onClick={() => {
-                onUpdateAvatar({ gender: 'girl' });
-                if (onChangeCharacterGender) onChangeCharacterGender('girl');
-              }}
+              onClick={handleLockedGenderClick}
             >
               👩 Girl
             </button>
             <button
               type="button"
               className={`chip ${avatar.gender === 'boy' ? 'active' : ''}`}
-              onClick={() => {
-                onUpdateAvatar({ gender: 'boy' });
-                if (onChangeCharacterGender) onChangeCharacterGender('boy');
-              }}
+              onClick={handleLockedGenderClick}
             >
               👦 Boy
             </button>
           </div>
+          {genderArmTip && (
+            <div className="armtip-notif" style={{ marginTop: 6 }}>
+              {genderArmTip}
+            </div>
+          )}
         </div>
 
         <div>

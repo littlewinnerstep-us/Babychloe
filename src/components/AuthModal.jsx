@@ -11,10 +11,12 @@ import {
   authenticateAccount,
   registerAccount,
   isUsernameTaken,
+  isDisplayNameTaken,
+  validateTextOnlyDisplayName,
 } from '../utils/multiplayerEngine';
 import { drawAvatar2D } from '../utils/avatarRenderer';
 
-export default function AuthModal({ onClose, onLogin }) {
+export default function AuthModal({ showDemoLogin = false, onClose, onLogin }) {
   const [mode, setMode] = useState('signin'); // 'signin' | 'register'
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -56,6 +58,8 @@ export default function AuthModal({ onClose, onLogin }) {
   }, [mode, gender, avatarStyle, hairStyle, hairColor, cloakColor]);
 
   const usernameTaken = mode === 'register' && username.trim().length >= 2 && isUsernameTaken(username);
+  const displayNameCheck = mode === 'register' && name.trim().length > 0 ? validateTextOnlyDisplayName(name) : { ok: true, error: '' };
+  const displayNameTaken = mode === 'register' && displayNameCheck.ok && name.trim().length >= 2 && isDisplayNameTaken(name);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -71,6 +75,12 @@ export default function AuthModal({ onClose, onLogin }) {
       return;
     }
 
+    const dnCheck = validateTextOnlyDisplayName(name);
+    if (!dnCheck.ok) {
+      setErrorMsg(dnCheck.error);
+      return;
+    }
+
     const avatar = {
       gender,
       avatarStyle,
@@ -83,7 +93,7 @@ export default function AuthModal({ onClose, onLogin }) {
     const res = registerAccount({
       username,
       password,
-      name: name.trim() || username.trim(),
+      name: dnCheck.clean,
       gender,
       avatar,
     });
@@ -111,14 +121,16 @@ export default function AuthModal({ onClose, onLogin }) {
           </button>
         </div>
 
-        <button
-          type="button"
-          className="btn-primary"
-          style={{ width: '100%', justifyContent: 'center', padding: '10px 14px', marginBottom: 10 }}
-          onClick={() => onLogin(DEMO_USER)}
-        >
-          <Sparkles size={16} /> Instant Demo Login ({DEMO_USER.name} • @{DEMO_USER.username})
-        </button>
+        {showDemoLogin && (
+          <button
+            type="button"
+            className="btn-primary"
+            style={{ width: '100%', justifyContent: 'center', padding: '10px 14px', marginBottom: 10 }}
+            onClick={() => onLogin(DEMO_USER)}
+          >
+            <Sparkles size={16} /> Instant Demo Login ({DEMO_USER.name} • @{DEMO_USER.username})
+          </button>
+        )}
 
         <div className="modal-tabs" style={{ marginBottom: 12 }}>
           <button
@@ -194,14 +206,29 @@ export default function AuthModal({ onClose, onLogin }) {
           {mode === 'register' && (
             <>
               <div>
-                <label className="field-label">Display Name</label>
+                <label className="field-label">Unique Display Name (Text Only) *</label>
                 <input
                   type="text"
+                  required
+                  maxLength={32}
                   className="input-control"
-                  placeholder="e.g., Jamie Chen"
+                  placeholder="e.g., Jamie Chen (letters & spaces only)"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setErrorMsg('');
+                  }}
                 />
+                {!displayNameCheck.ok && (
+                  <div style={{ fontSize: '0.72rem', color: '#e05252', marginTop: 3, fontWeight: 600 }}>
+                    {displayNameCheck.error}
+                  </div>
+                )}
+                {displayNameTaken && (
+                  <div style={{ fontSize: '0.72rem', color: '#e05252', marginTop: 3, fontWeight: 600 }}>
+                    Display name is already taken
+                  </div>
+                )}
               </div>
 
               {/* Live Character Preview + Girl/Boy Picker */}
