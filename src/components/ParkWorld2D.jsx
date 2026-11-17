@@ -40,6 +40,7 @@ import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
 import WalkToSearchBar from './WalkToSearchBar';
 import AvatarCustomizerDrawer from './AvatarCustomizerDrawer';
 import SpeciesGateModal from './SpeciesGateModal';
+import WorldJoystick from './WorldJoystick';
 
 const AVATAR_STORAGE_KEY = 'evergreen_paws_avatar_v1';
 
@@ -89,6 +90,7 @@ function drawRoundedRect(ctx, x, y, w, h, r) {
 }
 
 export default function ParkWorld2D({
+  isApk = false,
   memorials,
   allMemorials = [],
   activeSpecies = 'Dog',
@@ -213,6 +215,7 @@ export default function ParkWorld2D({
     left: false,
     right: false,
   });
+  const joystickRef = useRef({ x: 0, y: 0 });
 
   const particlesRef = useRef([]);
   const weatherParticlesRef = useRef([]);
@@ -259,6 +262,17 @@ export default function ParkWorld2D({
   useEffect(() => {
     memorialsRef.current = memorials;
   }, [memorials]);
+
+  useEffect(() => {
+    if (!isApk || typeof document === 'undefined') return undefined;
+    const prevOverflow = document.body.style.overflow;
+    if (isFullScreen) {
+      document.body.style.overflow = 'hidden';
+    }
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isApk, isFullScreen]);
 
   useEffect(() => {
     atmosphereRef.current = atmosphere;
@@ -601,25 +615,26 @@ export default function ParkWorld2D({
       const p = playerRef.current;
       const speed = 190;
 
-      // Update player velocity from keys/D-pad or click target
-      let vx = 0;
-      let vy = 0;
+      // Update player velocity from keys/D-pad, APK analog joystick, or click target
+      let vx = joystickRef.current.x;
+      let vy = joystickRef.current.y;
       if (keysRef.current.up) vy -= 1;
       if (keysRef.current.down) vy += 1;
       if (keysRef.current.left) vx -= 1;
       if (keysRef.current.right) vx += 1;
+      const inputMag = Math.min(1, Math.hypot(vx, vy));
 
-      if (vx !== 0 || vy !== 0) {
+      if (inputMag > 0.01) {
         p.targetX = null;
         p.targetY = null;
         p.targetMemorialId = null;
         pendingOpenIdRef.current = null;
         pendingOpenGateRef.current = false;
-        const len = Math.hypot(vx, vy);
+        const len = Math.hypot(vx, vy) || 1;
         vx /= len;
         vy /= len;
-        p.x += vx * speed * dt;
-        p.y += vy * speed * dt;
+        p.x += vx * speed * inputMag * dt;
+        p.y += vy * speed * inputMag * dt;
         p.facingX = vx;
         p.facingY = vy;
         p.moving = true;
@@ -1737,9 +1752,11 @@ export default function ParkWorld2D({
           type="button"
           className="world-fs-floating-btn"
           onClick={() => setIsFullScreen((fs) => !fs)}
+          aria-label={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
+          title={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
         >
-          {isFullScreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-          {isFullScreen ? 'Exit Full' : 'Full Screen'}
+          {isFullScreen ? <Minimize2 size={isApk ? 16 : 13} /> : <Maximize2 size={isApk ? 16 : 13} />}
+          {!isApk && (isFullScreen ? 'Exit Full' : 'Full Screen')}
         </button>
         <canvas
           ref={canvasRef}
@@ -1793,65 +1810,74 @@ export default function ParkWorld2D({
           </div>
         )}
 
-        {/* Touch D-Pad (Bottom-Left) */}
-        <div className="world-dpad" aria-label="Walk controls">
-          <div />
-          <button
-            type="button"
-            className="dpad-btn"
-            onPointerDown={() => setDpad('up', true)}
-            onPointerUp={() => setDpad('up', false)}
-            onPointerLeave={() => setDpad('up', false)}
-            onPointerCancel={() => setDpad('up', false)}
-            aria-label="Walk up"
-          >
-            <ArrowUp size={16} />
-          </button>
-          <div />
-          <button
-            type="button"
-            className="dpad-btn"
-            onPointerDown={() => setDpad('left', true)}
-            onPointerUp={() => setDpad('left', false)}
-            onPointerLeave={() => setDpad('left', false)}
-            onPointerCancel={() => setDpad('left', false)}
-            aria-label="Walk left"
-          >
-            <ArrowLeft size={16} />
-          </button>
-          <button
-            type="button"
-            className="dpad-btn center"
-            onClick={() => triggerEmote('🕯️', 'Holding lantern light')}
-            aria-label="Lantern emote"
-          >
-            🏮
-          </button>
-          <button
-            type="button"
-            className="dpad-btn"
-            onPointerDown={() => setDpad('right', true)}
-            onPointerUp={() => setDpad('right', false)}
-            onPointerLeave={() => setDpad('right', false)}
-            onPointerCancel={() => setDpad('right', false)}
-            aria-label="Walk right"
-          >
-            <ArrowRight size={16} />
-          </button>
-          <div />
-          <button
-            type="button"
-            className="dpad-btn"
-            onPointerDown={() => setDpad('down', true)}
-            onPointerUp={() => setDpad('down', false)}
-            onPointerLeave={() => setDpad('down', false)}
-            onPointerCancel={() => setDpad('down', false)}
-            aria-label="Walk down"
-          >
-            <ArrowDown size={16} />
-          </button>
-          <div />
-        </div>
+        {/* Walk Controls: Touch Joystick in APK, D-Pad on Web */}
+        {isApk ? (
+          <WorldJoystick
+            onMove={(x, y) => {
+              joystickRef.current = { x, y };
+            }}
+            onEmote={() => triggerEmote('🕯️', 'Holding lantern light')}
+          />
+        ) : (
+          <div className="world-dpad" aria-label="Walk controls">
+            <div />
+            <button
+              type="button"
+              className="dpad-btn"
+              onPointerDown={() => setDpad('up', true)}
+              onPointerUp={() => setDpad('up', false)}
+              onPointerLeave={() => setDpad('up', false)}
+              onPointerCancel={() => setDpad('up', false)}
+              aria-label="Walk up"
+            >
+              <ArrowUp size={16} />
+            </button>
+            <div />
+            <button
+              type="button"
+              className="dpad-btn"
+              onPointerDown={() => setDpad('left', true)}
+              onPointerUp={() => setDpad('left', false)}
+              onPointerLeave={() => setDpad('left', false)}
+              onPointerCancel={() => setDpad('left', false)}
+              aria-label="Walk left"
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <button
+              type="button"
+              className="dpad-btn center"
+              onClick={() => triggerEmote('🕯️', 'Holding lantern light')}
+              aria-label="Lantern emote"
+            >
+              🏮
+            </button>
+            <button
+              type="button"
+              className="dpad-btn"
+              onPointerDown={() => setDpad('right', true)}
+              onPointerUp={() => setDpad('right', false)}
+              onPointerLeave={() => setDpad('right', false)}
+              onPointerCancel={() => setDpad('right', false)}
+              aria-label="Walk right"
+            >
+              <ArrowRight size={16} />
+            </button>
+            <div />
+            <button
+              type="button"
+              className="dpad-btn"
+              onPointerDown={() => setDpad('down', true)}
+              onPointerUp={() => setDpad('down', false)}
+              onPointerLeave={() => setDpad('down', false)}
+              onPointerCancel={() => setDpad('down', false)}
+              aria-label="Walk down"
+            >
+              <ArrowDown size={16} />
+            </button>
+            <div />
+          </div>
+        )}
 
         {/* Nearby Popup Note (Tap to Open Vigil Card) */}
         {nearbyMemorial && !inspectedMemorial && (
@@ -1974,6 +2000,7 @@ export default function ParkWorld2D({
         )}
 
         <MultiplayerMeetupHUD
+          isApk={isApk}
           showDrawer={showMeetupPanel}
           onCloseDrawer={() => setShowMeetupPanel(false)}
           mpPeers={mpPeers}

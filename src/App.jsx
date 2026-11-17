@@ -39,6 +39,7 @@ import SpeciesGateModal from './components/SpeciesGateModal';
 import FavoritesModal from './components/FavoritesModal';
 import AdminBackendModal from './components/AdminBackendModal';
 import NotificationsModal from './components/NotificationsModal';
+import { isApkEnvironment } from './utils/platform';
 import {
   DEFAULT_SOUND_VOLUMES,
   setSoundState,
@@ -291,6 +292,13 @@ export default function App() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [accountsList, setAccountsList] = useState(getRegisteredAccounts);
   const [globalNotice, setGlobalNotice] = useState('');
+  const isApk = useMemo(() => isApkEnvironment(), []);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.body.classList.toggle('is-apk-app', isApk);
+    }
+  }, [isApk]);
 
   const showGlobalNotice = (msg) => {
     setGlobalNotice(msg);
@@ -1607,6 +1615,7 @@ export default function App() {
         {/* 3D Walkable Park, 2D Walkable Park, or Cards / Favorites Directory */}
         {viewMode === 'world3d' && activeTab !== 'sanctuary' && !showOnlyFavorites ? (
           <ParkWorld3D
+            isApk={isApk}
             memorials={speciesMemorials}
             allMemorials={visibleMemorials}
             activeSpecies={activeSpecies}
@@ -1664,6 +1673,7 @@ export default function App() {
           />
         ) : viewMode === 'world2d' && activeTab !== 'sanctuary' && !showOnlyFavorites ? (
           <ParkWorld2D
+            isApk={isApk}
             memorials={speciesMemorials}
             allMemorials={visibleMemorials}
             activeSpecies={activeSpecies}

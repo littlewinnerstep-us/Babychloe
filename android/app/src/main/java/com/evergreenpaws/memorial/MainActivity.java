@@ -7,6 +7,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.WindowManager;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -20,15 +21,35 @@ public class MainActivity extends Activity {
 
     private static final int FILE_CHOOSER_REQ = 1001;
     private static final String LIVE_URL = "https://littlewinnerstep-us.github.io/Babychloe/";
-    private static final String LOCAL_FALLBACK_URL = "file:///android_asset/index.html";
+    private static final String LOCAL_FALLBACK_URL = "file:///android_asset/index.html?apk=1";
     private WebView web;
     private ValueCallback<Uri[]> filePathCallback;
     private boolean fellBack = false;
+
+    @SuppressWarnings("deprecation")
+    private void applyApkFullscreen() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            getWindow().setAttributes(lp);
+        }
+        View decor = getWindow().getDecorView();
+        decor.setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        );
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        applyApkFullscreen();
 
         web = new WebView(this);
         setContentView(web);
@@ -36,12 +57,15 @@ public class MainActivity extends Activity {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
+        s.setUseWideViewPort(true);
+        s.setLoadWithOverviewMode(true);
         s.setAllowFileAccess(true);
         s.setAllowFileAccessFromFileURLs(true);
         s.setAllowUniversalAccessFromFileURLs(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
+        s.setUserAgentString(s.getUserAgentString() + " EvergreenPawsAPK/1");
 
         web.setWebViewClient(new WebViewClient() {
             private void triggerFallback(WebView view) {
@@ -129,7 +153,15 @@ public class MainActivity extends Activity {
             }
         });
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        web.loadUrl(LIVE_URL + "?t=" + System.currentTimeMillis());
+        web.loadUrl(LIVE_URL + "?apk=1&t=" + System.currentTimeMillis());
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            applyApkFullscreen();
+        }
     }
 
     @Override
@@ -168,6 +200,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        applyApkFullscreen();
         web.onResume();
         web.resumeTimers();
         web.evaluateJavascript(

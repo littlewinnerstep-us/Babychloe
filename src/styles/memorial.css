@@ -2442,3 +2442,173 @@ select {
   font-size: 0.78rem;
   color: var(--text-muted);
 }
+
+/* ===========================
+   ANDROID APK-ONLY OPTIMIZATIONS
+   =========================== */
+body.is-apk-app,
+body.is-apk-app * {
+  -webkit-tap-highlight-color: transparent !important;
+  tap-highlight-color: transparent !important;
+}
+
+body.is-apk-app .world-canvas,
+body.is-apk-app .world-canvas-wrap {
+  cursor: default !important;
+  outline: none !important;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Auto-adjust canvas and fullscreen container to APK viewport dimensions */
+body.is-apk-app .app-shell {
+  padding-bottom: calc(74px + env(safe-area-inset-bottom));
+}
+
+body.is-apk-app .world-container:not(.is-fullscreen) .world-canvas {
+  height: clamp(340px, calc(100dvh - 190px), 780px);
+}
+
+body.is-apk-app .world-container.is-fullscreen {
+  width: 100vw;
+  height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  box-sizing: border-box;
+}
+
+body.is-apk-app .world-container.is-fullscreen .world-hud-top {
+  padding: 6px 8px;
+  gap: 6px;
+}
+
+body.is-apk-app .world-container.is-fullscreen .world-canvas-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+/* APK On-Screen Menu Icon-Only Stack (Full Screen, Outside ON/OFF, Favorites, Gates) */
+body.is-apk-app .world-fs-floating-btn,
+body.is-apk-app .world-outside-chat-btn,
+body.is-apk-app .world-favorites-btn,
+body.is-apk-app .world-gate-readonly-pill {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 999px;
+  right: 10px;
+}
+
+body.is-apk-app .world-fs-floating-btn {
+  top: 10px;
+}
+
+body.is-apk-app .world-outside-chat-btn {
+  top: 52px;
+}
+
+body.is-apk-app .world-favorites-btn {
+  top: 94px;
+  font-size: 1rem;
+}
+
+body.is-apk-app .world-gate-readonly-pill {
+  top: 136px;
+  font-size: 1.05rem;
+}
+
+/* Analog Touch Joystick (APK only) */
+.world-joystick-wrap {
+  position: absolute;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  left: 14px;
+  z-index: 16;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 8px;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+/* When not fullscreen in APK, raise joystick & bottom overlays clear of .mobile-bottom-nav */
+body.is-apk-app .world-container:not(.is-fullscreen) .world-joystick-wrap {
+  bottom: calc(70px + env(safe-area-inset-bottom));
+}
+
+body.is-apk-app .world-container:not(.is-fullscreen) .world-chat-bar {
+  bottom: calc(70px + env(safe-area-inset-bottom));
+}
+
+body.is-apk-app .world-container:not(.is-fullscreen) .world-chat-preview-3rows {
+  bottom: calc(114px + env(safe-area-inset-bottom));
+}
+
+body.is-apk-app .world-container:not(.is-fullscreen) .world-nearby-note,
+body.is-apk-app .world-container:not(.is-fullscreen) .world-portal-prompt {
+  bottom: calc(116px + env(safe-area-inset-bottom));
+}
+
+body.is-apk-app .world-container:not(.is-fullscreen) .world-proximity-card {
+  bottom: calc(168px + env(safe-area-inset-bottom));
+}
+
+body.is-apk-app .world-container.is-fullscreen .world-joystick-wrap,
+body.is-apk-app .world-container.is-fullscreen .world-chat-bar {
+  bottom: calc(18px + env(safe-area-inset-bottom));
+}
+
+body.is-apk-app .world-container.is-fullscreen .world-chat-preview-3rows,
+body.is-apk-app .world-container.is-fullscreen .world-nearby-note,
+body.is-apk-app .world-container.is-fullscreen .world-portal-prompt {
+  bottom: calc(64px + env(safe-area-inset-bottom));
+}
+
+.world-joystick-base {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.08) 0%, rgba(16, 22, 20, 0.72) 72%);
+  border: 2px solid rgba(255, 226, 170, 0.42);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.38), inset 0 0 12px rgba(255, 226, 170, 0.12);
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  backdrop-filter: blur(6px);
+}
+
+.world-joystick-base.is-active {
+  border-color: #ffd57e;
+  background: radial-gradient(circle, rgba(255, 213, 126, 0.16) 0%, rgba(16, 22, 20, 0.82) 74%);
+}
+
+.world-joystick-knob {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff4da 0%, #e5b76b 58%, #b38036 100%);
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.48);
+  pointer-events: none;
+  transition: transform 0.03s linear;
+}
+
+.world-joystick-lantern-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 226, 170, 0.42);
+  background: rgba(16, 22, 20, 0.78);
+  color: #fff3d6;
+  display: grid;
+  place-items: center;
+  font-size: 0.92rem;
+  padding: 0;
+  cursor: pointer;
+}

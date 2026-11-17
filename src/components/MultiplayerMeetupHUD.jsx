@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 export default function MultiplayerMeetupHUD({
+  isApk = false,
   showDrawer,
   onCloseDrawer,
   mpPeers = [],
@@ -166,10 +167,14 @@ export default function MultiplayerMeetupHUD({
               ? 'Outside-group chat visible (tap to mute/hide outside chat)'
               : 'Outside-group chat hidden (tap to read outside chat)'
           }
-          aria-label="Toggle outside group chat visibility"
+          aria-label={showOutsideChat ? 'Outside chat ON' : 'Outside chat OFF'}
         >
-          {showOutsideChat ? <MessageSquare size={14} /> : <MessageSquareOff size={14} />}
-          <span>{showOutsideChat ? 'Outside: ON' : 'Outside: OFF'}</span>
+          {showOutsideChat ? (
+            <MessageSquare size={isApk ? 16 : 14} />
+          ) : (
+            <MessageSquareOff size={isApk ? 16 : 14} />
+          )}
+          {!isApk && <span>{showOutsideChat ? 'Outside: ON' : 'Outside: OFF'}</span>}
         </button>
       )}
 
@@ -179,17 +184,18 @@ export default function MultiplayerMeetupHUD({
           type="button"
           className={`world-favorites-btn ${showOnlyFavorites ? 'active' : ''}`}
           onClick={onToggleShowFavorites}
-          title="Open Favorite Pet Memorials list"
-          aria-label="Favorite pet memorials"
+          title={`Favorite Pet Memorials (${favorites.length})`}
+          aria-label={`Favorite pet memorials (${favorites.length})`}
         >
           <span>💖</span>
-          <span>Favorites ({favorites.length})</span>
+          {!isApk && <span>Favorites ({favorites.length})</span>}
         </button>
       )}
 
       {/* Read-Only Current Species Gates Indicator (Blocks canvas tap-through; zero action) */}
       <div
         className="world-gate-readonly-pill"
+        title={`${activeSpecies} Gates`}
         aria-label={`Current sanctuary: ${activeSpecies} Gates`}
         onPointerDown={(e) => e.stopPropagation()}
         onPointerUp={(e) => e.stopPropagation()}
@@ -201,7 +207,7 @@ export default function MultiplayerMeetupHUD({
         }}
       >
         <span>{speciesEmoji}</span>
-        <span>{activeSpecies} Gates</span>
+        {!isApk && <span>{activeSpecies} Gates</span>}
       </div>
 
       {/* Left-Screen Blinking Group Chat Invite Banner (Accept / Ignore, 30m auto-cancel) */}
