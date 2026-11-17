@@ -36,6 +36,7 @@ import VisitMemorialModal from './components/VisitMemorialModal';
 import CreateMemorialModal from './components/CreateMemorialModal';
 import AuthModal from './components/AuthModal';
 import SpeciesGateModal from './components/SpeciesGateModal';
+import FavoritesModal from './components/FavoritesModal';
 import AdminBackendModal from './components/AdminBackendModal';
 import NotificationsModal from './components/NotificationsModal';
 import {
@@ -253,6 +254,7 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundVolumes, setSoundVolumesState] = useState(loadVolumePrefs);
   const [showSpeciesGate, setShowSpeciesGate] = useState(false);
+  const [showFavoritesModal, setShowFavoritesModal] = useState(false);
   const [adminConfig, setAdminConfig] = useState(getAdminConfig);
   const [notifications, setNotifications] = useState(getAdminNotifications);
   const [readNotifIds, setReadNotifIds] = useState(() => loadArrayPref(STORAGE_READ_NOTIFS_KEY));
@@ -262,6 +264,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('tombstone'); // 'tombstone' | 'ash-room' | 'sanctuary'
   const [activeRoom, setActiveRoom] = useState('tombstone'); // 'tombstone' | 'ash-room'
   const [walkToRoomRequest, setWalkToRoomRequest] = useState(null);
+  const [walkToMemorialRequest, setWalkToMemorialRequest] = useState(null);
   const [activeSpecies, setActiveSpecies] = useState('Dog');
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
   const [viewMode, setViewMode] = useState(loadSavedViewMode); // 'world3d' | 'world2d' | 'grid'
@@ -608,6 +611,20 @@ export default function App() {
     setFavorites((prev) =>
       prev.includes(memorialId) ? prev.filter((id) => id !== memorialId) : [...prev, memorialId]
     );
+  };
+
+  const handleWalkAndVisitFavorite = (memorial) => {
+    if (!memorial) return;
+    setShowFavoritesModal(false);
+    setShowOnlyFavorites(false);
+    if (memorial.species) setActiveSpecies(memorial.species);
+    const targetRoom = memorial.space === 'ash-room' ? 'ash-room' : 'tombstone';
+    setActiveRoom(targetRoom);
+    setActiveTab(targetRoom);
+    if (viewMode === 'grid') {
+      setViewMode('world3d');
+    }
+    setWalkToMemorialRequest({ memorial, ts: Date.now() });
   };
 
   const handleToggleFriend = (friendName) => {
@@ -1577,8 +1594,8 @@ export default function App() {
               {(showOnlyFavorites || viewMode === 'grid') && (
                 <button
                   type="button"
-                  className={`view-mode-btn ${showOnlyFavorites ? 'active' : ''}`}
-                  onClick={() => setShowOnlyFavorites((v) => !v)}
+                  className={`view-mode-btn ${showFavoritesModal ? 'active' : ''}`}
+                  onClick={() => setShowFavoritesModal(true)}
                 >
                   💖 Favorites ({favorites.length})
                 </button>
@@ -1603,6 +1620,8 @@ export default function App() {
             activeRoom={activeRoom}
             walkToRoomRequest={walkToRoomRequest}
             onClearWalkToRoomRequest={() => setWalkToRoomRequest(null)}
+            walkToMemorialRequest={walkToMemorialRequest}
+            onClearWalkToMemorialRequest={() => setWalkToMemorialRequest(null)}
             mpPeers={mpPeers}
             mpStatus={mpStatus}
             mpOnline={mpOnline}
@@ -1613,14 +1632,14 @@ export default function App() {
             groupChatLog={groupChatLog}
             showOutsideChat={showOutsideChat}
             favorites={favorites}
-            showOnlyFavorites={showOnlyFavorites}
+            showOnlyFavorites={showFavoritesModal}
             friends={friends}
             groupInvites={groupInvites}
             accountsList={accountsList}
             remoteWorldEvent={remoteWorldEvent}
             onToggleMpOnline={handleToggleMpOnline}
             onToggleOutsideChat={handleToggleOutsideChat}
-            onToggleShowFavorites={() => setShowOnlyFavorites((v) => !v)}
+            onToggleShowFavorites={() => setShowFavoritesModal(true)}
             onToggleFavorite={handleToggleFavorite}
             onToggleFriend={handleToggleFriend}
             onInviteFriendToGroup={handleInviteFriendToGroup}
@@ -1658,6 +1677,8 @@ export default function App() {
             activeRoom={activeRoom}
             walkToRoomRequest={walkToRoomRequest}
             onClearWalkToRoomRequest={() => setWalkToRoomRequest(null)}
+            walkToMemorialRequest={walkToMemorialRequest}
+            onClearWalkToMemorialRequest={() => setWalkToMemorialRequest(null)}
             mpPeers={mpPeers}
             mpStatus={mpStatus}
             mpOnline={mpOnline}
@@ -1668,14 +1689,14 @@ export default function App() {
             groupChatLog={groupChatLog}
             showOutsideChat={showOutsideChat}
             favorites={favorites}
-            showOnlyFavorites={showOnlyFavorites}
+            showOnlyFavorites={showFavoritesModal}
             friends={friends}
             groupInvites={groupInvites}
             accountsList={accountsList}
             remoteWorldEvent={remoteWorldEvent}
             onToggleMpOnline={handleToggleMpOnline}
             onToggleOutsideChat={handleToggleOutsideChat}
-            onToggleShowFavorites={() => setShowOnlyFavorites((v) => !v)}
+            onToggleShowFavorites={() => setShowFavoritesModal(true)}
             onToggleFavorite={handleToggleFavorite}
             onToggleFriend={handleToggleFriend}
             onInviteFriendToGroup={handleInviteFriendToGroup}
@@ -1888,6 +1909,16 @@ export default function App() {
           allMemorials={visibleMemorials}
           onSelectSpecies={(sp) => setActiveSpecies(sp)}
           onClose={() => setShowSpeciesGate(false)}
+        />
+      )}
+
+      {showFavoritesModal && (
+        <FavoritesModal
+          favorites={favorites}
+          allMemorials={visibleMemorials}
+          onWalkAndVisit={handleWalkAndVisitFavorite}
+          onToggleFavorite={handleToggleFavorite}
+          onClose={() => setShowFavoritesModal(false)}
         />
       )}
     </div>

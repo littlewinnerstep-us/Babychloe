@@ -102,6 +102,8 @@ export default function ParkWorld2D({
   activeRoom,
   walkToRoomRequest = null,
   onClearWalkToRoomRequest,
+  walkToMemorialRequest = null,
+  onClearWalkToMemorialRequest,
   mpPeers = [],
   mpStatus = 'connecting',
   mpOnline = true,
@@ -388,6 +390,41 @@ export default function ParkWorld2D({
     const maxY = activeList.reduce((mx, m) => Math.max(mx, m.worldY), 640);
     roomHeightRef.current = Math.max(820, maxY + 170);
   }, [positionedMemorials, activeRoom]);
+
+  useEffect(() => {
+    const targetMem = walkToMemorialRequest?.memorial;
+    if (!targetMem) return;
+    if (targetMem.species && targetMem.species !== activeSpecies) return;
+    if (targetMem.space && targetMem.space !== roomRef.current) {
+      roomRef.current = targetMem.space;
+      if (onChangeRoom) onChangeRoom(targetMem.space);
+      return;
+    }
+    const found = positionedMemorials.find((m) => m.id === targetMem.id);
+    if (!found) return;
+    if (onClearWalkToMemorialRequest) onClearWalkToMemorialRequest();
+
+    const p = playerRef.current;
+    p.portalCooldownUntil = performance.now() + 900;
+    if (nearbyIdRef.current === found.id) {
+      setInspectedId(found.id);
+      return;
+    }
+    setInspectedId(null);
+    pendingOpenIdRef.current = found.id;
+    p.targetX = found.worldX;
+    p.targetY = found.worldY + 62;
+    p.targetMemorialId = found.id;
+    setWalkMessage(`Walking to ${found.name} (${found.locationCode})...`);
+    setTimeout(() => setWalkMessage(''), 2400);
+  }, [
+    walkToMemorialRequest,
+    positionedMemorials,
+    activeSpecies,
+    activeRoom,
+    onChangeRoom,
+    onClearWalkToMemorialRequest,
+  ]);
 
   const spawnFloatingParticles = (x, y, emoji, count = 5) => {
     for (let i = 0; i < count; i += 1) {

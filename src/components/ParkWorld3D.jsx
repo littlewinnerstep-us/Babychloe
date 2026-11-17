@@ -92,6 +92,8 @@ export default function ParkWorld3D({
   activeRoom,
   walkToRoomRequest = null,
   onClearWalkToRoomRequest,
+  walkToMemorialRequest = null,
+  onClearWalkToMemorialRequest,
   mpPeers = [],
   mpStatus = 'connecting',
   mpOnline = true,
@@ -384,6 +386,40 @@ export default function ParkWorld3D({
     const maxMonZ = activeList.reduce((mx, m) => Math.max(mx, m.worldZ), 200);
     maxZRef.current = Math.max(360, maxMonZ + 170);
   }, [positionedMemorials, activeRoom]);
+
+  useEffect(() => {
+    const targetMem = walkToMemorialRequest?.memorial;
+    if (!targetMem) return;
+    if (targetMem.species && targetMem.species !== activeSpecies) return;
+    if (targetMem.space && targetMem.space !== roomRef.current) {
+      roomRef.current = targetMem.space;
+      if (onChangeRoom) onChangeRoom(targetMem.space);
+      return;
+    }
+    const found = positionedMemorials.find((m) => m.id === targetMem.id);
+    if (!found) return;
+    if (onClearWalkToMemorialRequest) onClearWalkToMemorialRequest();
+
+    const p = playerRef.current;
+    p.portalCooldownUntil = performance.now() + 900;
+    if (nearbyIdRef.current === found.id) {
+      setInspectedId(found.id);
+      return;
+    }
+    setInspectedId(null);
+    pendingOpenIdRef.current = found.id;
+    p.targetX = found.worldX;
+    p.targetZ = found.worldZ + 56;
+    setWalkMessage(`Walking in 3D to ${found.name} (${found.locationCode})...`);
+    setTimeout(() => setWalkMessage(''), 2400);
+  }, [
+    walkToMemorialRequest,
+    positionedMemorials,
+    activeSpecies,
+    activeRoom,
+    onChangeRoom,
+    onClearWalkToMemorialRequest,
+  ]);
 
   const spawnFloatingParticles = (wx, wy, wz, emoji, count = 5) => {
     for (let i = 0; i < count; i += 1) {

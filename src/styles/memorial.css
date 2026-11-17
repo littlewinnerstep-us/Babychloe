@@ -1746,7 +1746,8 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: default;
   user-select: none;
 }
 

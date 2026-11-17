@@ -187,8 +187,19 @@ export default function MultiplayerMeetupHUD({
         </button>
       )}
 
-      {/* Read-Only Current Species Gates Indicator (No click/tap action) */}
-      <div className="world-gate-readonly-pill" aria-label={`Current sanctuary: ${activeSpecies} Gates`}>
+      {/* Read-Only Current Species Gates Indicator (Blocks canvas tap-through; zero action) */}
+      <div
+        className="world-gate-readonly-pill"
+        aria-label={`Current sanctuary: ${activeSpecies} Gates`}
+        onPointerDown={(e) => e.stopPropagation()}
+        onPointerUp={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+      >
         <span>{speciesEmoji}</span>
         <span>{activeSpecies} Gates</span>
       </div>
