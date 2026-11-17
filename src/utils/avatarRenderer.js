@@ -296,3 +296,73 @@ export function drawWrappedSpeechBubble(
 
   ctx.restore();
 }
+
+const petPortraitCache = new Map(); // photoUrl -> { img, loaded, failed }
+
+export function drawCachedPetPortrait(
+  ctx,
+  photoUrl,
+  cx,
+  cy,
+  radius,
+  fallbackEmoji = '🐾',
+  borderColor = '#f5e2b8'
+) {
+  if (!Number.isFinite(cx) || !Number.isFinite(cy) || radius < 3) return;
+  ctx.save();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(22, 30, 27, 0.85)';
+  ctx.fill();
+
+  let drewImage = false;
+  if (photoUrl && typeof Image !== 'undefined') {
+    let entry = petPortraitCache.get(photoUrl);
+    if (!entry) {
+      const img = new Image();
+      if (/^https?:/i.test(photoUrl)) {
+        img.crossOrigin = 'anonymous';
+      }
+      entry = { img, loaded: false, failed: false };
+      img.onload = () => {
+        entry.loaded = true;
+      };
+      img.onerror = () => {
+        entry.failed = true;
+      };
+      img.src = photoUrl;
+      petPortraitCache.set(photoUrl, entry);
+    }
+    if (entry.loaded && !entry.failed && entry.img.naturalWidth > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius - 1.2, 0, Math.PI * 2);
+      ctx.clip();
+      const iw = entry.img.naturalWidth;
+      const ih = entry.img.naturalHeight;
+      const side = Math.min(iw, ih);
+      const sx = (iw - side) / 2;
+      const sy = (ih - side) / 2;
+      ctx.drawImage(entry.img, sx, sy, side, side, cx - radius, cy - radius, radius * 2, radius * 2);
+      ctx.restore();
+      drewImage = true;
+    }
+  }
+
+  if (!drewImage) {
+    ctx.font = `${Math.max(10, Math.round(radius * 1.15))}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(fallbackEmoji || '🐾', cx, cy + 1);
+  }
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = Math.max(1.5, radius * 0.16);
+  ctx.stroke();
+
+  ctx.restore();
+}

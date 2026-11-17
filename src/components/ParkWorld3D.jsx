@@ -32,7 +32,11 @@ import {
   getPeersMap,
   getLocalChatBubble,
 } from '../utils/multiplayerEngine';
-import { drawAvatarHeadAndHair, drawWrappedSpeechBubble } from '../utils/avatarRenderer';
+import {
+  drawAvatarHeadAndHair,
+  drawWrappedSpeechBubble,
+  drawCachedPetPortrait,
+} from '../utils/avatarRenderer';
 import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
 import WalkToSearchBar from './WalkToSearchBar';
 import AvatarCustomizerDrawer from './AvatarCustomizerDrawer';
@@ -1166,6 +1170,20 @@ export default function ParkWorld3D({
               ...palette,
               stroke: isNear ? '#ffd57e' : 'rgba(255,255,255,0.35)',
             });
+
+            // Pet picture at top center of 3D tombstone
+            const tombPicPt = project3D(m.worldX, 46, m.worldZ + 9);
+            if (tombPicPt) {
+              drawCachedPetPortrait(
+                ctx,
+                m.photo,
+                tombPicPt.sx,
+                tombPicPt.sy,
+                Math.max(8, 11.5 * tombPicPt.scale),
+                getSpeciesEmoji(m.species),
+                isNear ? '#ffd57e' : '#f7ead2'
+              );
+            }
           } else {
             // 3D Columbarium Alcove Tower
             const urnCol = {
@@ -1182,11 +1200,25 @@ export default function ParkWorld3D({
               stroke: isNear ? '#ffd57e' : '#a47e49',
             });
 
-            const urnPt = project3D(m.worldX, 42, m.worldZ + 18);
+            // Pet picture at top center of 3D Ash Alcove
+            const ashPicPt = project3D(m.worldX, 58, m.worldZ + 18);
+            if (ashPicPt) {
+              drawCachedPetPortrait(
+                ctx,
+                m.photo,
+                ashPicPt.sx,
+                ashPicPt.sy,
+                Math.max(8, 11 * ashPicPt.scale),
+                getSpeciesEmoji(m.species),
+                isNear ? '#ffd57e' : '#e6c278'
+              );
+            }
+
+            const urnPt = project3D(m.worldX, 27, m.worldZ + 18);
             if (urnPt) {
               ctx.fillStyle = urnCol;
               ctx.beginPath();
-              ctx.ellipse(urnPt.sx, urnPt.sy, 11 * urnPt.scale, 15 * urnPt.scale, 0, 0, Math.PI * 2);
+              ctx.ellipse(urnPt.sx, urnPt.sy, 9.5 * urnPt.scale, 13 * urnPt.scale, 0, 0, Math.PI * 2);
               ctx.fill();
               ctx.strokeStyle = '#f2d085';
               ctx.lineWidth = 1.5;

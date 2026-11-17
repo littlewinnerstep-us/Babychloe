@@ -844,37 +844,38 @@ select {
   position: relative;
   z-index: 2;
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 6px;
   width: 100%;
 }
 
 .niche-frame {
-  width: 64px;
-  height: 76px;
-  border-radius: 10px;
-  padding: 3px;
-  background: linear-gradient(135deg, #d8b26e, #8a6432);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  padding: 2.5px;
+  background: linear-gradient(135deg, #f3d287, #8a6432);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 
 .monument-stage.full .niche-frame {
-  width: 88px;
-  height: 104px;
+  width: 78px;
+  height: 78px;
 }
 
 .niche-frame img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 7px;
+  border-radius: 50%;
   display: block;
 }
 
 .urn-svg {
-  width: 56px;
-  height: 82px;
+  width: 44px;
+  height: 60px;
   filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
 }
 

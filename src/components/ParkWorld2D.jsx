@@ -29,7 +29,11 @@ import {
   getPeersMap,
   getLocalChatBubble,
 } from '../utils/multiplayerEngine';
-import { drawAvatar2D, drawWrappedSpeechBubble } from '../utils/avatarRenderer';
+import {
+  drawAvatar2D,
+  drawWrappedSpeechBubble,
+  drawCachedPetPortrait,
+} from '../utils/avatarRenderer';
 import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
 import WalkToSearchBar from './WalkToSearchBar';
 import AvatarCustomizerDrawer from './AvatarCustomizerDrawer';
@@ -990,13 +994,24 @@ export default function ParkWorld2D({
           ctx.fill();
           ctx.stroke();
 
-          // Pet Initial / Mini Heart Crest
+          // Pet Picture at top center of Tombstone
+          drawCachedPetPortrait(
+            ctx,
+            m.photo,
+            mx,
+            my - 19,
+            11.5,
+            getSpeciesEmoji(m.species),
+            isNear ? '#ffe099' : '#f7ead2'
+          );
+
+          // Pet Name & Plot Code
           ctx.fillStyle = m.styleId === 'moss-celtic' ? '#f5faf3' : '#263038';
-          ctx.font = '700 12px "Cormorant Garamond", serif';
+          ctx.font = '700 11px "Cormorant Garamond", serif';
           ctx.textAlign = 'center';
-          ctx.fillText(m.name.slice(0, 10), mx, my - 4);
-          ctx.font = '600 9px "Plus Jakarta Sans", sans-serif';
-          ctx.fillText(m.locationCode, mx, my + 11);
+          ctx.fillText(m.name.slice(0, 10), mx, my + 3);
+          ctx.font = '600 8.5px "Plus Jakarta Sans", sans-serif';
+          ctx.fillText(m.locationCode, mx, my + 14);
         } else {
           // Ash Room Columbarium Alcove
           const alcGlow = ctx.createRadialGradient(mx, my - 6, 4, mx, my - 6, 56);
@@ -1008,11 +1023,22 @@ export default function ParkWorld2D({
           ctx.fill();
 
           ctx.fillStyle = '#2b1d17';
-          drawRoundedRect(ctx, mx - 34, my - 36, 68, 56, 10);
+          drawRoundedRect(ctx, mx - 34, my - 40, 68, 60, 10);
           ctx.fill();
           ctx.strokeStyle = isNear ? '#ffd57e' : '#a47e49';
           ctx.lineWidth = isNear ? 3 : 2;
           ctx.stroke();
+
+          // Pet Picture at top center of Ash Niche
+          drawCachedPetPortrait(
+            ctx,
+            m.photo,
+            mx,
+            my - 26,
+            11,
+            getSpeciesEmoji(m.species),
+            isNear ? '#ffd57e' : '#e6c278'
+          );
 
           // Urn silhouette inside alcove
           const urnColor = {
@@ -1024,10 +1050,10 @@ export default function ParkWorld2D({
 
           ctx.fillStyle = urnColor;
           ctx.beginPath();
-          ctx.ellipse(mx, my - 9, 12, 16, 0, 0, Math.PI * 2);
+          ctx.ellipse(mx, my - 2, 10, 12, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = '#e7c57c';
-          ctx.fillRect(mx - 8, my - 27, 16, 4);
+          ctx.fillRect(mx - 7, my - 15, 14, 3);
 
           // Brass plaque
           ctx.fillStyle = '#d8b26e';
