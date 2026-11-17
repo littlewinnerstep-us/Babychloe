@@ -28,6 +28,7 @@ import {
   INITIAL_MEMORIALS,
   getSpeciesEmoji,
   normalizeAndDeduplicateMemorials,
+  isMemorialOwner,
 } from './data/memorialData';
 import MonumentVisual from './components/MonumentVisual';
 import ParkWorld2D from './components/ParkWorld2D';
@@ -424,9 +425,8 @@ export default function App() {
   }, [currentUser]);
 
   const visibleMemorials = useMemo(() => {
-    const userEmail = currentUser?.email?.toLowerCase() || '';
     return memorials.filter((m) => {
-      const isOwner = userEmail && m.ownerEmail.toLowerCase() === userEmail;
+      const isOwner = isMemorialOwner(m, currentUser);
       if (m.visibility === 'private' && !isOwner) return false;
       return true;
     });
@@ -439,22 +439,17 @@ export default function App() {
 
   const filteredMemorials = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    const userEmail = currentUser?.email?.toLowerCase() || '';
-    const userName = currentUser?.username?.toLowerCase() || '';
     return visibleMemorials.filter((m) => {
       if (activeTab === 'tombstone' && m.space !== 'tombstone') return false;
       if (activeTab === 'ash-room' && m.space !== 'ash-room') return false;
       if (activeTab === 'sanctuary') {
-        const matchUser =
-          (userName && (m.ownerUsername || '').toLowerCase() === userName) ||
-          (userEmail && m.ownerEmail.toLowerCase() === userEmail);
-        if (!matchUser) return false;
+        if (!isMemorialOwner(m, currentUser)) return false;
       } else if (!showOnlyFavorites) {
         if ((m.species || 'Dog') !== activeSpecies) return false;
       }
       if (showOnlyFavorites && !favorites.includes(m.id)) return false;
       if (q) {
-        const hay = `${m.name} ${m.breed} ${m.species} ${m.ownerName} ${m.ownerUsername || ''} ${m.locationCode}`.toLowerCase();
+        const hay = `${m.name || ''} ${m.breed || ''} ${m.species || ''} ${m.ownerName || ''} ${m.ownerUsername || ''} ${m.locationCode || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -1054,7 +1049,7 @@ export default function App() {
                 <span className="user-avatar-dot">
                   {currentUser.gender === 'boy' ? '👦' : '👩'}
                 </span>
-                <span>{currentUser.name.split(' ')[0]}</span>
+                <span>{(currentUser.name || currentUser.username || 'Visitor').split(' ')[0]}</span>
               </button>
             ) : (
               <button
@@ -1566,8 +1561,7 @@ export default function App() {
         ) : (
           <section className="memorial-grid">
             {filteredMemorials.map((m) => {
-              const isOwner =
-                currentUser && m.ownerEmail.toLowerCase() === currentUser.email.toLowerCase();
+              const isOwner = isMemorialOwner(m, currentUser);
               return (
                 <article
                   key={m.id}

@@ -813,3 +813,26 @@ export const ASH_NPCS_DATA = [
     ],
   },
 ];
+
+export function getUserIdentityKey(user) {
+  if (!user || typeof user !== 'object') return '';
+  const raw = user.email || user.username || user.id || user.name || '';
+  return String(raw).trim().toLowerCase();
+}
+
+export function isMemorialOwner(memorial, user) {
+  if (!memorial || !user) return false;
+  const userKey = getUserIdentityKey(user);
+  const ownerEmail = String(memorial.ownerEmail || '').trim().toLowerCase();
+  const ownerUsername = String(memorial.ownerUsername || '').trim().toLowerCase();
+  if (userKey && ((ownerEmail && ownerEmail === userKey) || (ownerUsername && ownerUsername === userKey))) {
+    return true;
+  }
+  const userName = String(user.name || '').trim().toLowerCase();
+  const ownerName = String(memorial.ownerName || '').trim().toLowerCase();
+  return Boolean(
+    user.username &&
+      ownerUsername &&
+      String(user.username).trim().toLowerCase() === ownerUsername
+  ) || Boolean(userName && ownerName && user.id && memorial.ownerId && user.id === memorial.ownerId && userName === ownerName);
+}

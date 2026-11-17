@@ -336,17 +336,23 @@ export function drawCachedPetPortrait(
     }
     if (entry.loaded && !entry.failed && entry.img.naturalWidth > 0) {
       ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius - 1.2, 0, Math.PI * 2);
-      ctx.clip();
-      const iw = entry.img.naturalWidth;
-      const ih = entry.img.naturalHeight;
-      const side = Math.min(iw, ih);
-      const sx = (iw - side) / 2;
-      const sy = (ih - side) / 2;
-      ctx.drawImage(entry.img, sx, sy, side, side, cx - radius, cy - radius, radius * 2, radius * 2);
-      ctx.restore();
-      drewImage = true;
+      try {
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius - 1.2, 0, Math.PI * 2);
+        ctx.clip();
+        const iw = entry.img.naturalWidth;
+        const ih = entry.img.naturalHeight;
+        const side = Math.min(iw, ih);
+        const sx = (iw - side) / 2;
+        const sy = (ih - side) / 2;
+        ctx.drawImage(entry.img, sx, sy, side, side, cx - radius, cy - radius, radius * 2, radius * 2);
+        drewImage = true;
+      } catch (_err) {
+        entry.failed = true;
+        drewImage = false;
+      } finally {
+        ctx.restore();
+      }
     }
   }
 

@@ -12,7 +12,12 @@ import {
   Bell,
 } from 'lucide-react';
 import MonumentVisual from './MonumentVisual';
-import { MONUMENT_STYLES, OFFERING_TYPES } from '../data/memorialData';
+import {
+  MONUMENT_STYLES,
+  OFFERING_TYPES,
+  getUserIdentityKey,
+  isMemorialOwner,
+} from '../data/memorialData';
 import {
   hasGivenToday,
   recordGivenToday,
@@ -59,8 +64,8 @@ export default function VisitMemorialModal({
   const [editVisibility, setEditVisibility] = useState(memorial.visibility);
   const [savedNotice, setSavedNotice] = useState(false);
 
-  const isOwner =
-    currentUser && memorial.ownerEmail.toLowerCase() === currentUser.email.toLowerCase();
+  const userKey = getUserIdentityKey(currentUser);
+  const isOwner = isMemorialOwner(memorial, currentUser);
 
   const showArmtip = (msg) => {
     setArmtipText(msg);
@@ -72,14 +77,14 @@ export default function VisitMemorialModal({
       onRequireLogin();
       return;
     }
-    if (hasGivenToday(currentUser.email, memorial.id, offering.category)) {
-      showArmtip(getDailyLimitNotice(offering.category, memorial.name));
+    if (hasGivenToday(userKey, memorial.id, offering.category)) {
+      showArmtip(getDailyLimitNotice(offering.category, memorial.name || 'this pet'));
       setPickerOpen(null);
       return;
     }
-    recordGivenToday(currentUser.email, memorial.id, offering.category);
+    recordGivenToday(userKey, memorial.id, offering.category);
     onPerformOffering(memorial.id, offering);
-    setBlessingText(`You ${offering.blessing} for ${memorial.name}.`);
+    setBlessingText(`You ${offering.blessing} for ${memorial.name || 'this pet'}.`);
     setPickerOpen(null);
   };
 
@@ -88,8 +93,8 @@ export default function VisitMemorialModal({
       onRequireLogin();
       return;
     }
-    if (hasGivenToday(currentUser.email, memorial.id, 'message')) {
-      showArmtip(getDailyLimitNotice('message', memorial.name));
+    if (hasGivenToday(userKey, memorial.id, 'message')) {
+      showArmtip(getDailyLimitNotice('message', memorial.name || 'this pet'));
       return;
     }
     setShowMessagePopup(true);
@@ -101,19 +106,19 @@ export default function VisitMemorialModal({
       onRequireLogin();
       return;
     }
-    if (hasGivenToday(currentUser.email, memorial.id, 'message')) {
-      showArmtip(getDailyLimitNotice('message', memorial.name));
+    if (hasGivenToday(userKey, memorial.id, 'message')) {
+      showArmtip(getDailyLimitNotice('message', memorial.name || 'this pet'));
       setShowMessagePopup(false);
       return;
     }
     const clean = tributeText.trim();
     if (!clean) return;
-    recordGivenToday(currentUser.email, memorial.id, 'message');
+    recordGivenToday(userKey, memorial.id, 'message');
     onAddTribute(memorial.id, clean);
     setTributeText('');
     setShowMessagePopup(false);
     setActiveTab('tributes');
-    setBlessingText(`Your heartfelt message was posted for ${memorial.name}.`);
+    setBlessingText(`Your heartfelt message was posted for ${memorial.name || 'this pet'}.`);
   };
 
   const handleMemoryFile = async (e) => {
@@ -200,14 +205,16 @@ export default function VisitMemorialModal({
                   {isFavorite ? '💖 Favorited' : '🤍 Favorite Pet'}
                 </button>
               )}
-              {!isOwner && onToggleFriend && (
+              {!isOwner && onToggleFriend && memorial.ownerName && (
                 <button
                   type="button"
                   className={isFriend ? 'btn-primary' : 'btn-ghost'}
                   style={{ padding: '4px 10px', fontSize: '0.75rem' }}
                   onClick={() => onToggleFriend(memorial.ownerName)}
                 >
-                  {isFriend ? '🤝 Friend Added' : `🤝 Add ${memorial.ownerName.split(' ')[0]} as Friend`}
+                  {isFriend
+                    ? '🤝 Friend Added'
+                    : `🤝 Add ${(memorial.ownerName || 'Friend').split(' ')[0]} as Friend`}
                 </button>
               )}
             </div>
@@ -226,7 +233,7 @@ export default function VisitMemorialModal({
           <button
             type="button"
             className={`ritual-btn ${
-              currentUser && hasGivenToday(currentUser.email, memorial.id, 'candle')
+              userKey && hasGivenToday(userKey, memorial.id, 'candle')
                 ? 'btn-given-today'
                 : ''
             }`}
@@ -234,14 +241,14 @@ export default function VisitMemorialModal({
           >
             <span style={{ fontSize: '1.25rem' }}>🕯️</span>
             <span>
-              Light Candle ({memorial.candlesCount})
-              {currentUser && hasGivenToday(currentUser.email, memorial.id, 'candle') ? ' ✓' : ''}
+              Light Candle ({memorial.candlesCount || 0})
+              {userKey && hasGivenToday(userKey, memorial.id, 'candle') ? ' ✓' : ''}
             </span>
           </button>
           <button
             type="button"
             className={`ritual-btn ${
-              currentUser && hasGivenToday(currentUser.email, memorial.id, 'incense')
+              userKey && hasGivenToday(userKey, memorial.id, 'incense')
                 ? 'btn-given-today'
                 : ''
             }`}
@@ -249,20 +256,20 @@ export default function VisitMemorialModal({
           >
             <span style={{ fontSize: '1.25rem' }}>🪔</span>
             <span>
-              Burn Incense ({memorial.incenseCount})
-              {currentUser && hasGivenToday(currentUser.email, memorial.id, 'incense') ? ' ✓' : ''}
+              Burn Incense ({memorial.incenseCount || 0})
+              {userKey && hasGivenToday(userKey, memorial.id, 'incense') ? ' ✓' : ''}
             </span>
           </button>
           <button
             type="button"
             className={`ritual-btn ${pickerOpen === 'flowers' ? 'active' : ''} ${
-              currentUser && hasGivenToday(currentUser.email, memorial.id, 'flower')
+              userKey && hasGivenToday(userKey, memorial.id, 'flower')
                 ? 'btn-given-today'
                 : ''
             }`}
             onClick={() => {
-              if (currentUser && hasGivenToday(currentUser.email, memorial.id, 'flower')) {
-                showArmtip(getDailyLimitNotice('flower', memorial.name));
+              if (userKey && hasGivenToday(userKey, memorial.id, 'flower')) {
+                showArmtip(getDailyLimitNotice('flower', memorial.name || 'this pet'));
                 return;
               }
               setPickerOpen(pickerOpen === 'flowers' ? null : 'flowers');
@@ -270,20 +277,20 @@ export default function VisitMemorialModal({
           >
             <span style={{ fontSize: '1.25rem' }}>🌸</span>
             <span>
-              Lay Flowers ({memorial.flowersCount})
-              {currentUser && hasGivenToday(currentUser.email, memorial.id, 'flower') ? ' ✓' : ''}
+              Lay Flowers ({memorial.flowersCount || 0})
+              {userKey && hasGivenToday(userKey, memorial.id, 'flower') ? ' ✓' : ''}
             </span>
           </button>
           <button
             type="button"
             className={`ritual-btn ${pickerOpen === 'treats' ? 'active' : ''} ${
-              currentUser && hasGivenToday(currentUser.email, memorial.id, 'treat')
+              userKey && hasGivenToday(userKey, memorial.id, 'treat')
                 ? 'btn-given-today'
                 : ''
             }`}
             onClick={() => {
-              if (currentUser && hasGivenToday(currentUser.email, memorial.id, 'treat')) {
-                showArmtip(getDailyLimitNotice('treat', memorial.name));
+              if (userKey && hasGivenToday(userKey, memorial.id, 'treat')) {
+                showArmtip(getDailyLimitNotice('treat', memorial.name || 'this pet'));
                 return;
               }
               setPickerOpen(pickerOpen === 'treats' ? null : 'treats');
@@ -291,8 +298,8 @@ export default function VisitMemorialModal({
           >
             <span style={{ fontSize: '1.25rem' }}>🦴</span>
             <span>
-              Offer Treat ({memorial.treatsCount})
-              {currentUser && hasGivenToday(currentUser.email, memorial.id, 'treat') ? ' ✓' : ''}
+              Offer Treat ({memorial.treatsCount || 0})
+              {userKey && hasGivenToday(userKey, memorial.id, 'treat') ? ' ✓' : ''}
             </span>
           </button>
         </div>
@@ -301,7 +308,7 @@ export default function VisitMemorialModal({
           <button
             type="button"
             className={`btn-primary ${
-              currentUser && hasGivenToday(currentUser.email, memorial.id, 'message')
+              userKey && hasGivenToday(userKey, memorial.id, 'message')
                 ? 'btn-given-today'
                 : ''
             }`}
@@ -309,7 +316,7 @@ export default function VisitMemorialModal({
             onClick={handleOpenMessageComposer}
           >
             <MessageSquareHeart size={16} /> 💌 Leave Message &amp; Emoticon
-            {currentUser && hasGivenToday(currentUser.email, memorial.id, 'message') ? ' ✓' : ''}
+            {userKey && hasGivenToday(userKey, memorial.id, 'message') ? ' ✓' : ''}
           </button>
         </div>
 

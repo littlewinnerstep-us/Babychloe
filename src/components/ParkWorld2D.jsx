@@ -18,6 +18,8 @@ import {
   getSpeciesEmoji,
   GARDEN_NPCS_DATA,
   ASH_NPCS_DATA,
+  getUserIdentityKey,
+  isMemorialOwner,
 } from '../data/memorialData';
 import {
   hasGivenToday,
@@ -444,22 +446,25 @@ export default function ParkWorld2D({
     setTimeout(() => setArmtipText(''), 3200);
   };
 
+  const userKey = getUserIdentityKey(currentUser);
+
   const performQuickOffering = (memorial, offering) => {
-    if (!userRef.current) {
+    const activeUserKey = getUserIdentityKey(userRef.current);
+    if (!activeUserKey) {
       onRequireLogin();
       return;
     }
-    if (hasGivenToday(userRef.current.email, memorial.id, offering.category)) {
-      showArmtip(getDailyLimitNotice(offering.category, memorial.name));
+    if (hasGivenToday(activeUserKey, memorial.id, offering.category)) {
+      showArmtip(getDailyLimitNotice(offering.category, memorial.name || 'this pet'));
       return;
     }
-    recordGivenToday(userRef.current.email, memorial.id, offering.category);
+    recordGivenToday(activeUserKey, memorial.id, offering.category);
     const target = positionedRef.current.find((m) => m.id === memorial.id);
     if (target) {
       spawnFloatingParticles(target.worldX, target.worldY - 22, offering.emoji, 6);
     }
     onPerformOffering(memorial.id, offering);
-    setWalkMessage(`You ${offering.blessing} for ${memorial.name}`);
+    setWalkMessage(`You ${offering.blessing} for ${memorial.name || 'this pet'}`);
     setTimeout(() => setWalkMessage(''), 2400);
   };
 
@@ -947,8 +952,7 @@ export default function ParkWorld2D({
         const mx = m.worldX;
         const my = m.worldY;
         const isNear = m.id === nearbyIdRef.current;
-        const isOwner =
-          userRef.current && m.ownerEmail.toLowerCase() === userRef.current.email.toLowerCase();
+        const isOwner = isMemorialOwner(m, userRef.current);
 
         // Proximity Ring
         if (isNear) {
@@ -1794,9 +1798,17 @@ export default function ParkWorld2D({
             className="world-nearby-note"
             onClick={() => setInspectedId(nearbyMemorial.id)}
           >
-            <img src={nearbyMemorial.photo} alt={nearbyMemorial.name} />
+            {nearbyMemorial.photo ? (
+              <img
+                src={nearbyMemorial.photo}
+                alt={nearbyMemorial.name || 'Pet'}
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            ) : null}
             <span>
-              🕯️ Near {nearbyMemorial.name} ({nearbyMemorial.locationCode}) — Tap to Visit / Give Flower
+              🕯️ Near {nearbyMemorial.name || 'Pet'} ({nearbyMemorial.locationCode || 'Sanctuary'}) — Tap to Visit / Give Flower
             </span>
           </button>
         )}
@@ -1812,40 +1824,45 @@ export default function ParkWorld2D({
             >
               <X size={14} />
             </button>
-            <img
-              src={inspectedMemorial.photo}
-              alt={inspectedMemorial.name}
-              className="proximity-pet-photo"
-            />
+            {inspectedMemorial.photo ? (
+              <img
+                src={inspectedMemorial.photo}
+                alt={inspectedMemorial.name || 'Pet'}
+                className="proximity-pet-photo"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            ) : null}
             <div className="proximity-info">
               <div className="proximity-title-row">
-                <strong>{inspectedMemorial.name}</strong>
-                <span className="location-badge">{inspectedMemorial.locationCode}</span>
+                <strong>{inspectedMemorial.name || 'Beloved Pet'}</strong>
+                <span className="location-badge">{inspectedMemorial.locationCode || 'Sanctuary'}</span>
               </div>
-              <p className="proximity-epitaph">“{inspectedMemorial.epitaph}”</p>
+              <p className="proximity-epitaph">“{inspectedMemorial.epitaph || 'Forever loved and remembered'}”</p>
               {armtipText && <div className="armtip-notif">{armtipText}</div>}
               <div className="proximity-actions">
                 <button
                   type="button"
                   className={`btn-ghost ${
-                    currentUser &&
-                    hasGivenToday(currentUser.email, inspectedMemorial.id, 'candle')
+                    userKey &&
+                    hasGivenToday(userKey, inspectedMemorial.id, 'candle')
                       ? 'btn-given-today'
                       : ''
                   }`}
                   onClick={() => performQuickOffering(inspectedMemorial, OFFERING_TYPES.candle)}
                 >
-                  🕯️ Candle ({inspectedMemorial.candlesCount})
-                  {currentUser &&
-                  hasGivenToday(currentUser.email, inspectedMemorial.id, 'candle')
+                  🕯️ Candle ({inspectedMemorial.candlesCount || 0})
+                  {userKey &&
+                  hasGivenToday(userKey, inspectedMemorial.id, 'candle')
                     ? ' ✓'
                     : ''}
                 </button>
                 <button
                   type="button"
                   className={`btn-ghost ${
-                    currentUser &&
-                    hasGivenToday(currentUser.email, inspectedMemorial.id, 'flower')
+                    userKey &&
+                    hasGivenToday(userKey, inspectedMemorial.id, 'flower')
                       ? 'btn-given-today'
                       : ''
                   }`}
@@ -1853,9 +1870,9 @@ export default function ParkWorld2D({
                     performQuickOffering(inspectedMemorial, OFFERING_TYPES.flowers[0])
                   }
                 >
-                  🌸 Give Flower ({inspectedMemorial.flowersCount})
-                  {currentUser &&
-                  hasGivenToday(currentUser.email, inspectedMemorial.id, 'flower')
+                  🌸 Give Flower ({inspectedMemorial.flowersCount || 0})
+                  {userKey &&
+                  hasGivenToday(userKey, inspectedMemorial.id, 'flower')
                     ? ' ✓'
                     : ''}
                 </button>
@@ -1872,10 +1889,10 @@ export default function ParkWorld2D({
                 {onToggleFavorite && (
                   <button
                     type="button"
-                    className={favorites.includes(inspectedMemorial.id) ? 'btn-primary' : 'btn-ghost'}
+                    className={(favorites || []).includes(inspectedMemorial.id) ? 'btn-primary' : 'btn-ghost'}
                     onClick={() => onToggleFavorite(inspectedMemorial.id)}
                   >
-                    {favorites.includes(inspectedMemorial.id) ? '💖 Favorited' : '🤍 Favorite'}
+                    {(favorites || []).includes(inspectedMemorial.id) ? '💖 Favorited' : '🤍 Favorite'}
                   </button>
                 )}
               </div>
