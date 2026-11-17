@@ -1,0 +1,1856 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Sparkles,
+  UserCheck,
+  X,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  Compass,
+  DoorOpen,
+  RotateCcw,
+  RotateCw,
+  Video,
+  Maximize2,
+  Minimize2,
+} from 'lucide-react';
+import { OFFERING_TYPES } from '../data/memorialData';
+import {
+  hasGivenToday,
+  recordGivenToday,
+  getDailyLimitNotice,
+} from '../utils/dailyLimits';
+
+const AVATAR_STORAGE_KEY = 'evergreen_paws_avatar_v1';
+
+const CLOAK_OPTIONS = [
+  { id: 'sage', label: 'Sage', color: '#4a7c59' },
+  { id: 'lavender', label: 'Lavender', color: '#7c6a9a' },
+  { id: 'amber', label: 'Amber', color: '#c87d4b' },
+  { id: 'starlight', label: 'Starlight', color: '#3b5978' },
+  { id: 'rose', label: 'Rose', color: '#b86578' },
+];
+
+const HAIR_OPTIONS = [
+  { id: 'espresso', label: 'Espresso', color: '#2c221e' },
+  { id: 'chestnut', label: 'Chestnut', color: '#8d4a32' },
+  { id: 'honey', label: 'Honey', color: '#d8c098' },
+  { id: 'silver', label: 'Silver', color: '#e2e8f0' },
+];
+
+const COMPANION_OPTIONS = [
+  { id: 'dog', label: '🐕 Spirit Pup' },
+  { id: 'cat', label: '🐈 Spirit Kitty' },
+  { id: 'bunny', label: '🐇 Spirit Bunny' },
+  { id: 'none', label: 'None' },
+];
+
+const CAMERA_PRESETS = {
+  follow: { label: 'Follow', dist: 235, height: 145, pitch: 0.36 },
+  close: { label: 'Close', dist: 155, height: 95, pitch: 0.25 },
+  high: { label: 'Overview', dist: 330, height: 245, pitch: 0.54 },
+};
+
+const DEFAULT_AVATAR = {
+  cloakColor: '#4a7c59',
+  hairColor: '#2c221e',
+  companion: 'dog',
+  carryingLantern: true,
+};
+
+function loadAvatarPrefs() {
+  try {
+    const raw = localStorage.getItem(AVATAR_STORAGE_KEY);
+    if (raw) return { ...DEFAULT_AVATAR, ...JSON.parse(raw) };
+  } catch {
+    // ignore
+  }
+  return DEFAULT_AVATAR;
+}
+
+const TOMBSTONE_SLOTS_3D = [
+  { x: -240, z: -180 },
+  { x: 240, z: -180 },
+  { x: -270, z: 20 },
+  { x: 270, z: 20 },
+  { x: -195, z: 215 },
+  { x: 195, z: 215 },
+  { x: -410, z: -90 },
+  { x: 410, z: -90 },
+  { x: -400, z: 165 },
+  { x: 400, z: 165 },
+];
+
+const ASH_SLOTS_3D = [
+  { x: -250, z: -230 },
+  { x: -95, z: -230 },
+  { x: 95, z: -230 },
+  { x: 250, z: -230 },
+  { x: -330, z: -30 },
+  { x: 330, z: -30 },
+  { x: -330, z: 160 },
+  { x: 330, z: 160 },
+  { x: -165, z: 210 },
+  { x: 165, z: 210 },
+];
+
+const GARDEN_NPCS_3D = [
+  {
+    id: 'npc3d-maya',
+    name: 'Maya Lin',
+    cloak: '#6b8e78',
+    hair: '#221d1b',
+    baseX: -125,
+    baseZ: 15,
+    patrol: 32,
+    speed: 0.65,
+    line: 'The reflections on the pond are so peaceful.',
+  },
+  {
+    id: 'npc3d-kenji',
+    name: 'Elder Kenji',
+    cloak: '#7b6450',
+    hair: '#dfe5ec',
+    baseX: 165,
+    baseZ: 75,
+    patrol: 0,
+    speed: 0,
+    line: 'They wait for us in the sunbeams...',
+  },
+  {
+    id: 'npc3d-hana',
+    name: 'Keeper Hana',
+    cloak: '#a47551',
+    hair: '#3b2b24',
+    baseX: -60,
+    baseZ: -215,
+    patrol: 40,
+    speed: 0.45,
+    line: 'Walk through the archway ahead to enter the Ash Room.',
+  },
+];
+
+const ASH_NPCS_3D = [
+  {
+    id: 'npc3d-sora',
+    name: 'Sora',
+    cloak: '#5b7294',
+    hair: '#1f232b',
+    baseX: -110,
+    baseZ: 40,
+    patrol: 0,
+    speed: 0,
+    line: 'The sandalwood incense is so calming.',
+  },
+  {
+    id: 'npc3d-claire',
+    name: 'Claire',
+    cloak: '#a86b7a',
+    hair: '#6e4532',
+    baseX: 195,
+    baseZ: -115,
+    patrol: 28,
+    speed: 0.5,
+    line: 'Every candle keeps a cherished memory glowing.',
+  },
+];
+
+export default function ParkWorld3D({
+  memorials,
+  currentUser,
+  atmosphere,
+  season = 'spring',
+  weather = 'clear',
+  activeRoom,
+  onChangeRoom,
+  onSelectMemorial,
+  onPerformOffering,
+  onLightningStrike,
+  onRequireLogin,
+}) {
+  const canvasRef = useRef(null);
+  const [avatar, setAvatar] = useState(loadAvatarPrefs);
+  const [cameraMode, setCameraMode] = useState('follow');
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [showAvatarPanel, setShowAvatarPanel] = useState(false);
+  const [nearbyMemorialId, setNearbyMemorialId] = useState(null);
+  const [inspectedId, setInspectedId] = useState(null);
+  const [armtipText, setArmtipText] = useState('');
+  const [nearPortal, setNearPortal] = useState(false);
+  const [walkMessage, setWalkMessage] = useState('');
+
+  useEffect(() => {
+    if (!nearbyMemorialId) {
+      setInspectedId(null);
+      setArmtipText('');
+    }
+  }, [nearbyMemorialId]);
+
+  const playerRef = useRef({
+    x: 0,
+    z: activeRoom === 'ash-room' ? 235 : 190,
+    facingX: 0,
+    facingZ: -1,
+    bob: 0,
+    moving: false,
+    targetX: null,
+    targetZ: null,
+    history: [],
+    portalCooldownUntil: 0,
+  });
+
+  const camRef = useRef({
+    yaw: 0,
+    preset: 'follow',
+  });
+
+  const keysRef = useRef({
+    up: false,
+    down: false,
+    left: false,
+    right: false,
+    rotLeft: false,
+    rotRight: false,
+  });
+
+  const dragRef = useRef({
+    active: false,
+    startX: 0,
+    startYaw: 0,
+    moved: false,
+  });
+
+  const screenHitsRef = useRef([]);
+  const particlesRef = useRef([]);
+  const weatherParticlesRef = useRef([]);
+  const lightningFlashRef = useRef(0);
+  const nextLightningRef = useRef(performance.now() + 4000);
+  const roomRef = useRef(activeRoom);
+  const atmosphereRef = useRef(atmosphere);
+  const seasonRef = useRef(season);
+  const weatherRef = useRef(weather);
+  const lightningCbRef = useRef(onLightningStrike);
+  const avatarRef = useRef(avatar);
+  const userRef = useRef(currentUser);
+  const nearbyIdRef = useRef(null);
+  const pendingOpenIdRef = useRef(null);
+  const nearPortalRef = useRef(false);
+
+  useEffect(() => {
+    atmosphereRef.current = atmosphere;
+  }, [atmosphere]);
+
+  useEffect(() => {
+    seasonRef.current = season;
+  }, [season]);
+
+  useEffect(() => {
+    weatherRef.current = weather;
+    weatherParticlesRef.current = [];
+  }, [weather]);
+
+  useEffect(() => {
+    lightningCbRef.current = onLightningStrike;
+  }, [onLightningStrike]);
+
+  useEffect(() => {
+    avatarRef.current = avatar;
+    try {
+      localStorage.setItem(AVATAR_STORAGE_KEY, JSON.stringify(avatar));
+    } catch {
+      // ignore
+    }
+  }, [avatar]);
+
+  useEffect(() => {
+    userRef.current = currentUser;
+  }, [currentUser]);
+
+  useEffect(() => {
+    camRef.current.preset = cameraMode;
+  }, [cameraMode]);
+
+  useEffect(() => {
+    if (roomRef.current !== activeRoom) {
+      roomRef.current = activeRoom;
+      const p = playerRef.current;
+      p.targetX = null;
+      p.targetZ = null;
+      p.portalCooldownUntil = performance.now() + 900;
+      p.x = 0;
+      p.z = activeRoom === 'ash-room' ? 245 : -225;
+      camRef.current.yaw = 0;
+      p.history = [];
+    }
+  }, [activeRoom]);
+
+  const positionedMemorials = useMemo(() => {
+    const tombstones = memorials.filter((m) => m.space === 'tombstone');
+    const ashNiches = memorials.filter((m) => m.space === 'ash-room');
+    const list = [];
+    tombstones.forEach((m, idx) => {
+      const s = TOMBSTONE_SLOTS_3D[idx % TOMBSTONE_SLOTS_3D.length];
+      list.push({ ...m, worldX: s.x, worldZ: s.z });
+    });
+    ashNiches.forEach((m, idx) => {
+      const s = ASH_SLOTS_3D[idx % ASH_SLOTS_3D.length];
+      list.push({ ...m, worldX: s.x, worldZ: s.z });
+    });
+    return list;
+  }, [memorials]);
+
+  const positionedRef = useRef(positionedMemorials);
+  useEffect(() => {
+    positionedRef.current = positionedMemorials;
+  }, [positionedMemorials]);
+
+  const spawnFloatingParticles = (wx, wy, wz, emoji, count = 5) => {
+    for (let i = 0; i < count; i += 1) {
+      particlesRef.current.push({
+        x: wx + (Math.random() - 0.5) * 26,
+        y: wy + Math.random() * 14,
+        z: wz + (Math.random() - 0.5) * 26,
+        vx: (Math.random() - 0.5) * 14,
+        vy: 28 + Math.random() * 18,
+        vz: (Math.random() - 0.5) * 14,
+        emoji,
+        life: 1.3 + Math.random() * 0.4,
+      });
+    }
+  };
+
+  const triggerEmote = (emoji, label) => {
+    const p = playerRef.current;
+    spawnFloatingParticles(p.x, 42, p.z, emoji, 6);
+    setWalkMessage(label);
+    setTimeout(() => setWalkMessage(''), 2200);
+  };
+
+  const handleWalkToPet = (memorial) => {
+    if (nearbyIdRef.current === memorial.id) {
+      setInspectedId(memorial.id);
+      return;
+    }
+    setInspectedId(null);
+    pendingOpenIdRef.current = memorial.id;
+    if (memorial.space !== roomRef.current) {
+      roomRef.current = memorial.space;
+      onChangeRoom(memorial.space);
+    }
+    setTimeout(() => {
+      const found = positionedRef.current.find((m) => m.id === memorial.id);
+      if (found) {
+        const p = playerRef.current;
+        p.portalCooldownUntil = performance.now() + 900;
+        p.targetX = found.worldX;
+        p.targetZ = found.worldZ + 56;
+        setWalkMessage(`Walking in 3D to ${found.name} (${found.locationCode})...`);
+        setTimeout(() => setWalkMessage(''), 2200);
+      }
+    }, 60);
+  };
+
+  const showArmtip = (msg) => {
+    setArmtipText(msg);
+    setTimeout(() => setArmtipText(''), 3200);
+  };
+
+  const performQuickOffering = (memorial, offering) => {
+    if (!userRef.current) {
+      onRequireLogin();
+      return;
+    }
+    if (hasGivenToday(userRef.current.email, memorial.id, offering.category)) {
+      showArmtip(getDailyLimitNotice(offering.category, memorial.name));
+      return;
+    }
+    recordGivenToday(userRef.current.email, memorial.id, offering.category);
+    const target = positionedRef.current.find((m) => m.id === memorial.id);
+    if (target) {
+      spawnFloatingParticles(target.worldX, 34, target.worldZ, offering.emoji, 6);
+    }
+    onPerformOffering(memorial.id, offering);
+    setWalkMessage(`You ${offering.blessing} for ${memorial.name}`);
+    setTimeout(() => setWalkMessage(''), 2400);
+  };
+
+  const cycleCameraPreset = () => {
+    setCameraMode((prev) =>
+      prev === 'follow' ? 'close' : prev === 'close' ? 'high' : 'follow'
+    );
+  };
+
+  // Keyboard Listeners
+  useEffect(() => {
+    const mapKey = (e, down) => {
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') keysRef.current.up = down;
+      if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keysRef.current.down = down;
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keysRef.current.left = down;
+      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keysRef.current.right = down;
+      if (e.key === 'q' || e.key === 'Q') keysRef.current.rotLeft = down;
+      if (e.key === 'r' || e.key === 'R') keysRef.current.rotRight = down;
+
+      if (down && (e.key === 'e' || e.key === 'E' || e.key === 'Enter')) {
+        if (nearbyIdRef.current) onSelectMemorial(nearbyIdRef.current);
+      }
+      if (down && (e.key === 'f' || e.key === 'F')) {
+        const nearby = positionedRef.current.find((m) => m.id === nearbyIdRef.current);
+        if (nearby) performQuickOffering(nearby, OFFERING_TYPES.flowers[0]);
+      }
+      if (down && (e.key === 'c' || e.key === 'C')) {
+        const nearby = positionedRef.current.find((m) => m.id === nearbyIdRef.current);
+        if (nearby) performQuickOffering(nearby, OFFERING_TYPES.candle);
+      }
+    };
+    const onDown = (e) => mapKey(e, true);
+    const onUp = (e) => mapKey(e, false);
+    window.addEventListener('keydown', onDown);
+    window.addEventListener('keyup', onUp);
+    return () => {
+      window.removeEventListener('keydown', onDown);
+      window.removeEventListener('keyup', onUp);
+    };
+  }, [onSelectMemorial]);
+
+  // 3D Render Loop
+  useEffect(() => {
+    let animId;
+    let lastTime = performance.now();
+
+    const frame = (now) => {
+      const dt = Math.min(0.05, (now - lastTime) / 1000);
+      lastTime = now;
+
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        animId = requestAnimationFrame(frame);
+        return;
+      }
+
+      const rect = canvas.getBoundingClientRect();
+      const viewW = Math.max(300, Math.round(rect.width));
+      const viewH = Math.max(320, Math.round(rect.height));
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      if (canvas.width !== viewW * dpr || canvas.height !== viewH * dpr) {
+        canvas.width = viewW * dpr;
+        canvas.height = viewH * dpr;
+      }
+
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      // Camera orbit keys
+      if (keysRef.current.rotLeft) camRef.current.yaw -= 1.8 * dt;
+      if (keysRef.current.rotRight) camRef.current.yaw += 1.8 * dt;
+
+      const yaw = camRef.current.yaw;
+      const dirX = Math.sin(yaw);
+      const dirZ = -Math.cos(yaw);
+      const rightX = Math.cos(yaw);
+      const rightZ = Math.sin(yaw);
+
+      const p = playerRef.current;
+      const speed = 195;
+
+      // Camera-relative movement
+      let moveForward = 0;
+      let moveRight = 0;
+      if (keysRef.current.up) moveForward += 1;
+      if (keysRef.current.down) moveForward -= 1;
+      if (keysRef.current.right) moveRight += 1;
+      if (keysRef.current.left) moveRight -= 1;
+
+      if (moveForward !== 0 || moveRight !== 0) {
+        p.targetX = null;
+        p.targetZ = null;
+        let vx = dirX * moveForward + rightX * moveRight;
+        let vz = dirZ * moveForward + rightZ * moveRight;
+        const len = Math.hypot(vx, vz) || 1;
+        vx /= len;
+        vz /= len;
+        p.x += vx * speed * dt;
+        p.z += vz * speed * dt;
+        p.facingX = vx;
+        p.facingZ = vz;
+        p.moving = true;
+        p.bob += dt * 12;
+      } else if (p.targetX !== null && p.targetZ !== null) {
+        const dx = p.targetX - p.x;
+        const dz = p.targetZ - p.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist > 8) {
+          const vx = dx / dist;
+          const vz = dz / dist;
+          p.x += vx * speed * dt;
+          p.z += vz * speed * dt;
+          p.facingX = vx;
+          p.facingZ = vz;
+          p.moving = true;
+          p.bob += dt * 12;
+        } else {
+          p.targetX = null;
+          p.targetZ = null;
+          p.moving = false;
+        }
+      } else {
+        p.moving = false;
+      }
+
+      // Clamp 3D world bounds
+      p.x = Math.max(-500, Math.min(500, p.x));
+      p.z = Math.max(-360, Math.min(360, p.z));
+
+      if (p.moving || p.history.length === 0) {
+        p.history.unshift({ x: p.x, z: p.z });
+        if (p.history.length > 28) p.history.pop();
+      }
+
+      const room = roomRef.current;
+      const portalZ = room === 'tombstone' ? -320 : 320;
+      const portalDist = Math.hypot(p.x - 0, p.z - portalZ);
+      const isNearPortalNow = portalDist < 95;
+      if (isNearPortalNow !== nearPortalRef.current) {
+        nearPortalRef.current = isNearPortalNow;
+        setNearPortal(isNearPortalNow);
+      }
+
+      if (portalDist < 44 && now > p.portalCooldownUntil) {
+        const nextRoom = room === 'tombstone' ? 'ash-room' : 'tombstone';
+        p.portalCooldownUntil = now + 1100;
+        roomRef.current = nextRoom;
+        onChangeRoom(nextRoom);
+        p.targetX = null;
+        p.targetZ = null;
+        p.x = 0;
+        p.z = nextRoom === 'ash-room' ? 245 : -225;
+        p.history = [];
+        animId = requestAnimationFrame(frame);
+        return;
+      }
+
+      // Proximity to 3D monuments
+      const roomMemorials = positionedRef.current.filter((m) => m.space === room);
+      let closest = null;
+      let closestDist = 110;
+      for (const m of roomMemorials) {
+        const d = Math.hypot(p.x - m.worldX, p.z - m.worldZ);
+        if (d < closestDist) {
+          closestDist = d;
+          closest = m;
+        }
+      }
+      const nextNearbyId = closest ? closest.id : null;
+      if (nextNearbyId !== nearbyIdRef.current) {
+        nearbyIdRef.current = nextNearbyId;
+        setNearbyMemorialId(nextNearbyId);
+        if (nextNearbyId && pendingOpenIdRef.current === nextNearbyId) {
+          setInspectedId(nextNearbyId);
+          pendingOpenIdRef.current = null;
+        } else if (!nextNearbyId) {
+          setInspectedId(null);
+        }
+      }
+
+      // 3D Camera Setup
+      const cfg = CAMERA_PRESETS[camRef.current.preset] || CAMERA_PRESETS.follow;
+      const camX = p.x - dirX * cfg.dist;
+      const camZ = p.z - dirZ * cfg.dist;
+      const camY = cfg.height;
+      const pitch = cfg.pitch;
+      const cosP = Math.cos(pitch);
+      const sinP = Math.sin(pitch);
+      const fov = Math.min(viewW, viewH) * 1.18;
+      const horizonY = viewH * 0.52 - (sinP / cosP) * fov;
+
+      const project3D = (wx, wy, wz) => {
+        const rx = wx - camX;
+        const ry = wy - camY;
+        const rz = wz - camZ;
+        const cx = rx * rightX + rz * rightZ;
+        const depth = rx * dirX + rz * dirZ;
+        const cz = depth * cosP - ry * sinP;
+        const cy = ry * cosP + depth * sinP;
+        if (cz <= 15) return null;
+        const scale = fov / cz;
+        return {
+          sx: viewW / 2 + cx * scale,
+          sy: viewH * 0.52 - cy * scale,
+          scale,
+          cz,
+        };
+      };
+
+      // ====================
+      // DRAW 3D SKY & GROUND HORIZON
+      // ====================
+      const atm = atmosphereRef.current;
+      const curSeason = seasonRef.current;
+      const curWeather = weatherRef.current;
+      const horizonClamp = Math.max(40, Math.min(viewH * 0.65, horizonY));
+
+      if (room === 'tombstone') {
+        const sky = ctx.createLinearGradient(0, 0, 0, horizonClamp + 20);
+        if (curWeather === 'thunderstorm' || curWeather === 'rain') {
+          if (atm === 'night') {
+            sky.addColorStop(0, '#060a10');
+            sky.addColorStop(1, '#14202b');
+          } else {
+            sky.addColorStop(0, '#3a4956');
+            sky.addColorStop(1, '#687985');
+          }
+        } else if (atm === 'morning') {
+          sky.addColorStop(0, curSeason === 'winter' ? '#85a7ba' : '#6ba3be');
+          sky.addColorStop(1, curSeason === 'autumn' ? '#eed8c2' : '#dcebd5');
+        } else if (atm === 'dusk') {
+          sky.addColorStop(0, '#2c2233');
+          sky.addColorStop(0.65, '#7c4e56');
+          sky.addColorStop(1, '#d99a6c');
+        } else {
+          sky.addColorStop(0, '#09111b');
+          sky.addColorStop(1, '#1a2f3d');
+        }
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, viewW, horizonClamp + 16);
+
+        // Orbiting Sun / Moon Shine & Stars
+        const celestialX = ((viewW * 0.5 - yaw * 180) % (viewW + 160) + viewW + 160) % (viewW + 160) - 80;
+        const celestialY = Math.max(36, horizonClamp * 0.42);
+        if (atm === 'night' || atm === 'dusk') {
+          ctx.fillStyle = 'rgba(255, 244, 214, 0.72)';
+          for (let i = 0; i < 22; i += 1) {
+            const sx = ((i * 97 - yaw * 130) % viewW + viewW) % viewW;
+            const sy = 18 + ((i * 53) % Math.max(30, horizonClamp - 25));
+            ctx.fillRect(sx, sy, 2, 2);
+          }
+        }
+        if (curWeather === 'clear' && atm === 'night') {
+          const moonHalo = ctx.createRadialGradient(
+            celestialX,
+            celestialY,
+            10,
+            celestialX,
+            celestialY,
+            88
+          );
+          moonHalo.addColorStop(0, 'rgba(255, 246, 208, 0.65)');
+          moonHalo.addColorStop(0.4, 'rgba(216, 232, 255, 0.22)');
+          moonHalo.addColorStop(1, 'rgba(216, 232, 255, 0)');
+          ctx.fillStyle = moonHalo;
+          ctx.beginPath();
+          ctx.arc(celestialX, celestialY, 88, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Moonshine beam across the horizon
+          const beam = ctx.createLinearGradient(celestialX, celestialY, celestialX, viewH);
+          beam.addColorStop(0, 'rgba(235, 244, 255, 0.14)');
+          beam.addColorStop(1, 'rgba(235, 244, 255, 0)');
+          ctx.fillStyle = beam;
+          ctx.beginPath();
+          ctx.moveTo(celestialX - 24, celestialY);
+          ctx.lineTo(celestialX + 24, celestialY);
+          ctx.lineTo(celestialX + 120, viewH);
+          ctx.lineTo(celestialX - 120, viewH);
+          ctx.closePath();
+          ctx.fill();
+        } else if (curWeather === 'clear' && (atm === 'morning' || atm === 'dusk')) {
+          const sunHalo = ctx.createRadialGradient(celestialX, celestialY, 10, celestialX, celestialY, 72);
+          sunHalo.addColorStop(0, 'rgba(255, 232, 168, 0.52)');
+          sunHalo.addColorStop(1, 'rgba(255, 232, 168, 0)');
+          ctx.fillStyle = sunHalo;
+          ctx.beginPath();
+          ctx.arc(celestialX, celestialY, 72, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = atm === 'night' ? '#f8f0d8' : '#ffdf9e';
+        ctx.beginPath();
+        ctx.arc(celestialX, celestialY, atm === 'night' ? 18 : 22, 0, Math.PI * 2);
+        ctx.fill();
+
+        const ground = ctx.createLinearGradient(0, horizonClamp, 0, viewH);
+        const seasonGrass = {
+          spring: { morning: ['#6fa66e', '#4c7c4d'], dusk: ['#475d43', '#2a3c2b'], night: ['#192a22', '#0e1914'] },
+          summer: { morning: ['#579654', '#396b3a'], dusk: ['#3e563a', '#233623'], night: ['#15281d', '#0b1710'] },
+          autumn: { morning: ['#948b53', '#6e6437'], dusk: ['#5f4e37', '#3c3021'], night: ['#24221a', '#14130e'] },
+          winter: { morning: ['#d2dfe3', '#aebfc6'], dusk: ['#6a7d8a', '#4a5a66'], night: ['#223340', '#14202a'] },
+        }[curSeason] || { morning: ['#6c9c6b', '#477249'], dusk: ['#445740', '#283829'], night: ['#192a22', '#0e1914'] };
+        const [gTop, gBot] = seasonGrass[atm] || seasonGrass.dusk;
+        ground.addColorStop(0, gTop);
+        ground.addColorStop(1, gBot);
+        ctx.fillStyle = ground;
+        ctx.fillRect(0, horizonClamp, viewW, viewH - horizonClamp);
+      } else {
+        // Indoor Ash Room ceiling & timber floor
+        const ceil = ctx.createLinearGradient(0, 0, 0, horizonClamp + 20);
+        ceil.addColorStop(0, '#140d0a');
+        ceil.addColorStop(1, '#2d1e17');
+        ctx.fillStyle = ceil;
+        ctx.fillRect(0, 0, viewW, horizonClamp + 16);
+
+        const floor = ctx.createLinearGradient(0, horizonClamp, 0, viewH);
+        floor.addColorStop(0, '#2a1c15');
+        floor.addColorStop(1, '#422c20');
+        ctx.fillStyle = floor;
+        ctx.fillRect(0, horizonClamp, viewW, viewH - horizonClamp);
+      }
+
+      // Helper for 3D Projected Ground Quads
+      const drawGroundPoly = (pts, fill, stroke) => {
+        const proj = pts.map(([wx, wy, wz]) => project3D(wx, wy, wz));
+        if (proj.some((pt) => pt === null)) return;
+        ctx.beginPath();
+        ctx.moveTo(proj[0].sx, proj[0].sy);
+        for (let i = 1; i < proj.length; i += 1) {
+          ctx.lineTo(proj[i].sx, proj[i].sy);
+        }
+        ctx.closePath();
+        ctx.fillStyle = fill;
+        ctx.fill();
+        if (stroke) {
+          ctx.strokeStyle = stroke;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      };
+
+      // Draw 3D Ground Grid & Paths
+      if (room === 'tombstone') {
+        // Subtle meadow grid lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 1;
+        for (let gx = -500; gx <= 500; gx += 100) {
+          const a = project3D(gx, 0, -360);
+          const b = project3D(gx, 0, 360);
+          if (a && b) {
+            ctx.beginPath();
+            ctx.moveTo(a.sx, a.sy);
+            ctx.lineTo(b.sx, b.sy);
+            ctx.stroke();
+          }
+        }
+        // Main Stone Walkway along Z
+        const pathColor = atm === 'night' ? '#3d4952' : '#c6bea9';
+        for (let pz = -330; pz < 330; pz += 66) {
+          drawGroundPoly(
+            [
+              [-36, 0, pz],
+              [36, 0, pz],
+              [36, 0, pz + 66],
+              [-36, 0, pz + 66],
+            ],
+            pathColor,
+            'rgba(0,0,0,0.12)'
+          );
+        }
+        // Cross paths
+        [-150, 50, 240].forEach((cz) => {
+          for (let px = -360; px < 360; px += 90) {
+            drawGroundPoly(
+              [
+                [px, 0, cz - 24],
+                [px + 90, 0, cz - 24],
+                [px + 90, 0, cz + 24],
+                [px, 0, cz + 24],
+              ],
+              pathColor,
+              'rgba(0,0,0,0.08)'
+            );
+          }
+        });
+        // 3D Reflection Pond at (-110, 100)
+        const pondPts = [];
+        for (let a = 0; a < 14; a += 1) {
+          const ang = (a / 14) * Math.PI * 2;
+          pondPts.push([Math.cos(ang) * 78, 0.5, 50 + Math.sin(ang) * 44]);
+        }
+        drawGroundPoly(
+          pondPts,
+          atm === 'night' ? '#1c4259' : '#589ab3',
+          'rgba(180,225,240,0.4)'
+        );
+      } else {
+        // Ash Room Crimson & Gold Sanctuary Runner
+        for (let pz = -300; pz < 320; pz += 62) {
+          drawGroundPoly(
+            [
+              [-48, 0.5, pz],
+              [48, 0.5, pz],
+              [48, 0.5, pz + 62],
+              [-48, 0.5, pz + 62],
+            ],
+            '#5e262b',
+            '#d4a853'
+          );
+        }
+        for (let px = -320; px < 320; px += 80) {
+          drawGroundPoly(
+            [
+              [px, 0.5, -36],
+              [px + 80, 0.5, -36],
+              [px + 80, 0.5, 36],
+              [px, 0.5, 36],
+            ],
+            '#5e262b',
+            '#d4a853'
+          );
+        }
+      }
+
+      // Helper for Extruded 3D Box
+      const draw3DBox = (cx, baseY, cz, w, h, d, colors) => {
+        const hw = w / 2;
+        const hd = d / 2;
+        const corners = [
+          project3D(cx - hw, baseY, cz - hd), // 0: bfl
+          project3D(cx + hw, baseY, cz - hd), // 1: bfr
+          project3D(cx + hw, baseY, cz + hd), // 2: bbr
+          project3D(cx - hw, baseY, cz + hd), // 3: bbl
+          project3D(cx - hw, baseY + h, cz - hd), // 4: tfl
+          project3D(cx + hw, baseY + h, cz - hd), // 5: tfr
+          project3D(cx + hw, baseY + h, cz + hd), // 6: tbr
+          project3D(cx - hw, baseY + h, cz + hd), // 7: tbl
+        ];
+        if (corners.some((c) => c === null)) return null;
+
+        const faces = [
+          { idx: [4, 5, 6, 7], col: colors.top },
+          { idx: [0, 1, 5, 4], col: colors.front },
+          { idx: [2, 3, 7, 6], col: colors.back || colors.front },
+          { idx: [1, 2, 6, 5], col: colors.side },
+          { idx: [3, 0, 4, 7], col: colors.side },
+        ];
+
+        // Sort faces back-to-front by avg cz
+        faces.sort((a, b) => {
+          const za = a.idx.reduce((s, i) => s + corners[i].cz, 0) / 4;
+          const zb = b.idx.reduce((s, i) => s + corners[i].cz, 0) / 4;
+          return zb - za;
+        });
+
+        faces.forEach((f) => {
+          ctx.beginPath();
+          ctx.moveTo(corners[f.idx[0]].sx, corners[f.idx[0]].sy);
+          for (let k = 1; k < 4; k += 1) {
+            ctx.lineTo(corners[f.idx[k]].sx, corners[f.idx[k]].sy);
+          }
+          ctx.closePath();
+          ctx.fillStyle = f.col;
+          ctx.fill();
+          ctx.strokeStyle = colors.stroke || 'rgba(0,0,0,0.25)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        });
+
+        return project3D(cx, baseY + h + 8, cz);
+      };
+
+      // ====================
+      // BUILD 3D RENDER QUEUE (PAINTER'S ALGORITHM)
+      // ====================
+      const drawList = [];
+      const pushEntity = (wx, wz, renderFn) => {
+        const pr = project3D(wx, 0, wz);
+        if (pr) drawList.push({ cz: pr.cz, render: renderFn });
+      };
+
+      // 1. Portal Archway
+      pushEntity(0, portalZ, () => {
+        if (room === 'tombstone') {
+          draw3DBox(-44, 0, portalZ, 22, 88, 22, {
+            top: '#8c725a',
+            front: '#6e5642',
+            side: '#513d2e',
+          });
+          draw3DBox(44, 0, portalZ, 22, 88, 22, {
+            top: '#8c725a',
+            front: '#6e5642',
+            side: '#513d2e',
+          });
+          const labelPt = draw3DBox(0, 82, portalZ, 124, 22, 26, {
+            top: '#a58465',
+            front: '#7b5f47',
+            side: '#584130',
+          });
+          const pMid = project3D(0, 42, portalZ);
+          if (pMid) {
+            ctx.fillStyle = 'rgba(255, 206, 120, 0.32)';
+            ctx.beginPath();
+            ctx.ellipse(pMid.sx, pMid.sy, 32 * pMid.scale, 38 * pMid.scale, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          if (labelPt) {
+            ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
+            ctx.fillStyle = '#ffe5ad';
+            ctx.textAlign = 'center';
+            ctx.fillText('🏛️ Hall of Serenity (Ash Room)', labelPt.sx, labelPt.sy - 6);
+          }
+        } else {
+          draw3DBox(-42, 0, portalZ, 18, 76, 18, {
+            top: '#52785d',
+            front: '#3a5c44',
+            side: '#284230',
+          });
+          draw3DBox(42, 0, portalZ, 18, 76, 18, {
+            top: '#52785d',
+            front: '#3a5c44',
+            side: '#284230',
+          });
+          const labelPt = draw3DBox(0, 72, portalZ, 112, 18, 20, {
+            top: '#6d9678',
+            front: '#446b50',
+            side: '#2d4a36',
+          });
+          if (labelPt) {
+            ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
+            ctx.fillStyle = '#d7f4db';
+            ctx.textAlign = 'center';
+            ctx.fillText('🌿 Exit to Tombstone Garden', labelPt.sx, labelPt.sy - 6);
+          }
+        }
+      });
+
+      // 2. Decorative 3D Environment Props
+      if (room === 'tombstone') {
+        const trees = [
+          { x: -370, z: -260, cherry: true },
+          { x: 370, z: -260, cherry: true },
+          { x: -420, z: 40, cherry: false },
+          { x: 420, z: 40, cherry: false },
+          { x: -320, z: 290, cherry: true },
+          { x: 320, z: 290, cherry: true },
+        ];
+        trees.forEach((t) => {
+          pushEntity(t.x, t.z, () => {
+            draw3DBox(t.x, 0, t.z, 14, 52, 14, {
+              top: '#754e33',
+              front: '#5e3d27',
+              side: '#432b1a',
+            });
+            const crown = project3D(t.x, 70, t.z);
+            if (crown) {
+              const r = 34 * crown.scale;
+              let canopyColor;
+              if (curSeason === 'winter') {
+                canopyColor = atm === 'night' ? '#637a8a' : '#dce8ee';
+              } else if (curSeason === 'autumn') {
+                canopyColor = t.cherry
+                  ? atm === 'night' ? '#7a4430' : '#df7b3d'
+                  : atm === 'night' ? '#663c27' : '#c95c34';
+              } else if (curSeason === 'summer') {
+                canopyColor = atm === 'night' ? '#1c4226' : '#3d7f46';
+              } else {
+                canopyColor = t.cherry
+                  ? atm === 'night' ? '#7d4d67' : '#ebaec2'
+                  : atm === 'night' ? '#214532' : '#4b7e52';
+              }
+              ctx.fillStyle = canopyColor;
+              ctx.beginPath();
+              ctx.arc(crown.sx, crown.sy, r, 0, Math.PI * 2);
+              ctx.arc(crown.sx - r * 0.55, crown.sy + r * 0.2, r * 0.72, 0, Math.PI * 2);
+              ctx.arc(crown.sx + r * 0.55, crown.sy + r * 0.2, r * 0.72, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          });
+        });
+
+        // 3D Lantern Posts
+        [
+          { x: -55, z: -210 },
+          { x: 55, z: -210 },
+          { x: -55, z: 120 },
+          { x: 55, z: 120 },
+        ].forEach((l) => {
+          pushEntity(l.x, l.z, () => {
+            draw3DBox(l.x, 0, l.z, 6, 46, 6, {
+              top: '#48545e',
+              front: '#313a42',
+              side: '#232a30',
+            });
+            const lamp = project3D(l.x, 52, l.z);
+            if (lamp) {
+              const g = ctx.createRadialGradient(lamp.sx, lamp.sy, 2, lamp.sx, lamp.sy, 32 * lamp.scale);
+              g.addColorStop(0, 'rgba(255, 218, 128, 0.85)');
+              g.addColorStop(1, 'rgba(255, 218, 128, 0)');
+              ctx.fillStyle = g;
+              ctx.beginPath();
+              ctx.arc(lamp.sx, lamp.sy, 32 * lamp.scale, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          });
+        });
+      } else {
+        // Central 3D Incense Brazier Altar in Ash Room
+        pushEntity(0, 0, () => {
+          draw3DBox(0, 0, 0, 44, 24, 44, {
+            top: '#8c6632',
+            front: '#69491f',
+            side: '#4b3314',
+          });
+          const topPt = project3D(0, 32, 0);
+          if (topPt) {
+            ctx.font = `${Math.max(14, Math.round(24 * topPt.scale))}px serif`;
+            ctx.textAlign = 'center';
+            ctx.fillText('🪔', topPt.sx, topPt.sy);
+          }
+        });
+      }
+
+      // 3. 3D Tombstones & Ash Alcoves
+      const newScreenHits = [];
+      roomMemorials.forEach((m) => {
+        pushEntity(m.worldX, m.worldZ, () => {
+          const isNear = m.id === nearbyIdRef.current;
+          const isOwner =
+            userRef.current && m.ownerEmail.toLowerCase() === userRef.current.email.toLowerCase();
+
+          // Proximity halo on ground
+          if (isNear) {
+            const gp = project3D(m.worldX, 1, m.worldZ);
+            if (gp) {
+              const pr = (44 + Math.sin(now * 0.006) * 4) * gp.scale;
+              ctx.strokeStyle = '#ffd57e';
+              ctx.lineWidth = 3;
+              ctx.beginPath();
+              ctx.ellipse(gp.sx, gp.sy, pr, pr * 0.52, 0, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+          }
+
+          let topLabelPt = null;
+          if (room === 'tombstone') {
+            const palette = {
+              'classic-granite': { top: '#cfd6dd', front: '#9aa4ae', side: '#6d7782' },
+              'angel-wings': { top: '#fbf7ee', front: '#e2dac9', side: '#bfb49f' },
+              'rose-heart': { top: '#fadfe5', front: '#e2aeb9', side: '#ba8290' },
+              'moss-celtic': { top: '#9fb49c', front: '#6c856b', side: '#4b614b' },
+            }[m.styleId] || { top: '#cfd6dd', front: '#9aa4ae', side: '#6d7782' };
+
+            // Stone plinth
+            draw3DBox(m.worldX, 0, m.worldZ, 52, 10, 34, {
+              top: '#848f88',
+              front: '#5f6963',
+              side: '#454e49',
+            });
+            // Extruded gravestone slab
+            topLabelPt = draw3DBox(m.worldX, 10, m.worldZ, 38, 48, 16, {
+              ...palette,
+              stroke: isNear ? '#ffd57e' : 'rgba(255,255,255,0.35)',
+            });
+          } else {
+            // 3D Columbarium Alcove Tower
+            const urnCol = {
+              'celadon-urn': '#86b599',
+              'gilded-lotus': '#d4a853',
+              'starlight-glass': '#82b3ee',
+              'warm-cherrywood': '#a95f3a',
+            }[m.styleId] || '#86b599';
+
+            topLabelPt = draw3DBox(m.worldX, 0, m.worldZ, 56, 74, 34, {
+              top: '#7a573d',
+              front: '#3e291e',
+              side: '#2a1b13',
+              stroke: isNear ? '#ffd57e' : '#a47e49',
+            });
+
+            const urnPt = project3D(m.worldX, 42, m.worldZ + 18);
+            if (urnPt) {
+              ctx.fillStyle = urnCol;
+              ctx.beginPath();
+              ctx.ellipse(urnPt.sx, urnPt.sy, 11 * urnPt.scale, 15 * urnPt.scale, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.strokeStyle = '#f2d085';
+              ctx.lineWidth = 1.5;
+              ctx.stroke();
+            }
+          }
+
+          // Floating 3D Nameplate & Offerings
+          if (topLabelPt) {
+            const fontSize = Math.max(10, Math.min(15, Math.round(13 * topLabelPt.scale)));
+            ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+            const text = `${isOwner ? '⭐ ' : ''}${m.name} (${m.locationCode})`;
+            const tw = ctx.measureText(text).width + 14;
+            ctx.fillStyle = 'rgba(16, 22, 20, 0.84)';
+            ctx.fillRect(topLabelPt.sx - tw / 2, topLabelPt.sy - 20, tw, 18);
+            ctx.strokeStyle = isNear ? '#ffd57e' : 'rgba(255,255,255,0.22)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(topLabelPt.sx - tw / 2, topLabelPt.sy - 20, tw, 18);
+            ctx.fillStyle = '#ffe6b3';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, topLabelPt.sx, topLabelPt.sy - 7);
+
+            // Hit rect for tap-to-walk
+            newScreenHits.push({
+              id: m.id,
+              worldX: m.worldX,
+              worldZ: m.worldZ,
+              sx: topLabelPt.sx,
+              sy: topLabelPt.sy + 20 * topLabelPt.scale,
+              radius: Math.max(30, 42 * topLabelPt.scale),
+            });
+          }
+
+          // Active offerings in front of plinth
+          const baseFront = project3D(m.worldX, 6, m.worldZ + 26);
+          if (baseFront) {
+            const toks = (m.activeOfferings || []).slice(0, 4).join(' ');
+            ctx.font = `${Math.max(11, Math.round(14 * baseFront.scale))}px serif`;
+            ctx.textAlign = 'center';
+            ctx.fillText(toks, baseFront.sx, baseFront.sy);
+          }
+        });
+      });
+
+      // 4. 3D Ambient NPCs
+      const npcs = room === 'tombstone' ? GARDEN_NPCS_3D : ASH_NPCS_3D;
+      npcs.forEach((npc, idx) => {
+        const nx = npc.baseX + (npc.patrol ? Math.sin(now * 0.001 * npc.speed + idx * 2) * npc.patrol : 0);
+        const nz = npc.baseZ;
+        pushEntity(nx, nz, () => {
+          const headPt = draw3DBox(nx, 0, nz, 18, 30, 14, {
+            top: npc.cloak,
+            front: npc.cloak,
+            side: npc.cloak,
+          });
+          const head = project3D(nx, 37, nz);
+          if (head) {
+            ctx.fillStyle = '#f2cfb6';
+            ctx.beginPath();
+            ctx.arc(head.sx, head.sy, 8 * head.scale, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = npc.hair;
+            ctx.beginPath();
+            ctx.arc(head.sx, head.sy - 2 * head.scale, 8.2 * head.scale, Math.PI, 0);
+            ctx.fill();
+          }
+          if (headPt && Math.hypot(p.x - nx, p.z - nz) < 95) {
+            ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
+            const bw = ctx.measureText(npc.line).width + 18;
+            ctx.fillStyle = 'rgba(20, 26, 24, 0.92)';
+            ctx.fillRect(headPt.sx - bw / 2, headPt.sy - 36, bw, 22);
+            ctx.strokeStyle = 'rgba(255, 224, 155, 0.65)';
+            ctx.strokeRect(headPt.sx - bw / 2, headPt.sy - 36, bw, 22);
+            ctx.fillStyle = '#f9f2e4';
+            ctx.textAlign = 'center';
+            ctx.fillText(npc.line, headPt.sx, headPt.sy - 21);
+          }
+        });
+      });
+
+      // 5. 3D Spirit Pet Companion
+      const av = avatarRef.current;
+      if (av.companion !== 'none') {
+        const trail = p.history[Math.min(18, p.history.length - 1)] || { x: p.x - 24, z: p.z + 18 };
+        const sx = trail.x - p.facingX * 18;
+        const sz = trail.z - p.facingZ * 18;
+        const sy = 10 + Math.sin(now * 0.005) * 4;
+        pushEntity(sx, sz, () => {
+          const sp = project3D(sx, sy, sz);
+          if (sp) {
+            const glow = ctx.createRadialGradient(sp.sx, sp.sy, 2, sp.sx, sp.sy, 22 * sp.scale);
+            glow.addColorStop(0, 'rgba(182, 238, 255, 0.72)');
+            glow.addColorStop(1, 'rgba(182, 238, 255, 0)');
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(sp.sx, sp.sy, 22 * sp.scale, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.font = `${Math.max(14, Math.round(18 * sp.scale))}px serif`;
+            ctx.textAlign = 'center';
+            const emoji = av.companion === 'cat' ? '🐈' : av.companion === 'bunny' ? '🐇' : '🐕';
+            ctx.fillText(emoji, sp.sx, sp.sy + 5);
+          }
+        });
+      }
+
+      // 6. 3D Player Character
+      const bobY = p.moving ? Math.abs(Math.sin(p.bob)) * 6 : 0;
+      pushEntity(p.x, p.z, () => {
+        const shadow = project3D(p.x, 0.5, p.z);
+        if (shadow) {
+          ctx.fillStyle = 'rgba(0,0,0,0.34)';
+          ctx.beginPath();
+          ctx.ellipse(shadow.sx, shadow.sy, 14 * shadow.scale, 7 * shadow.scale, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        draw3DBox(p.x, 2 + bobY, p.z, 20, 28, 14, {
+          top: av.cloakColor,
+          front: av.cloakColor,
+          side: av.cloakColor,
+          stroke: 'rgba(255,255,255,0.45)',
+        });
+        const head = project3D(p.x, 37 + bobY, p.z);
+        if (head) {
+          ctx.fillStyle = '#f5d2b8';
+          ctx.beginPath();
+          ctx.arc(head.sx, head.sy, 9.5 * head.scale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = av.hairColor;
+          ctx.beginPath();
+          ctx.arc(head.sx, head.sy - 2 * head.scale, 9.8 * head.scale, Math.PI, 0);
+          ctx.fill();
+
+          if (av.carryingLantern) {
+            ctx.font = `${Math.max(11, Math.round(14 * head.scale))}px serif`;
+            ctx.textAlign = 'center';
+            ctx.fillText('🏮', head.sx + 16 * head.scale, head.sy + 14 * head.scale);
+          }
+
+          const tag = userRef.current?.name?.split(' ')[0] || 'Visitor';
+          ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
+          const tw = ctx.measureText(tag).width + 12;
+          ctx.fillStyle = 'rgba(15, 22, 20, 0.78)';
+          ctx.fillRect(head.sx - tw / 2, head.sy - 28 * head.scale - 14, tw, 16);
+          ctx.fillStyle = '#ffe5b0';
+          ctx.textAlign = 'center';
+          ctx.fillText(tag, head.sx, head.sy - 28 * head.scale - 2);
+        }
+      });
+
+      // 7. Destination Target Ring
+      if (p.targetX !== null && p.targetZ !== null) {
+        pushEntity(p.targetX, p.targetZ, () => {
+          const gp = project3D(p.targetX, 1, p.targetZ);
+          if (gp) {
+            const rr = (12 + Math.sin(now * 0.01) * 3) * gp.scale;
+            ctx.strokeStyle = 'rgba(255, 232, 165, 0.9)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.ellipse(gp.sx, gp.sy, rr, rr * 0.55, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        });
+      }
+
+      // Execute back-to-front Painter's sort
+      drawList.sort((a, b) => b.cz - a.cz);
+      drawList.forEach((item) => item.render());
+      screenHitsRef.current = newScreenHits;
+
+      // 3D Floating Particles
+      particlesRef.current = particlesRef.current.filter((pt) => pt.life > 0);
+      particlesRef.current.forEach((pt) => {
+        pt.x += pt.vx * dt;
+        pt.y += pt.vy * dt;
+        pt.z += pt.vz * dt;
+        pt.life -= dt;
+        const sp = project3D(pt.x, pt.y, pt.z);
+        if (sp) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, Math.min(1, pt.life));
+          ctx.font = `${Math.max(13, Math.round(18 * sp.scale))}px serif`;
+          ctx.textAlign = 'center';
+          ctx.fillText(pt.emoji, sp.sx, sp.sy);
+          ctx.restore();
+        }
+      });
+
+      // ====================
+      // 4-SEASON WEATHER EFFECTS OVERLAY
+      // ====================
+      if (room === 'tombstone' && (curWeather === 'snow' || curWeather === 'rain' || curWeather === 'thunderstorm' || curWeather === 'windy')) {
+        if (weatherParticlesRef.current.length === 0) {
+          const count = curWeather === 'windy' ? 14 : curWeather === 'snow' ? 24 : 28;
+          for (let i = 0; i < count; i += 1) {
+            weatherParticlesRef.current.push({
+              x: Math.random() * viewW,
+              y: Math.random() * viewH,
+              speed:
+                curWeather === 'snow'
+                  ? 14 + Math.random() * 14
+                  : curWeather === 'windy'
+                    ? 26 + Math.random() * 22
+                    : 85 + Math.random() * 45,
+              size:
+                curWeather === 'snow'
+                  ? 2.2 + Math.random() * 2.8
+                  : curWeather === 'windy'
+                    ? 4.2 + Math.random() * 3.0
+                    : 1.5,
+              phase: Math.random() * Math.PI * 2,
+              hueIdx: i % 3,
+              ripple: 0,
+              rx: Math.random() * viewW,
+              ry: viewH * (0.58 + Math.random() * 0.38),
+            });
+          }
+        }
+
+        const leafPalette = {
+          spring: ['#f3b6c6', '#e896ae', '#f8d4df'],
+          summer: ['#6eb36b', '#4d9352', '#8fd182'],
+          autumn: ['#e28238', '#c84b31', '#e8b349'],
+          winter: ['#d8e6ec', '#b6cdd6', '#eef6fa'],
+        }[curSeason] || ['#e28238', '#c84b31', '#e8b349'];
+
+        weatherParticlesRef.current.forEach((wp) => {
+          if (curWeather === 'snow') {
+            wp.y += wp.speed * dt;
+            wp.x += Math.sin(now * 0.0012 + wp.phase) * 18 * dt;
+            if (wp.y > viewH + 10) { wp.y = -10; wp.x = Math.random() * viewW; }
+            if (wp.x < 0) wp.x += viewW;
+            if (wp.x > viewW) wp.x -= viewW;
+            const sg = ctx.createRadialGradient(wp.x, wp.y, 0.5, wp.x, wp.y, wp.size * 2.2);
+            sg.addColorStop(0, 'rgba(255, 255, 255, 0.92)');
+            sg.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = sg;
+            ctx.beginPath();
+            ctx.arc(wp.x, wp.y, wp.size * 2.2, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (curWeather === 'windy') {
+            wp.x += wp.speed * dt;
+            wp.y += (10 + Math.sin(now * 0.0016 + wp.phase) * 14) * dt;
+            if (wp.x > viewW + 16) { wp.x = -16; wp.y = Math.random() * viewH; }
+            if (wp.y > viewH + 14) { wp.y = -12; }
+            ctx.save();
+            ctx.translate(wp.x, wp.y);
+            ctx.rotate(now * 0.0014 + wp.phase);
+            ctx.fillStyle = leafPalette[wp.hueIdx];
+            ctx.beginPath();
+            ctx.ellipse(0, 0, wp.size * 1.4, wp.size * 0.68, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          } else {
+            // Slow dramatic rain + ground ripples
+            wp.y += wp.speed * dt;
+            wp.x -= 14 * dt;
+            if (wp.y > viewH) {
+              wp.y = -20;
+              wp.x = Math.random() * (viewW + 40);
+              wp.ripple = 1;
+              wp.rx = Math.random() * viewW;
+              wp.ry = viewH * (0.58 + Math.random() * 0.36);
+            }
+            ctx.strokeStyle = 'rgba(192, 226, 255, 0.55)';
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.moveTo(wp.x, wp.y);
+            ctx.lineTo(wp.x - 3, wp.y + 20);
+            ctx.stroke();
+
+            if (wp.ripple > 0.05) {
+              const rad = (1 - wp.ripple) * 18 + 3;
+              ctx.strokeStyle = `rgba(205, 232, 255, ${wp.ripple * 0.35})`;
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.ellipse(wp.rx, wp.ry, rad, rad * 0.42, 0, 0, Math.PI * 2);
+              ctx.stroke();
+              wp.ripple = Math.max(0, wp.ripple - dt * 0.9);
+            }
+          }
+        });
+      }
+
+      if (curWeather === 'thunderstorm') {
+        if (now > nextLightningRef.current) {
+          lightningFlashRef.current = 0.82;
+          nextLightningRef.current = now + 7000 + Math.random() * 5500;
+          if (lightningCbRef.current) lightningCbRef.current();
+        }
+        if (lightningFlashRef.current > 0.01) {
+          ctx.fillStyle = `rgba(235, 244, 255, ${lightningFlashRef.current * (room === 'ash-room' ? 0.16 : 0.45)})`;
+          ctx.fillRect(0, 0, viewW, viewH);
+          lightningFlashRef.current *= Math.pow(0.05, dt);
+        }
+      }
+
+      animId = requestAnimationFrame(frame);
+    };
+
+    animId = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(animId);
+  }, [onChangeRoom]);
+
+  const handlePointerDown = (e) => {
+    dragRef.current = {
+      active: true,
+      startX: e.clientX,
+      startYaw: camRef.current.yaw,
+      moved: false,
+    };
+  };
+
+  const handlePointerMove = (e) => {
+    if (!dragRef.current.active) return;
+    const dx = e.clientX - dragRef.current.startX;
+    if (Math.abs(dx) > 6) dragRef.current.moved = true;
+    camRef.current.yaw = dragRef.current.startYaw - dx * 0.0065;
+  };
+
+  const handlePointerUp = (e) => {
+    const wasMoved = dragRef.current.moved;
+    dragRef.current.active = false;
+    if (wasMoved) return;
+
+    // Tap-to-walk on monument or 3D ground plane
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    // Check monument hitboxes first — walk first if not nearby, open right away if nearby
+    const hit = screenHitsRef.current.find(
+      (h) => Math.hypot(clickX - h.sx, clickY - h.sy) < h.radius
+    );
+    if (hit) {
+      if (nearbyIdRef.current === hit.id) {
+        setInspectedId(hit.id);
+      } else {
+        setInspectedId(null);
+        pendingOpenIdRef.current = hit.id;
+        playerRef.current.targetX = hit.worldX;
+        playerRef.current.targetZ = hit.worldZ + 52;
+        const tapped = positionedRef.current.find((m) => m.id === hit.id);
+        if (tapped) {
+          setWalkMessage(`Walking to ${tapped.name}...`);
+          setTimeout(() => setWalkMessage(''), 2000);
+        }
+      }
+      return;
+    }
+
+    pendingOpenIdRef.current = null;
+
+    // Raycast click onto ground plane (wy = 0)
+    const viewW = rect.width;
+    const viewH = rect.height;
+    const fov = Math.min(viewW, viewH) * 1.18;
+    const cfg = CAMERA_PRESETS[camRef.current.preset] || CAMERA_PRESETS.follow;
+    const yaw = camRef.current.yaw;
+    const dirX = Math.sin(yaw);
+    const dirZ = -Math.cos(yaw);
+    const rightX = Math.cos(yaw);
+    const rightZ = Math.sin(yaw);
+
+    const p = playerRef.current;
+    const camX = p.x - dirX * cfg.dist;
+    const camZ = p.z - dirZ * cfg.dist;
+    const camY = cfg.height;
+    const pitch = cfg.pitch;
+
+    const nx = (clickX - viewW / 2) / fov;
+    const ny = (viewH * 0.52 - clickY) / fov;
+
+    const worldRight = nx;
+    const worldUp = ny * Math.cos(pitch) - Math.sin(pitch);
+    const worldForward = Math.cos(pitch) + ny * Math.sin(pitch);
+
+    const rayX = worldRight * rightX + worldForward * dirX;
+    const rayY = worldUp;
+    const rayZ = worldRight * rightZ + worldForward * dirZ;
+
+    if (rayY < -0.02) {
+      const t = -camY / rayY;
+      const gx = camX + t * rayX;
+      const gz = camZ + t * rayZ;
+      p.targetX = Math.max(-500, Math.min(500, gx));
+      p.targetZ = Math.max(-360, Math.min(360, gz));
+    }
+  };
+
+  const setDpad = (dir, active) => {
+    keysRef.current[dir] = active;
+  };
+
+  const nearbyMemorial = useMemo(
+    () => positionedMemorials.find((m) => m.id === nearbyMemorialId) || null,
+    [positionedMemorials, nearbyMemorialId]
+  );
+
+  const inspectedMemorial = useMemo(
+    () => positionedMemorials.find((m) => m.id === inspectedId) || null,
+    [positionedMemorials, inspectedId]
+  );
+
+  return (
+    <div className={`world-container ${isFullScreen ? 'is-fullscreen' : ''}`}>
+      {/* Top Quick-Find, Emotes & Camera Bar */}
+      <div className="world-hud-top">
+        <div className="world-quick-pets">
+          <span className="quick-pets-label">
+            <Compass size={13} /> Walk to:
+          </span>
+          {memorials.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              className={`quick-pet-chip ${nearbyMemorialId === m.id ? 'active' : ''}`}
+              onClick={() => handleWalkToPet(m)}
+            >
+              <span>{m.space === 'ash-room' ? '🏛️' : '🌿'}</span>
+              <span>{m.name}</span>
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => (camRef.current.yaw -= 0.45)}
+            title="Rotate camera left (Q)"
+          >
+            <RotateCcw size={14} />
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => (camRef.current.yaw += 0.45)}
+            title="Rotate camera right (R)"
+          >
+            <RotateCw size={14} />
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={cycleCameraPreset}
+            title="Switch 3D camera angle"
+          >
+            <Video size={14} /> {CAMERA_PRESETS[cameraMode].label}
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => triggerEmote('🙏', 'Shared a quiet prayer')}
+          >
+            🙏 Pray
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => triggerEmote('🌸', 'Scattered gentle petals')}
+          >
+            🌸 Petals
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => setShowAvatarPanel((v) => !v)}
+          >
+            <UserCheck size={14} /> Avatar
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => setIsFullScreen((fs) => !fs)}
+            title={isFullScreen ? 'Exit Full Screen' : 'Full Screen 3D'}
+          >
+            {isFullScreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            {isFullScreen ? 'Exit' : 'Full'}
+          </button>
+        </div>
+      </div>
+
+      {/* 3D Canvas Viewport */}
+      <div className="world-canvas-wrap">
+        <button
+          type="button"
+          className="world-fs-floating-btn"
+          onClick={() => setIsFullScreen((fs) => !fs)}
+        >
+          {isFullScreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+          {isFullScreen ? 'Exit Full' : 'Full Screen'}
+        </button>
+        <canvas
+          ref={canvasRef}
+          className="world-canvas"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={() => {
+            dragRef.current.active = false;
+          }}
+        />
+
+        <div className="world-room-pill">
+          {activeRoom === 'ash-room'
+            ? '🧊 3D Ash Room (Hall of Serenity)'
+            : '🧊 3D Tombstone Garden (Whispering Meadow)'}
+          <span className="world-hint-text">
+            {' '}
+            • Drag to orbit 3D camera • Tap ground/monument or use D-pad / WASD
+          </span>
+        </div>
+
+        {walkMessage && (
+          <div className="world-toast">
+            <Sparkles size={14} /> {walkMessage}
+          </div>
+        )}
+
+        {nearPortal && !nearbyMemorial && (
+          <div className="world-portal-prompt">
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => {
+                const next = activeRoom === 'tombstone' ? 'ash-room' : 'tombstone';
+                onChangeRoom(next);
+              }}
+            >
+              <DoorOpen size={15} />
+              {activeRoom === 'tombstone'
+                ? 'Enter 3D Ash Room'
+                : 'Step Out to 3D Tombstone Garden'}
+            </button>
+          </div>
+        )}
+
+        {/* Touch D-Pad */}
+        <div className="world-dpad" aria-label="3D walk controls">
+          <div />
+          <button
+            type="button"
+            className="dpad-btn"
+            onPointerDown={() => setDpad('up', true)}
+            onPointerUp={() => setDpad('up', false)}
+            onPointerLeave={() => setDpad('up', false)}
+            onPointerCancel={() => setDpad('up', false)}
+            aria-label="Walk forward"
+          >
+            <ArrowUp size={16} />
+          </button>
+          <div />
+          <button
+            type="button"
+            className="dpad-btn"
+            onPointerDown={() => setDpad('left', true)}
+            onPointerUp={() => setDpad('left', false)}
+            onPointerLeave={() => setDpad('left', false)}
+            onPointerCancel={() => setDpad('left', false)}
+            aria-label="Walk left"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <button
+            type="button"
+            className="dpad-btn center"
+            onClick={() => triggerEmote('🕯️', 'Holding lantern light')}
+            aria-label="Lantern emote"
+          >
+            🏮
+          </button>
+          <button
+            type="button"
+            className="dpad-btn"
+            onPointerDown={() => setDpad('right', true)}
+            onPointerUp={() => setDpad('right', false)}
+            onPointerLeave={() => setDpad('right', false)}
+            onPointerCancel={() => setDpad('right', false)}
+            aria-label="Walk right"
+          >
+            <ArrowRight size={16} />
+          </button>
+          <div />
+          <button
+            type="button"
+            className="dpad-btn"
+            onPointerDown={() => setDpad('down', true)}
+            onPointerUp={() => setDpad('down', false)}
+            onPointerLeave={() => setDpad('down', false)}
+            onPointerCancel={() => setDpad('down', false)}
+            aria-label="Walk back"
+          >
+            <ArrowDown size={16} />
+          </button>
+          <div />
+        </div>
+
+        {/* Nearby Popup Note (Tap to Open Vigil Card) */}
+        {nearbyMemorial && !inspectedMemorial && (
+          <button
+            type="button"
+            className="world-nearby-note"
+            onClick={() => setInspectedId(nearbyMemorial.id)}
+          >
+            <img src={nearbyMemorial.photo} alt={nearbyMemorial.name} />
+            <span>
+              🕯️ Near {nearbyMemorial.name} ({nearbyMemorial.locationCode}) — Tap to Visit / Give Flower
+            </span>
+          </button>
+        )}
+
+        {/* Closable Vigil Encounter Card (Reverted clean 3-button layout) */}
+        {inspectedMemorial && (
+          <div className="world-proximity-card">
+            <button
+              type="button"
+              className="vigil-close-btn"
+              onClick={() => setInspectedId(null)}
+              aria-label="Close vigil card"
+            >
+              <X size={14} />
+            </button>
+            <img
+              src={inspectedMemorial.photo}
+              alt={inspectedMemorial.name}
+              className="proximity-pet-photo"
+            />
+            <div className="proximity-info">
+              <div className="proximity-title-row">
+                <strong>{inspectedMemorial.name}</strong>
+                <span className="location-badge">{inspectedMemorial.locationCode}</span>
+              </div>
+              <p className="proximity-epitaph">“{inspectedMemorial.epitaph}”</p>
+              {armtipText && <div className="armtip-notif">{armtipText}</div>}
+              <div className="proximity-actions">
+                <button
+                  type="button"
+                  className={`btn-ghost ${
+                    currentUser &&
+                    hasGivenToday(currentUser.email, inspectedMemorial.id, 'candle')
+                      ? 'btn-given-today'
+                      : ''
+                  }`}
+                  onClick={() => performQuickOffering(inspectedMemorial, OFFERING_TYPES.candle)}
+                >
+                  🕯️ Candle ({inspectedMemorial.candlesCount})
+                  {currentUser &&
+                  hasGivenToday(currentUser.email, inspectedMemorial.id, 'candle')
+                    ? ' ✓'
+                    : ''}
+                </button>
+                <button
+                  type="button"
+                  className={`btn-ghost ${
+                    currentUser &&
+                    hasGivenToday(currentUser.email, inspectedMemorial.id, 'flower')
+                      ? 'btn-given-today'
+                      : ''
+                  }`}
+                  onClick={() =>
+                    performQuickOffering(inspectedMemorial, OFFERING_TYPES.flowers[0])
+                  }
+                >
+                  🌸 Give Flower ({inspectedMemorial.flowersCount})
+                  {currentUser &&
+                  hasGivenToday(currentUser.email, inspectedMemorial.id, 'flower')
+                    ? ' ✓'
+                    : ''}
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => {
+                    setInspectedId(null);
+                    onSelectMemorial(inspectedMemorial.id);
+                  }}
+                >
+                  💌 Visit &amp; Leave Message
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Avatar Customizer Drawer */}
+        {showAvatarPanel && (
+          <div className="world-avatar-drawer">
+            <div className="modal-header" style={{ marginBottom: 10 }}>
+              <strong style={{ fontSize: '0.92rem' }}>Customize Visitor Avatar</strong>
+              <button
+                type="button"
+                className="modal-close"
+                style={{ width: 28, height: 28 }}
+                onClick={() => setShowAvatarPanel(false)}
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="form-grid" style={{ gap: 10 }}>
+              <div>
+                <div className="field-label">Cloak Color</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {CLOAK_OPTIONS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      title={c.label}
+                      onClick={() => setAvatar((a) => ({ ...a, cloakColor: c.color }))}
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: '50%',
+                        background: c.color,
+                        border:
+                          avatar.cloakColor === c.color
+                            ? '2.5px solid #ffd57e'
+                            : '1px solid rgba(255,255,255,0.25)',
+                        cursor: 'pointer',
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="field-label">Hair Color</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {HAIR_OPTIONS.map((h) => (
+                    <button
+                      key={h.id}
+                      type="button"
+                      title={h.label}
+                      onClick={() => setAvatar((a) => ({ ...a, hairColor: h.color }))}
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: '50%',
+                        background: h.color,
+                        border:
+                          avatar.hairColor === h.color
+                            ? '2.5px solid #ffd57e'
+                            : '1px solid rgba(255,255,255,0.25)',
+                        cursor: 'pointer',
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="field-label">Spirit Pet Companion</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {COMPANION_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      className={`chip ${avatar.companion === opt.id ? 'active' : ''}`}
+                      onClick={() => setAvatar((a) => ({ ...a, companion: opt.id }))}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={avatar.carryingLantern}
+                  onChange={(e) =>
+                    setAvatar((a) => ({ ...a, carryingLantern: e.target.checked }))
+                  }
+                />
+                Carry warm glowing lantern 🏮
+              </label>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
