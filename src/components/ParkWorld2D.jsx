@@ -264,15 +264,17 @@ export default function ParkWorld2D({
   }, [memorials]);
 
   useEffect(() => {
-    if (!isApk || typeof document === 'undefined') return undefined;
+    if (typeof document === 'undefined') return undefined;
+    document.body.classList.toggle('world-is-fullscreen', isFullScreen);
     const prevOverflow = document.body.style.overflow;
     if (isFullScreen) {
       document.body.style.overflow = 'hidden';
     }
     return () => {
+      document.body.classList.remove('world-is-fullscreen');
       document.body.style.overflow = prevOverflow;
     };
-  }, [isApk, isFullScreen]);
+  }, [isFullScreen]);
 
   useEffect(() => {
     atmosphereRef.current = atmosphere;
@@ -1683,7 +1685,7 @@ export default function ParkWorld2D({
           onSelectPet={handleWalkToPet}
         />
 
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <div className="world-hud-actions">
           <button
             type="button"
             className="btn-ghost"

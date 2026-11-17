@@ -2444,8 +2444,24 @@ select {
 }
 
 /* ===========================
-   ANDROID APK-ONLY OPTIMIZATIONS
+   FULL-SCENE OVERLAY & ANDROID APK-ONLY OPTIMIZATIONS
    =========================== */
+.world-hud-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Break out of .main-content z-index stacking context and completely hide top & bottom bars in Full Scene mode */
+body.world-is-fullscreen .main-content {
+  z-index: auto !important;
+}
+
+body.world-is-fullscreen .mobile-bottom-nav,
+body.world-is-fullscreen .top-bar {
+  display: none !important;
+}
+
 body.is-apk-app,
 body.is-apk-app * {
   -webkit-tap-highlight-color: transparent !important;
@@ -2461,13 +2477,100 @@ body.is-apk-app .world-canvas-wrap {
   -webkit-touch-callout: none;
 }
 
+/* Compact APK outer header so icons never wrap or block each other */
+body.is-apk-app .top-bar-inner {
+  padding: 6px 10px;
+  gap: 6px;
+}
+
+body.is-apk-app .brand-group {
+  gap: 6px;
+}
+
+body.is-apk-app .brand-crest {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+
+body.is-apk-app .brand-title {
+  font-size: 0.94rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.is-apk-app .brand-sub {
+  display: none;
+}
+
+body.is-apk-app .top-actions {
+  gap: 4px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+
+body.is-apk-app .top-actions .top-music-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+body.is-apk-app .top-actions .btn-primary,
+body.is-apk-app .top-actions .btn-ghost,
+body.is-apk-app .top-actions .user-chip {
+  padding: 5px 8px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Compact slim in-world HUD top bar (single scrollable action strip instead of tall wrapped rows) */
+body.is-apk-app .world-hud-top {
+  padding: 5px 8px;
+  gap: 5px;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+body.is-apk-app .walk-search-box {
+  padding: 4px 9px;
+  min-height: 30px;
+}
+
+body.is-apk-app .walk-search-box input {
+  font-size: 0.76rem;
+}
+
+body.is-apk-app .world-hud-actions {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 5px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 1px;
+}
+
+body.is-apk-app .world-hud-actions::-webkit-scrollbar {
+  display: none;
+}
+
+body.is-apk-app .world-hud-actions .btn-ghost {
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* Auto-adjust canvas and fullscreen container to APK viewport dimensions */
-body.is-apk-app .app-shell {
+body.is-apk-app .park-shell {
   padding-bottom: calc(74px + env(safe-area-inset-bottom));
 }
 
 body.is-apk-app .world-container:not(.is-fullscreen) .world-canvas {
-  height: clamp(340px, calc(100dvh - 190px), 780px);
+  height: clamp(360px, calc(100dvh - 185px), 780px);
 }
 
 body.is-apk-app .world-container.is-fullscreen {
@@ -2481,14 +2584,40 @@ body.is-apk-app .world-container.is-fullscreen {
 }
 
 body.is-apk-app .world-container.is-fullscreen .world-hud-top {
-  padding: 6px 8px;
-  gap: 6px;
+  padding: 4px 8px;
+  gap: 4px;
 }
 
 body.is-apk-app .world-container.is-fullscreen .world-canvas-wrap {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
+}
+
+/* Keep top-left room badge and toast strictly clear of right-side 36px icon stack */
+body.is-apk-app .world-room-pill {
+  top: 8px;
+  left: 8px;
+  right: auto;
+  max-width: calc(100% - 60px);
+  padding: 4px 9px;
+  font-size: 0.68rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.is-apk-app .world-toast {
+  top: 38px;
+  max-width: calc(100% - 108px);
+  padding: 4px 10px;
+  font-size: 0.72rem;
+}
+
+body.is-apk-app .world-group-invite-banner {
+  top: 42px;
+  left: 8px;
+  width: min(230px, calc(100% - 64px));
 }
 
 /* APK On-Screen Menu Icon-Only Stack (Full Screen, Outside ON/OFF, Favorites, Gates) */
@@ -2505,20 +2634,20 @@ body.is-apk-app .world-gate-readonly-pill {
 }
 
 body.is-apk-app .world-fs-floating-btn {
-  top: 10px;
+  top: 8px;
 }
 
 body.is-apk-app .world-outside-chat-btn {
-  top: 52px;
+  top: 50px;
 }
 
 body.is-apk-app .world-favorites-btn {
-  top: 94px;
+  top: 92px;
   font-size: 1rem;
 }
 
 body.is-apk-app .world-gate-readonly-pill {
-  top: 136px;
+  top: 134px;
   font-size: 1.05rem;
 }
 
@@ -2526,11 +2655,11 @@ body.is-apk-app .world-gate-readonly-pill {
 .world-joystick-wrap {
   position: absolute;
   bottom: calc(16px + env(safe-area-inset-bottom));
-  left: 14px;
+  left: 12px;
   z-index: 16;
   display: inline-flex;
   align-items: flex-end;
-  gap: 8px;
+  gap: 6px;
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
@@ -2542,10 +2671,12 @@ body.is-apk-app .world-container:not(.is-fullscreen) .world-joystick-wrap {
 }
 
 body.is-apk-app .world-container:not(.is-fullscreen) .world-chat-bar {
+  left: 146px;
   bottom: calc(70px + env(safe-area-inset-bottom));
 }
 
 body.is-apk-app .world-container:not(.is-fullscreen) .world-chat-preview-3rows {
+  left: 146px;
   bottom: calc(114px + env(safe-area-inset-bottom));
 }
 
@@ -2558,21 +2689,27 @@ body.is-apk-app .world-container:not(.is-fullscreen) .world-proximity-card {
   bottom: calc(168px + env(safe-area-inset-bottom));
 }
 
+/* In Full Scene mode, bottom bar is hidden so joystick & chat sit cleanly at bottom edge */
 body.is-apk-app .world-container.is-fullscreen .world-joystick-wrap,
 body.is-apk-app .world-container.is-fullscreen .world-chat-bar {
-  bottom: calc(18px + env(safe-area-inset-bottom));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+body.is-apk-app .world-container.is-fullscreen .world-chat-bar,
+body.is-apk-app .world-container.is-fullscreen .world-chat-preview-3rows {
+  left: 146px;
 }
 
 body.is-apk-app .world-container.is-fullscreen .world-chat-preview-3rows,
 body.is-apk-app .world-container.is-fullscreen .world-nearby-note,
 body.is-apk-app .world-container.is-fullscreen .world-portal-prompt {
-  bottom: calc(64px + env(safe-area-inset-bottom));
+  bottom: calc(62px + env(safe-area-inset-bottom));
 }
 
 .world-joystick-base {
   position: relative;
-  width: 88px;
-  height: 88px;
+  width: 84px;
+  height: 84px;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(255, 255, 255, 0.08) 0%, rgba(16, 22, 20, 0.72) 72%);
   border: 2px solid rgba(255, 226, 170, 0.42);
@@ -2589,8 +2726,8 @@ body.is-apk-app .world-container.is-fullscreen .world-portal-prompt {
 }
 
 .world-joystick-knob {
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #fff4da 0%, #e5b76b 58%, #b38036 100%);
   border: 2px solid rgba(255, 255, 255, 0.75);
