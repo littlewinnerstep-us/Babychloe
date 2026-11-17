@@ -93,6 +93,7 @@ export default function CreateMemorialModal({
           emoji: '🕯️',
           label: 'Eternal Vigil Candle',
           visitor: currentUser.name,
+          createdAt: Date.now(),
           time: 'Just now',
         },
       ],

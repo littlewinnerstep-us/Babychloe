@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   X,
   Sparkles,
@@ -15,6 +15,7 @@ import MonumentVisual from './MonumentVisual';
 import {
   MONUMENT_STYLES,
   OFFERING_TYPES,
+  formatTimeAgo,
   getUserIdentityKey,
   isMemorialOwner,
 } from '../data/memorialData';
@@ -63,6 +64,12 @@ export default function VisitMemorialModal({
   const [editStory, setEditStory] = useState(memorial.story);
   const [editVisibility, setEditVisibility] = useState(memorial.visibility);
   const [savedNotice, setSavedNotice] = useState(false);
+  const [, setTimeTick] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setTimeTick((n) => n + 1), 15000);
+    return () => clearInterval(timer);
+  }, []);
 
   const userKey = getUserIdentityKey(currentUser);
   const isOwner = isMemorialOwner(memorial, currentUser);
@@ -432,7 +439,9 @@ export default function VisitMemorialModal({
                     </strong>{' '}
                     by {item.visitor}
                   </span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.76rem' }}>{item.time}</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.76rem' }}>
+                    {formatTimeAgo(item.createdAt, item.time, item.id)}
+                  </span>
                 </div>
               ))}
             </div>
@@ -508,7 +517,9 @@ export default function VisitMemorialModal({
                 <div key={t.id} className="log-item" style={{ flexDirection: 'column', gap: 4 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
                     <strong>{t.author}</strong>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{t.date}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                      {formatTimeAgo(t.createdAt, t.date, t.id)}
+                    </span>
                   </div>
                   <div
                     style={{

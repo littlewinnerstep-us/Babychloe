@@ -682,13 +682,14 @@ export default function App() {
   };
 
   const buildWithOffering = (m, offering, visitorName) => {
+    const now = Date.now();
     const nextActive = [
       offering.emoji,
       ...(m.activeOfferings || []).filter((e, i) => i < 5 || e !== offering.emoji),
     ].slice(0, 6);
     return {
       ...m,
-      updatedAt: Date.now(),
+      updatedAt: now,
       candlesCount: offering.category === 'candle' ? m.candlesCount + 1 : m.candlesCount,
       incenseCount: offering.category === 'incense' ? m.incenseCount + 1 : m.incenseCount,
       flowersCount: offering.category === 'flower' ? m.flowersCount + 1 : m.flowersCount,
@@ -696,10 +697,11 @@ export default function App() {
       activeOfferings: nextActive,
       offeringsLog: [
         {
-          id: `o-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          id: `o-${now}-${Math.random().toString(36).slice(2, 6)}`,
           emoji: offering.emoji,
           label: offering.label,
           visitor: visitorName,
+          createdAt: now,
           time: 'Just now',
         },
         ...(m.offeringsLog || []),
@@ -707,19 +709,23 @@ export default function App() {
     };
   };
 
-  const buildWithTribute = (m, message, author) => ({
-    ...m,
-    updatedAt: Date.now(),
-    tributes: [
-      {
-        id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        author,
-        message,
-        date: 'Just now',
-      },
-      ...(m.tributes || []),
-    ],
-  });
+  const buildWithTribute = (m, message, author) => {
+    const now = Date.now();
+    return {
+      ...m,
+      updatedAt: now,
+      tributes: [
+        {
+          id: `t-${now}-${Math.random().toString(36).slice(2, 6)}`,
+          author,
+          message,
+          createdAt: now,
+          date: 'Just now',
+        },
+        ...(m.tributes || []),
+      ],
+    };
+  };
 
   const applyOfferingToState = (memorialId, offering, visitorName) => {
     setMemorials((prev) =>

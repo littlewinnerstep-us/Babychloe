@@ -829,6 +829,30 @@ export const ASH_NPCS_DATA = [
   },
 ];
 
+export function formatTimeAgo(createdAt, fallbackLabel = '', entryId = '') {
+  let ts = Number(createdAt);
+  if (!Number.isFinite(ts) || ts <= 0) {
+    const m = String(entryId || '').match(/^[ot]-(\d{12,})/);
+    if (m) {
+      ts = Number(m[1]);
+    }
+  }
+  if (!Number.isFinite(ts) || ts <= 0) {
+    return fallbackLabel || 'Recently';
+  }
+  const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (diffSec < 10) return 'Just now';
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const mins = Math.floor(diffSec / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
+}
+
 export function getUserIdentityKey(user) {
   if (!user || typeof user !== 'object') return '';
   const raw = user.email || user.username || user.id || user.name || '';
