@@ -52,7 +52,7 @@ function UrnArtwork({ styleId }) {
 }
 
 function OfferingTokens({ activeOfferings = [] }) {
-  const items = activeOfferings.slice(0, 6);
+  const items = (Array.isArray(activeOfferings) ? activeOfferings : []).slice(0, 6);
   return (
     <>
       {items.map((emoji, idx) => {

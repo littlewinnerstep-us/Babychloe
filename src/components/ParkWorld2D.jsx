@@ -57,7 +57,10 @@ const DEFAULT_AVATAR = {
 function loadAvatarPrefs() {
   try {
     const raw = localStorage.getItem(AVATAR_STORAGE_KEY);
-    if (raw) return { ...DEFAULT_AVATAR, ...JSON.parse(raw) };
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return { ...DEFAULT_AVATAR, ...parsed };
+    }
   } catch {
     // ignore storage errors
   }
@@ -221,7 +224,8 @@ export default function ParkWorld2D({
     if (!currentUser) return [];
     const uName = (currentUser.username || '').toLowerCase();
     const uEmail = (currentUser.email || '').toLowerCase();
-    return allMemorials.filter((m) => {
+    return (allMemorials || []).filter((m) => {
+      if (!m) return false;
       if (uName && (m.ownerUsername || '').toLowerCase() === uName) return true;
       if (uEmail && (m.ownerEmail || '').toLowerCase() === uEmail) return true;
       return false;
@@ -1019,9 +1023,9 @@ export default function ParkWorld2D({
           ctx.fillStyle = m.styleId === 'moss-celtic' ? '#f5faf3' : '#263038';
           ctx.font = '700 11px "Cormorant Garamond", serif';
           ctx.textAlign = 'center';
-          ctx.fillText(m.name.slice(0, 10), mx, my + 3);
+          ctx.fillText((m.name || 'Pet').slice(0, 10), mx, my + 3);
           ctx.font = '600 8.5px "Plus Jakarta Sans", sans-serif';
-          ctx.fillText(m.locationCode, mx, my + 14);
+          ctx.fillText(m.locationCode || 'Plot G-1', mx, my + 14);
         } else {
           // Ash Room Columbarium Alcove
           const alcGlow = ctx.createRadialGradient(mx, my - 6, 4, mx, my - 6, 56);
@@ -1071,7 +1075,7 @@ export default function ParkWorld2D({
           ctx.fillStyle = '#281b09';
           ctx.font = '800 9px "Plus Jakarta Sans", sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText(m.name.slice(0, 9), mx, my + 20);
+          ctx.fillText((m.name || 'Pet').slice(0, 9), mx, my + 20);
         }
 
         // Owner Star

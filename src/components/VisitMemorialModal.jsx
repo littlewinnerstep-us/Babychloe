@@ -157,8 +157,8 @@ export default function VisitMemorialModal({
       zoneName: editSpace === 'ash-room' ? 'Hall of Serenity' : 'Whispering Meadow',
       locationCode:
         editSpace === 'ash-room'
-          ? memorial.locationCode.replace('Plot G-', 'Niche A-')
-          : memorial.locationCode.replace('Niche A-', 'Plot G-').replace('Niche B-', 'Plot G-'),
+          ? (memorial.locationCode || 'Plot G-1').replace('Plot G-', 'Niche A-')
+          : (memorial.locationCode || 'Niche A-1').replace('Niche A-', 'Plot G-').replace('Niche B-', 'Plot G-'),
       epitaph: editEpitaph.trim() || memorial.epitaph,
       story: editStory.trim() || memorial.story,
       visibility: editVisibility,

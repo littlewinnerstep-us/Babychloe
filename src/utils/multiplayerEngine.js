@@ -1012,9 +1012,11 @@ export function updateUserModeration(usernameOrEmail, moderationPatch) {
 }
 
 export function getRegisteredAccounts() {
-  return Array.from(accountsMap.values()).sort((a, b) =>
-    (a.name || a.username || '').localeCompare(b.name || b.username || '')
-  );
+  return Array.from(accountsMap.values())
+    .filter((a) => a && typeof a === 'object')
+    .sort((a, b) =>
+      String(a.name || a.username || '').localeCompare(String(b.name || b.username || ''))
+    );
 }
 
 export function isUsernameTaken(username) {

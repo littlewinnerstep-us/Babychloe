@@ -186,7 +186,10 @@ function loadArrayPref(key) {
 function loadSavedUser() {
   try {
     const raw = localStorage.getItem(STORAGE_USER_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    }
   } catch {
     // ignore corrupted storage
   }
@@ -974,7 +977,10 @@ export default function App() {
         ? `Beloved pets enshrined by ${currentUser.name}`
         : 'Sign in to view and tend to your own pets’ tombstones and ash niches',
     },
-  }[activeTab];
+  }[activeTab] || {
+    title: '🌿 Outdoor Tombstone Garden',
+    subtitle: 'Sunlit meadow plots & carved memorial stones beneath open skies',
+  };
 
   return (
     <div className={`park-shell theme-${atmosphere}`}>

@@ -619,7 +619,10 @@ function formatSequentialCode(space, num) {
 export function normalizeAndDeduplicateMemorials(memorials) {
   if (!Array.isArray(memorials)) return INITIAL_MEMORIALS;
 
-  const sorted = memorials
+  const valid = memorials.filter((m) => m && typeof m === 'object' && m.id);
+  if (valid.length === 0) return INITIAL_MEMORIALS;
+
+  const sorted = valid
     .slice()
     .sort((a, b) => {
       const sa = STARTER_ORDER[a.id] || 9999;
@@ -653,10 +656,22 @@ export function normalizeAndDeduplicateMemorials(memorials) {
     used.add(num);
 
     const nextCode = formatSequentialCode(space, num);
-    updatedById.set(m.id, nextCode === m.locationCode ? m : { ...m, locationCode: nextCode });
+    const normalized = {
+      ...m,
+      name: String(m.name || 'Beloved Pet'),
+      species: sp,
+      space,
+      locationCode: nextCode,
+      activeOfferings: Array.isArray(m.activeOfferings) ? m.activeOfferings : [],
+      tributes: Array.isArray(m.tributes) ? m.tributes : [],
+      memories: Array.isArray(m.memories) ? m.memories : [],
+      offeringsLog: Array.isArray(m.offeringsLog) ? m.offeringsLog : [],
+      traits: Array.isArray(m.traits) ? m.traits : [],
+    };
+    updatedById.set(m.id, normalized);
   }
 
-  return memorials.map((m) => updatedById.get(m.id) || m);
+  return valid.map((m) => updatedById.get(m.id) || m);
 }
 
 export function getNextPlotCode(memorials, species, space) {

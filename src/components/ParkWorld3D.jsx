@@ -66,7 +66,10 @@ const DEFAULT_AVATAR = {
 function loadAvatarPrefs() {
   try {
     const raw = localStorage.getItem(AVATAR_STORAGE_KEY);
-    if (raw) return { ...DEFAULT_AVATAR, ...JSON.parse(raw) };
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return { ...DEFAULT_AVATAR, ...parsed };
+    }
   } catch {
     // ignore
   }
@@ -227,7 +230,8 @@ export default function ParkWorld3D({
     if (!currentUser) return [];
     const uName = (currentUser.username || '').toLowerCase();
     const uEmail = (currentUser.email || '').toLowerCase();
-    return allMemorials.filter((m) => {
+    return (allMemorials || []).filter((m) => {
+      if (!m) return false;
       if (uName && (m.ownerUsername || '').toLowerCase() === uName) return true;
       if (uEmail && (m.ownerEmail || '').toLowerCase() === uEmail) return true;
       return false;
@@ -1937,7 +1941,7 @@ export default function ParkWorld3D({
             onClick={cycleCameraPreset}
             title="Switch 3D camera angle"
           >
-            <Video size={14} /> {CAMERA_PRESETS[cameraMode].label}
+            <Video size={14} /> {(CAMERA_PRESETS[cameraMode] || CAMERA_PRESETS.follow).label}
           </button>
           <button
             type="button"
