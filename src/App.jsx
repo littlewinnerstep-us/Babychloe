@@ -35,6 +35,8 @@ import {
   playThunderSound,
   playDogBarkAndHowl,
   unlockAudioFromGesture,
+  isAudioUnlocked,
+  wasRecentlyUnlockedInGesture,
 } from './utils/soundEngine';
 
 const STORAGE_MEMORIALS_KEY = 'evergreen_paws_memorials_v1';
@@ -141,7 +143,7 @@ export default function App() {
   const [season, setSeason] = useState(initialEnv.season); // 'spring' | 'summer' | 'autumn' | 'winter'
   const [weather, setWeather] = useState(initialEnv.weather); // 'clear' | 'windy' | 'snow' | 'rain' | 'thunderstorm'
   const [randomWeather, setRandomWeather] = useState(true);
-  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [musicUrl, setMusicUrl] = useState(loadSavedMusicUrl);
   const [musicInput, setMusicInput] = useState(loadSavedMusicUrl);
   const [showMusicModal, setShowMusicModal] = useState(false);
@@ -204,17 +206,26 @@ export default function App() {
   };
 
   const handleToggleSound = () => {
+    // If soundEnabled is true on load/first-tap before Safari unlocked media playback,
+    // unlock and play immediately instead of toggling sound off on that first tap.
+    if (soundEnabled && (!isAudioUnlocked() || wasRecentlyUnlockedInGesture(350))) {
+      setSoundState({ enabled: true, musicUrl, weather });
+      unlockAudioFromGesture();
+      playDogBarkAndHowl(true);
+      return;
+    }
     const next = !soundEnabled;
+    setSoundEnabled(next);
+    setSoundState({ enabled: next, musicUrl, weather });
     if (next) {
       unlockAudioFromGesture();
     }
-    setSoundEnabled(next);
-    setSoundState({ enabled: next, musicUrl, weather });
   };
 
   const handleAudioFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setSoundState({ enabled: true, musicUrl, weather });
     unlockAudioFromGesture();
     const reader = new FileReader();
     reader.onload = () => {
@@ -675,11 +686,11 @@ export default function App() {
               type="button"
               className="env-pill"
               onClick={() => {
-                unlockAudioFromGesture();
                 if (!soundEnabled) {
                   setSoundEnabled(true);
-                  setSoundState({ enabled: true, musicUrl, weather });
                 }
+                setSoundState({ enabled: true, musicUrl, weather });
+                unlockAudioFromGesture();
                 playDogBarkAndHowl(true);
               }}
               title="Hear distant dog bark & moonlight howl"
@@ -978,10 +989,10 @@ export default function App() {
                 onSubmit={(e) => {
                   e.preventDefault();
                   const nextUrl = musicInput.trim();
-                  unlockAudioFromGesture();
                   setMusicUrl(nextUrl);
                   setSoundEnabled(true);
                   setSoundState({ enabled: true, musicUrl: nextUrl, weather });
+                  unlockAudioFromGesture();
                   setShowMusicModal(false);
                 }}
               >
@@ -1018,11 +1029,11 @@ export default function App() {
                 className="btn-ghost"
                 style={{ justifyContent: 'center' }}
                 onClick={() => {
-                  unlockAudioFromGesture();
                   setMusicUrl('');
                   setMusicInput('');
                   setSoundEnabled(true);
                   setSoundState({ enabled: true, musicUrl: '', weather });
+                  unlockAudioFromGesture();
                   setShowMusicModal(false);
                 }}
               >
