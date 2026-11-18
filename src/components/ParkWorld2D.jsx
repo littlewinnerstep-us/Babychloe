@@ -72,7 +72,7 @@ const GATE_X = 2720;
 
 const WORLD_BOUNDS = {
   tombstone: { width: 2800, height: 820, portalX: CENTER_X, portalY: 90 },
-  'ash-room': { width: 2800, height: 820, portalX: CENTER_X, portalY: 735 },
+  'ash-room': { width: 2800, height: 820, portalX: CENTER_X, portalY: 90 },
 };
 
 // 10 tombs max on left row + 10 tombs max on right row = 20 per row (10 rows = 200 max)
@@ -172,6 +172,10 @@ export default function ParkWorld2D({
   const [nearSpeciesGate, setNearSpeciesGate] = useState(false);
   const [walkMessage, setWalkMessage] = useState('');
   const [walkTipVisible, setWalkTipVisible] = useState(true);
+  const [zoomOverview, setZoomOverview] = useState(0); // 0 = current view, 100 = full 200-plot overview
+  const zoomOverviewRef = useRef(0);
+  zoomOverviewRef.current = zoomOverview;
+  const activeZoomRef = useRef(1);
   const nativeFsRef = useRef(false);
 
   const handleToggleFullScreen = () => {
@@ -260,7 +264,7 @@ export default function ParkWorld2D({
 
   const playerRef = useRef({
     x: CENTER_X + getLocalSpawnOffset(),
-    y: activeRoom === 'ash-room' ? 660 : 540,
+    y: activeRoom === 'ash-room' ? 165 : 540,
     facingX: 0,
     facingY: 1,
     bob: 0,
@@ -432,9 +436,9 @@ export default function ParkWorld2D({
       p.targetMemorialId = null;
       p.portalCooldownUntil = performance.now() + 900;
       p.x = CENTER_X + getLocalSpawnOffset();
-      p.y = roomRef.current === 'ash-room' ? 665 : 165;
+      p.y = 165;
       p.facingX = 0;
-      p.facingY = roomRef.current === 'ash-room' ? -1 : 1;
+      p.facingY = 1;
       p.history = [];
       setInspectedId(null);
       setNearbyMemorialId(null);
@@ -472,13 +476,8 @@ export default function ParkWorld2D({
       p.targetY = null;
       p.targetMemorialId = null;
       p.portalCooldownUntil = performance.now() + 900;
-      if (activeRoom === 'ash-room') {
-        p.x = CENTER_X + getLocalSpawnOffset();
-        p.y = 665;
-      } else {
-        p.x = CENTER_X + getLocalSpawnOffset();
-        p.y = 165;
-      }
+      p.x = CENTER_X + getLocalSpawnOffset();
+      p.y = 165;
       p.history = [];
     }
   }, [activeRoom]);
@@ -844,9 +843,9 @@ export default function ParkWorld2D({
         p.targetX = null;
         p.targetY = null;
         p.x = CENTER_X + getLocalSpawnOffset();
-        p.y = room === 'ash-room' ? 665 : 165;
+        p.y = 165;
         p.facingX = 0;
-        p.facingY = room === 'ash-room' ? -1 : 1;
+        p.facingY = 1;
         p.history = [];
         updateLocalPresence({
           name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
@@ -882,13 +881,8 @@ export default function ParkWorld2D({
         onChangeRoom(nextRoom);
         p.targetX = null;
         p.targetY = null;
-        if (nextRoom === 'ash-room') {
-          p.x = CENTER_X + getLocalSpawnOffset();
-          p.y = 665;
-        } else {
-          p.x = CENTER_X + getLocalSpawnOffset();
-          p.y = 165;
-        }
+        p.x = CENTER_X + getLocalSpawnOffset();
+        p.y = 165;
         p.history = [];
         updateLocalPresence({
           name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
@@ -929,8 +923,12 @@ export default function ParkWorld2D({
         }
       }
 
-      // Camera centering & desktop full-screen edge-to-edge zoom
-      const zoom = Math.max(1, viewW / bounds.width, viewH / bounds.height);
+      // Camera zoom (slider: 0 = current close view, 100 = full 200-plot overview)
+      const currentZoom = Math.max(1, viewW / bounds.width, viewH / bounds.height);
+      const fitAllZoom = Math.min(viewW / bounds.width, viewH / bounds.height);
+      const tZoom = Math.max(0, Math.min(1, zoomOverviewRef.current / 100));
+      const zoom = currentZoom + (fitAllZoom - currentZoom) * tZoom;
+      activeZoomRef.current = zoom;
       const effW = viewW / zoom;
       const effH = viewH / zoom;
       const camX =
@@ -986,37 +984,63 @@ export default function ParkWorld2D({
         ctx.lineWidth = 68;
         ctx.stroke();
 
-        // Tranquil reflection pond
-        ctx.save();
-        ctx.beginPath();
-        ctx.ellipse(CENTER_X, 415, 138, 62, 0, 0, Math.PI * 2);
-        const pondGrad = ctx.createRadialGradient(CENTER_X, 405, 10, CENTER_X, 415, 140);
-        pondGrad.addColorStop(0, atm === 'night' ? '#2c5a73' : '#74b3c8');
-        pondGrad.addColorStop(1, atm === 'night' ? '#163142' : '#43798c');
-        ctx.fillStyle = pondGrad;
-        ctx.fill();
-        ctx.lineWidth = 5;
-        ctx.strokeStyle = atm === 'night' ? '#354840' : '#859c7c';
-        ctx.stroke();
-        // Lily pads
-        ctx.fillStyle = '#4e8a55';
-        ctx.beginPath();
-        ctx.arc(560, 405, 10, 0.2, Math.PI * 1.85);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(642, 424, 9, 0.5, Math.PI * 2.1);
-        ctx.fill();
-        ctx.fillStyle = '#f6b8c9';
-        ctx.beginPath();
-        ctx.arc(562, 403, 3.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+        // Tranquil reflection pools every 3-row road interval (with 3-7 jumping fish each)
+        const poolIntervals = [330, 1050, 1770];
+        poolIntervals.forEach((py, pIdx) => {
+          ctx.save();
+          ctx.beginPath();
+          ctx.ellipse(CENTER_X, py, 138, 62, 0, 0, Math.PI * 2);
+          const pondGrad = ctx.createRadialGradient(CENTER_X, py - 10, 10, CENTER_X, py, 140);
+          pondGrad.addColorStop(0, atm === 'night' ? '#2c5a73' : '#74b3c8');
+          pondGrad.addColorStop(1, atm === 'night' ? '#163142' : '#43798c');
+          ctx.fillStyle = pondGrad;
+          ctx.fill();
+          ctx.lineWidth = 5;
+          ctx.strokeStyle = atm === 'night' ? '#354840' : '#859c7c';
+          ctx.stroke();
 
-        // Wooden Park Benches
-        const benches = [
-          { x: 755, y: 385 },
-          { x: 425, y: 545 },
-        ];
+          // Lily pads
+          ctx.fillStyle = '#4e8a55';
+          ctx.beginPath();
+          ctx.arc(CENTER_X - 58, py - 10, 10, 0.2, Math.PI * 1.85);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(CENTER_X + 52, py + 12, 9, 0.5, Math.PI * 2.1);
+          ctx.fill();
+          ctx.fillStyle = '#f6b8c9';
+          ctx.beginPath();
+          ctx.arc(CENTER_X - 56, py - 12, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 3-7 random fishes jumping & playing in each pool
+          const fishCount = 3 + ((pIdx * 3 + 2) % 5);
+          for (let f = 0; f < fishCount; f += 1) {
+            const seed = pIdx * 17 + f * 7;
+            const speed = 0.0022 + (seed % 5) * 0.0004;
+            const phase = seed * 1.3;
+            const swimX = CENTER_X + Math.cos(now * 0.0009 + seed) * (76 - (f % 3) * 18);
+            const swimY = py + Math.sin(now * 0.0011 + seed * 0.7) * (28 - (f % 2) * 8);
+            const jumpWave = Math.sin(now * speed + phase);
+            const jumpH = jumpWave > 0.35 ? (jumpWave - 0.35) * 28 : 0;
+            if (jumpH > 0) {
+              ctx.strokeStyle = 'rgba(220, 245, 255, 0.55)';
+              ctx.lineWidth = 1.4;
+              ctx.beginPath();
+              ctx.ellipse(swimX, swimY + 3, 7 + jumpH * 0.35, 3 + jumpH * 0.15, 0, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+            ctx.font = '14px serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(f % 2 === 0 ? '🐟' : '🐠', swimX, swimY - jumpH);
+          }
+          ctx.restore();
+        });
+
+        // Wooden Park Benches flanking every 3-row pool
+        const benches = [];
+        poolIntervals.forEach((py) => {
+          benches.push({ x: CENTER_X - 185, y: py }, { x: CENTER_X + 185, y: py });
+        });
         benches.forEach((b) => {
           ctx.fillStyle = 'rgba(0,0,0,0.22)';
           ctx.fillRect(b.x - 28, b.y + 8, 60, 12);
@@ -1028,15 +1052,13 @@ export default function ParkWorld2D({
           ctx.fill();
         });
 
-        // Decorative Garden Trees
-        const trees = [
-          { x: 100, y: 120, cherry: true },
-          { x: 1100, y: 120, cherry: true },
-          { x: 95, y: 375, cherry: false },
-          { x: 1105, y: 375, cherry: false },
-          { x: 315, y: 145, cherry: true },
-          { x: 885, y: 145, cherry: true },
-        ];
+        // Decorative Garden Trees at 3-row road intervals
+        const trees = [];
+        [210, 930, 1650, 2370].forEach((ty, ti) => {
+          [90, 560, 1040, 1760, 2240, 2710].forEach((tx, xi) => {
+            trees.push({ x: tx, y: ty, cherry: (ti + xi) % 2 === 0 });
+          });
+        });
         trees.forEach((tr) => {
           ctx.fillStyle = 'rgba(0,0,0,0.24)';
           ctx.beginPath();
@@ -1129,38 +1151,43 @@ export default function ParkWorld2D({
           ctx.stroke();
         }
 
-        // Gold-bordered Crimson Sanctuary Runner
+        // Gold-bordered Crimson Sanctuary Runners (10 rows: 10 left + 10 right niches = 200)
         ctx.fillStyle = '#5c262a';
         ctx.fillRect(CENTER_X - 80, 120, 160, Math.max(610, bounds.height - 180));
         ctx.strokeStyle = '#d4a853';
         ctx.lineWidth = 3;
         ctx.strokeRect(CENTER_X - 76, 124, 152, Math.max(602, bounds.height - 188));
-        ctx.fillRect(140, 355, bounds.width - 280, 82);
-        ctx.strokeRect(144, 359, bounds.width - 288, 74);
+        for (let row = 0; row < 10; row += 1) {
+          const ry = 200 + row * 240;
+          ctx.fillStyle = '#5c262a';
+          ctx.fillRect(140, ry - 41, bounds.width - 280, 82);
+          ctx.strokeStyle = '#d4a853';
+          ctx.strokeRect(144, ry - 37, bounds.width - 288, 74);
 
-        // Central Bronze Incense Brazier Altar
-        const ax = CENTER_X;
-        const ay = 392;
-        const altarGlow = ctx.createRadialGradient(ax, ay, 8, ax, ay, 85);
-        altarGlow.addColorStop(0, 'rgba(255, 196, 108, 0.45)');
-        altarGlow.addColorStop(1, 'rgba(255, 196, 108, 0)');
-        ctx.fillStyle = altarGlow;
-        ctx.beginPath();
-        ctx.arc(ax, ay, 85, 0, Math.PI * 2);
-        ctx.fill();
+          // Warm Bronze Incense Brazier / Light in the middle of each row
+          const ax = CENTER_X;
+          const ay = ry;
+          const altarGlow = ctx.createRadialGradient(ax, ay, 8, ax, ay, 85);
+          altarGlow.addColorStop(0, 'rgba(255, 196, 108, 0.45)');
+          altarGlow.addColorStop(1, 'rgba(255, 196, 108, 0)');
+          ctx.fillStyle = altarGlow;
+          ctx.beginPath();
+          ctx.arc(ax, ay, 85, 0, Math.PI * 2);
+          ctx.fill();
 
-        ctx.fillStyle = '#6f4e28';
-        ctx.beginPath();
-        ctx.arc(ax, ay, 24, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#d4a853';
-        ctx.beginPath();
-        ctx.arc(ax, ay - 2, 16, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#ffdfb0';
-        ctx.font = '18px serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('🪔', ax, ay + 5);
+          ctx.fillStyle = '#6f4e28';
+          ctx.beginPath();
+          ctx.arc(ax, ay, 24, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#d4a853';
+          ctx.beginPath();
+          ctx.arc(ax, ay - 2, 16, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffdfb0';
+          ctx.font = '18px serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('🪔', ax, ay + 5);
+        }
 
         // Meditation Cushions
         [
@@ -1770,7 +1797,7 @@ export default function ParkWorld2D({
     const bounds = { ...WORLD_BOUNDS[room], height: roomHeightRef.current };
     const p = playerRef.current;
 
-    const zoom = Math.max(1, viewW / bounds.width, viewH / bounds.height);
+    const zoom = activeZoomRef.current || Math.max(1, viewW / bounds.width, viewH / bounds.height);
     const effW = viewW / zoom;
     const effH = viewH / zoom;
     const camX =
@@ -1916,12 +1943,29 @@ export default function ParkWorld2D({
           onClick={handleCanvasClick}
         />
 
-        {/* Room Indicator & Instructions */}
-        <div className="world-room-pill">
-          {activeRoom === 'ash-room'
-            ? `🏛️ ${activeSpecies} Ash Room (Hall of Serenity)`
-            : `🌿 ${activeSpecies} Tombstone Garden`}
-          <span className="world-hint-text"> • Walk with WASD / Arrow keys / Mouse click or Joystick</span>
+        {/* Room Indicator & 2D Overview Zoom Slider */}
+        <div className="world-room-pill" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span>
+            {activeRoom === 'ash-room'
+              ? `🏛️ ${activeSpecies} Ash Room (Hall of Serenity)`
+              : `🌿 ${activeSpecies} Tombstone Garden`}
+          </span>
+          <label
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', cursor: 'pointer' }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span>🔍 Zoom</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={zoomOverview}
+              onChange={(e) => setZoomOverview(Number(e.target.value))}
+              style={{ width: 84, accentColor: '#ffd57e' }}
+              aria-label="2D Garden Overview Zoom"
+            />
+          </label>
         </div>
 
         {walkTipVisible && (

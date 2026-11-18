@@ -387,9 +387,9 @@ export default function ParkWorld3D({
       p.targetZ = null;
       p.portalCooldownUntil = performance.now() + 900;
       p.x = getLocalSpawnOffset();
-      p.z = roomRef.current === 'ash-room' ? 245 : -225;
+      p.z = -225;
       p.facingX = 0;
-      p.facingZ = roomRef.current === 'ash-room' ? -1 : 1;
+      p.facingZ = 1;
       camRef.current.yaw = 0;
       p.history = [];
       setInspectedId(null);
@@ -469,7 +469,7 @@ export default function ParkWorld3D({
       p.targetZ = null;
       p.portalCooldownUntil = performance.now() + 900;
       p.x = getLocalSpawnOffset();
-      p.z = activeRoom === 'ash-room' ? 245 : -225;
+      p.z = -225;
       camRef.current.yaw = 0;
       p.history = [];
     }
@@ -820,7 +820,7 @@ export default function ParkWorld3D({
         moving: p.moving,
         avatar: avatarRef.current,
       });
-      const portalZ = room === 'tombstone' ? -320 : 320;
+      const portalZ = -320;
       const portalDist = Math.hypot(p.x - 0, p.z - portalZ);
       const isNearPortalNow = portalDist < 95;
       if (isNearPortalNow !== nearPortalRef.current) {
@@ -843,9 +843,9 @@ export default function ParkWorld3D({
         p.targetX = null;
         p.targetZ = null;
         p.x = getLocalSpawnOffset();
-        p.z = room === 'ash-room' ? 245 : -225;
+        p.z = -225;
         p.facingX = 0;
-        p.facingZ = room === 'ash-room' ? -1 : 1;
+        p.facingZ = 1;
         camRef.current.yaw = 0;
         p.history = [];
         updateLocalPresence({
@@ -883,7 +883,7 @@ export default function ParkWorld3D({
         p.targetX = null;
         p.targetZ = null;
         p.x = getLocalSpawnOffset();
-        p.z = nextRoom === 'ash-room' ? 245 : -225;
+        p.z = -225;
         camRef.current.yaw = 0;
         p.history = [];
         updateLocalPresence({
@@ -1130,42 +1130,47 @@ export default function ParkWorld3D({
             );
           }
         }
-        // 3D Reflection Pond at (-110, 100)
-        const pondPts = [];
-        for (let a = 0; a < 14; a += 1) {
-          const ang = (a / 14) * Math.PI * 2;
-          pondPts.push([Math.cos(ang) * 78, 0.5, 50 + Math.sin(ang) * 44]);
-        }
-        drawGroundPoly(
-          pondPts,
-          atm === 'night' ? '#1c4259' : '#589ab3',
-          'rgba(180,225,240,0.4)'
-        );
+        // 3D Reflection Pools at every 3-row road interval (with 3-7 jumping fish each)
+        [-45, 705, 1455].forEach((poolZ) => {
+          const pondPts = [];
+          for (let a = 0; a < 14; a += 1) {
+            const ang = (a / 14) * Math.PI * 2;
+            pondPts.push([Math.cos(ang) * 86, 0.5, poolZ + Math.sin(ang) * 48]);
+          }
+          drawGroundPoly(
+            pondPts,
+            atm === 'night' ? '#1c4259' : '#589ab3',
+            'rgba(180,225,240,0.4)'
+          );
+        });
       } else {
-        // Ash Room Crimson & Gold Sanctuary Runner
+        // Ash Room Crimson & Gold Sanctuary Runners (10 rows: 10 left + 10 right niches = 200)
         for (let pz = -300; pz < maxZ - 20; pz += 62) {
           drawGroundPoly(
             [
-              [-48, 0.5, pz],
-              [48, 0.5, pz],
-              [48, 0.5, pz + 62],
-              [-48, 0.5, pz + 62],
+              [-64, 0.5, pz],
+              [64, 0.5, pz],
+              [64, 0.5, pz + 62],
+              [-64, 0.5, pz + 62],
             ],
             '#5e262b',
             '#d4a853'
           );
         }
-        for (let px = -320; px < 320; px += 80) {
-          drawGroundPoly(
-            [
-              [px, 0.5, -36],
-              [px + 80, 0.5, -36],
-              [px + 80, 0.5, 36],
-              [px, 0.5, 36],
-            ],
-            '#5e262b',
-            '#d4a853'
-          );
+        for (let row = 0; row < 10; row += 1) {
+          const rz = -170 + row * 250;
+          for (let px = -1440; px < 1440; px += 180) {
+            drawGroundPoly(
+              [
+                [px, 0.5, rz - 36],
+                [px + 180, 0.5, rz - 36],
+                [px + 180, 0.5, rz + 36],
+                [px, 0.5, rz + 36],
+              ],
+              '#5e262b',
+              '#d4a853'
+            );
+          }
         }
       }
 
@@ -1300,14 +1305,41 @@ export default function ParkWorld3D({
 
       // 2. Decorative 3D Environment Props
       if (room === 'tombstone') {
-        const trees = [
-          { x: -370, z: -260, cherry: true },
-          { x: 370, z: -260, cherry: true },
-          { x: -420, z: 40, cherry: false },
-          { x: 420, z: 40, cherry: false },
-          { x: -320, z: 290, cherry: true },
-          { x: 320, z: 290, cherry: true },
-        ];
+        // Jumping fish (3-7 per pool) & flanking benches at every 3-row pool
+        [-45, 705, 1455].forEach((poolZ, pIdx) => {
+          const fishCount = 3 + ((pIdx * 3 + 2) % 5);
+          for (let f = 0; f < fishCount; f += 1) {
+            const seed = pIdx * 19 + f * 7;
+            const fx = Math.cos(now * 0.0009 + seed) * (46 - (f % 3) * 10);
+            const fz = poolZ + Math.sin(now * 0.0011 + seed * 0.7) * (22 - (f % 2) * 6);
+            const jumpWave = Math.sin(now * (0.0022 + (seed % 5) * 0.0004) + seed * 1.3);
+            const fy = jumpWave > 0.35 ? (jumpWave - 0.35) * 38 : 3;
+            pushEntity(fx, fz, () => {
+              const fp = project3D(fx, fy, fz);
+              if (fp) {
+                ctx.font = `${Math.max(10, Math.round(14 * fp.scale))}px serif`;
+                ctx.textAlign = 'center';
+                ctx.fillText(f % 2 === 0 ? '🐟' : '🐠', fp.sx, fp.sy);
+              }
+            });
+          }
+          [-150, 150].forEach((bx) => {
+            pushEntity(bx, poolZ, () => {
+              draw3DBox(bx, 0, poolZ, 44, 12, 18, {
+                top: '#9b6a46',
+                front: '#7c5134',
+                side: '#5e3d27',
+              });
+            });
+          });
+        });
+
+        const trees = [];
+        [-260, 490, 1240, 1990].forEach((tz, ti) => {
+          [-1460, -920, -380, 380, 920, 1460].forEach((tx, xi) => {
+            trees.push({ x: tx, z: tz, cherry: (ti + xi) % 2 === 0 });
+          });
+        });
         trees.forEach((t) => {
           pushEntity(t.x, t.z, () => {
             draw3DBox(t.x, 0, t.z, 14, 52, 14, {
@@ -1368,20 +1400,30 @@ export default function ParkWorld3D({
           });
         });
       } else {
-        // Central 3D Incense Brazier Altar in Ash Room
-        pushEntity(0, 0, () => {
-          draw3DBox(0, 0, 0, 44, 24, 44, {
-            top: '#8c6632',
-            front: '#69491f',
-            side: '#4b3314',
+        // Warm 3D Incense Braziers / Lights in the middle of every Ash Room row (1-10)
+        for (let row = 0; row < 10; row += 1) {
+          const rz = -170 + row * 250;
+          pushEntity(0, rz, () => {
+            draw3DBox(0, 0, rz, 44, 24, 44, {
+              top: '#8c6632',
+              front: '#69491f',
+              side: '#4b3314',
+            });
+            const topPt = project3D(0, 32, rz);
+            if (topPt) {
+              const g = ctx.createRadialGradient(topPt.sx, topPt.sy, 2, topPt.sx, topPt.sy, 38 * topPt.scale);
+              g.addColorStop(0, 'rgba(255, 206, 120, 0.55)');
+              g.addColorStop(1, 'rgba(255, 206, 120, 0)');
+              ctx.fillStyle = g;
+              ctx.beginPath();
+              ctx.arc(topPt.sx, topPt.sy, 38 * topPt.scale, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.font = `${Math.max(14, Math.round(24 * topPt.scale))}px serif`;
+              ctx.textAlign = 'center';
+              ctx.fillText('🪔', topPt.sx, topPt.sy);
+            }
           });
-          const topPt = project3D(0, 32, 0);
-          if (topPt) {
-            ctx.font = `${Math.max(14, Math.round(24 * topPt.scale))}px serif`;
-            ctx.textAlign = 'center';
-            ctx.fillText('🪔', topPt.sx, topPt.sy);
-          }
-        });
+        }
       }
 
       // 3. 3D Tombstones & Ash Alcoves
