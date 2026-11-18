@@ -104,6 +104,8 @@ export default function ParkWorld2D({
   activeRoom,
   walkToRoomRequest = null,
   onClearWalkToRoomRequest,
+  walkToSpeciesRequest = null,
+  onClearWalkToSpeciesRequest,
   walkToMemorialRequest = null,
   onClearWalkToMemorialRequest,
   mpPeers = [],
@@ -188,6 +190,10 @@ export default function ParkWorld2D({
   };
 
   const pendingOpenGateRef = useRef(false);
+  const pendingTargetSpeciesRef = useRef(null);
+  const speciesRef = useRef(activeSpecies);
+  const onSelectSpeciesRef = useRef(onSelectSpecies);
+  onSelectSpeciesRef.current = onSelectSpecies;
   const openSpeciesGateRef = useRef(null);
 
   const openSpeciesGate = () => {
@@ -195,6 +201,24 @@ export default function ParkWorld2D({
     else setShowSpeciesGate(true);
   };
   openSpeciesGateRef.current = openSpeciesGate;
+
+  const startWalkToSpeciesGate = (targetSpecies) => {
+    if (!targetSpecies || targetSpecies === speciesRef.current) return;
+    const p = playerRef.current;
+    setInspectedId(null);
+    pendingOpenGateRef.current = false;
+    pendingOpenIdRef.current = null;
+    pendingTargetSpeciesRef.current = targetSpecies;
+    p.targetMemorialId = null;
+    if (Math.hypot(p.x - 1135, p.y - 410) < 54) {
+      p.x = 1020;
+      p.y = 410;
+    }
+    p.targetX = 1135;
+    p.targetY = 410;
+    setWalkMessage(`Walking to ${getSpeciesEmoji(targetSpecies)} ${targetSpecies} Gates...`);
+    setTimeout(() => setWalkMessage(''), 2600);
+  };
 
   const walkOrOpenSpeciesGate = () => {
     setInspectedId(null);
@@ -373,6 +397,7 @@ export default function ParkWorld2D({
 
   useEffect(() => {
     if (!remoteWorldEvent || remoteWorldEvent.room !== roomRef.current) return;
+    if (remoteWorldEvent.species && remoteWorldEvent.species !== speciesRef.current) return;
     if (remoteWorldEvent.memorialId) {
       const target = positionedRef.current.find((m) => m.id === remoteWorldEvent.memorialId);
       if (target) {
@@ -386,6 +411,46 @@ export default function ParkWorld2D({
       setTimeout(() => setWalkMessage(''), 2600);
     }
   }, [remoteWorldEvent]);
+
+  // Synchronize player spawn when species gate changes externally
+  useEffect(() => {
+    if (speciesRef.current !== activeSpecies) {
+      speciesRef.current = activeSpecies;
+      pendingTargetSpeciesRef.current = null;
+      const p = playerRef.current;
+      p.targetX = null;
+      p.targetY = null;
+      p.targetMemorialId = null;
+      p.portalCooldownUntil = performance.now() + 900;
+      p.x = 1030;
+      p.y = 410;
+      p.history = [];
+      setInspectedId(null);
+      setNearbyMemorialId(null);
+      nearbyIdRef.current = null;
+      updateLocalPresence({
+        name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
+        room: roomRef.current,
+        species: activeSpecies,
+        nx: p.x - 600,
+        nz: p.y - 410,
+        facingX: p.facingX,
+        facingZ: p.facingY,
+        moving: false,
+        avatar: avatarRef.current,
+        force: true,
+      });
+    }
+  }, [activeSpecies]);
+
+  useEffect(() => {
+    if (!walkToSpeciesRequest || walkToSpeciesRequest === speciesRef.current) {
+      if (walkToSpeciesRequest && onClearWalkToSpeciesRequest) onClearWalkToSpeciesRequest();
+      return;
+    }
+    startWalkToSpeciesGate(walkToSpeciesRequest);
+    if (onClearWalkToSpeciesRequest) onClearWalkToSpeciesRequest();
+  }, [walkToSpeciesRequest, onClearWalkToSpeciesRequest]);
 
   // Synchronize player spawn when room changes externally (tabs or portal)
   useEffect(() => {
@@ -687,6 +752,7 @@ export default function ParkWorld2D({
         p.targetMemorialId = null;
         pendingOpenIdRef.current = null;
         pendingOpenGateRef.current = false;
+        pendingTargetSpeciesRef.current = null;
         const len = Math.hypot(vx, vy) || 1;
         vx /= len;
         vy /= len;
@@ -725,6 +791,7 @@ export default function ParkWorld2D({
       updateLocalPresence({
         name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
         room,
+        species: speciesRef.current,
         nx: p.x - 600,
         nz: p.y - 410,
         facingX: p.facingX,
@@ -752,6 +819,24 @@ export default function ParkWorld2D({
       if (isNearGateNow !== nearGateRef.current) {
         nearGateRef.current = isNearGateNow;
         setNearSpeciesGate(isNearGateNow);
+      }
+      if (pendingTargetSpeciesRef.current && gateDist < 38) {
+        const nextSpecies = pendingTargetSpeciesRef.current;
+        pendingTargetSpeciesRef.current = null;
+        pendingOpenGateRef.current = false;
+        p.portalCooldownUntil = now + 1100;
+        speciesRef.current = nextSpecies;
+        if (onSelectSpeciesRef.current) onSelectSpeciesRef.current(nextSpecies);
+        p.targetX = null;
+        p.targetY = null;
+        p.x = 1030;
+        p.y = 410;
+        p.history = [];
+        spawnFloatingParticles(p.x, p.y - 18, getSpeciesEmoji(nextSpecies), 7);
+        setWalkMessage(`⛩️ Entered ${getSpeciesEmoji(nextSpecies)} ${nextSpecies} Gates`);
+        setTimeout(() => setWalkMessage(''), 2400);
+        animId = requestAnimationFrame(renderFrame);
+        return;
       }
       if (isNearGateNow && pendingOpenGateRef.current) {
         pendingOpenGateRef.current = false;
@@ -1308,7 +1393,7 @@ export default function ParkWorld2D({
       // ====================
       const nowMs = Date.now();
       getPeersMap().forEach((peer) => {
-        if (peer.room !== room) return;
+        if (peer.room !== room || (peer.species || 'Dog') !== speciesRef.current) return;
         peer.rx += (peer.nx - peer.rx) * Math.min(1, dt * 10);
         peer.rz += (peer.nz - peer.rz) * Math.min(1, dt * 10);
         if (peer.moving) peer.bob = (peer.bob || 0) + dt * 12;
@@ -2095,9 +2180,7 @@ export default function ParkWorld2D({
           activeSpecies={activeSpecies}
           allMemorials={allMemorials}
           onSelectSpecies={(sp) => {
-            if (onSelectSpecies) onSelectSpecies(sp);
-            setWalkMessage(`Entered ${getSpeciesEmoji(sp)} ${sp} Sanctuary`);
-            setTimeout(() => setWalkMessage(''), 2200);
+            startWalkToSpeciesGate(sp);
           }}
           onClose={() => setShowSpeciesGate(false)}
         />

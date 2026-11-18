@@ -91,6 +91,8 @@ export default function ParkWorld3D({
   activeRoom,
   walkToRoomRequest = null,
   onClearWalkToRoomRequest,
+  walkToSpeciesRequest = null,
+  onClearWalkToSpeciesRequest,
   walkToMemorialRequest = null,
   onClearWalkToMemorialRequest,
   mpPeers = [],
@@ -176,6 +178,10 @@ export default function ParkWorld3D({
   };
 
   const pendingOpenGateRef = useRef(false);
+  const pendingTargetSpeciesRef = useRef(null);
+  const speciesRef = useRef(activeSpecies);
+  const onSelectSpeciesRef = useRef(onSelectSpecies);
+  onSelectSpeciesRef.current = onSelectSpecies;
   const openSpeciesGateRef = useRef(null);
 
   const openSpeciesGate = () => {
@@ -183,6 +189,23 @@ export default function ParkWorld3D({
     else setShowSpeciesGate(true);
   };
   openSpeciesGateRef.current = openSpeciesGate;
+
+  const startWalkToSpeciesGate = (targetSpecies) => {
+    if (!targetSpecies || targetSpecies === speciesRef.current) return;
+    const p = playerRef.current;
+    setInspectedId(null);
+    pendingOpenGateRef.current = false;
+    pendingOpenIdRef.current = null;
+    pendingTargetSpeciesRef.current = targetSpecies;
+    if (Math.hypot(p.x - 460, p.z - 0) < 54) {
+      p.x = 355;
+      p.z = 0;
+    }
+    p.targetX = 460;
+    p.targetZ = 0;
+    setWalkMessage(`Walking to ${getSpeciesEmoji(targetSpecies)} ${targetSpecies} Gates...`);
+    setTimeout(() => setWalkMessage(''), 2600);
+  };
 
   const walkOrOpenSpeciesGate = () => {
     setInspectedId(null);
@@ -333,6 +356,7 @@ export default function ParkWorld3D({
 
   useEffect(() => {
     if (!remoteWorldEvent || remoteWorldEvent.room !== roomRef.current) return;
+    if (remoteWorldEvent.species && remoteWorldEvent.species !== speciesRef.current) return;
     if (remoteWorldEvent.memorialId) {
       const target = positionedRef.current.find((m) => m.id === remoteWorldEvent.memorialId);
       if (target) {
@@ -346,6 +370,44 @@ export default function ParkWorld3D({
       setTimeout(() => setWalkMessage(''), 2600);
     }
   }, [remoteWorldEvent]);
+
+  useEffect(() => {
+    if (speciesRef.current !== activeSpecies) {
+      speciesRef.current = activeSpecies;
+      pendingTargetSpeciesRef.current = null;
+      const p = playerRef.current;
+      p.targetX = null;
+      p.targetZ = null;
+      p.portalCooldownUntil = performance.now() + 900;
+      p.x = 365;
+      p.z = 0;
+      p.history = [];
+      setInspectedId(null);
+      setNearbyMemorialId(null);
+      nearbyIdRef.current = null;
+      updateLocalPresence({
+        name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
+        room: roomRef.current,
+        species: activeSpecies,
+        nx: p.x,
+        nz: p.z,
+        facingX: p.facingX,
+        facingZ: p.facingZ,
+        moving: false,
+        avatar: avatarRef.current,
+        force: true,
+      });
+    }
+  }, [activeSpecies]);
+
+  useEffect(() => {
+    if (!walkToSpeciesRequest || walkToSpeciesRequest === speciesRef.current) {
+      if (walkToSpeciesRequest && onClearWalkToSpeciesRequest) onClearWalkToSpeciesRequest();
+      return;
+    }
+    startWalkToSpeciesGate(walkToSpeciesRequest);
+    if (onClearWalkToSpeciesRequest) onClearWalkToSpeciesRequest();
+  }, [walkToSpeciesRequest, onClearWalkToSpeciesRequest]);
 
   useEffect(() => {
     camRef.current.preset = cameraMode;
@@ -688,6 +750,7 @@ export default function ParkWorld3D({
         p.targetZ = null;
         pendingOpenIdRef.current = null;
         pendingOpenGateRef.current = false;
+        pendingTargetSpeciesRef.current = null;
         let vx = dirX * moveForward + rightX * moveRight;
         let vz = dirZ * moveForward + rightZ * moveRight;
         const len = Math.hypot(vx, vz) || 1;
@@ -735,6 +798,7 @@ export default function ParkWorld3D({
       updateLocalPresence({
         name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
         room,
+        species: speciesRef.current,
         nx: p.x,
         nz: p.z,
         facingX: p.facingX,
@@ -755,6 +819,24 @@ export default function ParkWorld3D({
       if (isNearGateNow !== nearGateRef.current) {
         nearGateRef.current = isNearGateNow;
         setNearSpeciesGate(isNearGateNow);
+      }
+      if (pendingTargetSpeciesRef.current && gateDist < 38) {
+        const nextSpecies = pendingTargetSpeciesRef.current;
+        pendingTargetSpeciesRef.current = null;
+        pendingOpenGateRef.current = false;
+        p.portalCooldownUntil = now + 1100;
+        speciesRef.current = nextSpecies;
+        if (onSelectSpeciesRef.current) onSelectSpeciesRef.current(nextSpecies);
+        p.targetX = null;
+        p.targetZ = null;
+        p.x = 365;
+        p.z = 0;
+        p.history = [];
+        spawnFloatingParticles(p.x, 38, p.z, getSpeciesEmoji(nextSpecies), 7);
+        setWalkMessage(`⛩️ Entered ${getSpeciesEmoji(nextSpecies)} ${nextSpecies} Gates`);
+        setTimeout(() => setWalkMessage(''), 2400);
+        animId = requestAnimationFrame(frame);
+        return;
       }
       if (isNearGateNow && pendingOpenGateRef.current) {
         pendingOpenGateRef.current = false;
@@ -1542,7 +1624,7 @@ export default function ParkWorld3D({
       // 4b. Remote Live Multiplayer Visitors
       const nowMs = Date.now();
       getPeersMap().forEach((peer) => {
-        if (peer.room !== room) return;
+        if (peer.room !== room || (peer.species || 'Dog') !== speciesRef.current) return;
         peer.rx += (peer.nx - peer.rx) * Math.min(1, dt * 10);
         peer.rz += (peer.nz - peer.rz) * Math.min(1, dt * 10);
         if (peer.moving) peer.bob = (peer.bob || 0) + dt * 12;
@@ -2388,9 +2470,7 @@ export default function ParkWorld3D({
           activeSpecies={activeSpecies}
           allMemorials={allMemorials}
           onSelectSpecies={(sp) => {
-            if (onSelectSpecies) onSelectSpecies(sp);
-            setWalkMessage(`Entered ${getSpeciesEmoji(sp)} ${sp} Sanctuary`);
-            setTimeout(() => setWalkMessage(''), 2200);
+            startWalkToSpeciesGate(sp);
           }}
           onClose={() => setShowSpeciesGate(false)}
         />

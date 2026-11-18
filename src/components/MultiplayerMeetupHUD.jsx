@@ -102,6 +102,10 @@ export default function MultiplayerMeetupHUD({
 
   const incomingFriendReqs = friendRequests?.incoming || [];
   const outgoingFriendReqs = friendRequests?.outgoing || [];
+  const sameGatePeers = useMemo(
+    () => mpPeers.filter((p) => (p.species || 'Dog') === activeSpecies),
+    [mpPeers, activeSpecies]
+  );
 
   const combinedFeed = useMemo(() => {
     const outside = showOutsideChat
@@ -489,7 +493,7 @@ export default function MultiplayerMeetupHUD({
               {/* Online Visitors List */}
               <div>
                 <div className="field-label" style={{ marginBottom: 4 }}>
-                  Visitors Here ({mpPeers.length + 1})
+                  Visitors in {activeSpecies} Gates ({sameGatePeers.length + 1})
                 </div>
                 <div className="mp-visitors-list">
                   <div className="mp-visitor-row is-self">
@@ -501,7 +505,7 @@ export default function MultiplayerMeetupHUD({
                     </span>
                   </div>
 
-                  {mpPeers.map((peer) => {
+                  {sameGatePeers.map((peer) => {
                     const pNameLower = (peer.name || '').trim().toLowerCase();
                     const isFriend = friends.some((f) => f.toLowerCase() === pNameLower);
                     const pendingOut = outgoingFriendReqs.find(
@@ -592,9 +596,9 @@ export default function MultiplayerMeetupHUD({
                     );
                   })}
 
-                  {mpPeers.length === 0 && (
+                  {sameGatePeers.length === 0 && (
                     <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', padding: '4px 2px' }}>
-                      Open in another tab or share your link with friends in room <strong>{mpRoomCode}</strong> to meet up!
+                      No other visitors in <strong>{activeSpecies} Gates</strong> right now. Share your link or meet friends at the same gate!
                     </div>
                   )}
                 </div>

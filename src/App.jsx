@@ -276,6 +276,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('tombstone'); // 'tombstone' | 'ash-room' | 'sanctuary'
   const [activeRoom, setActiveRoom] = useState('tombstone'); // 'tombstone' | 'ash-room'
   const [walkToRoomRequest, setWalkToRoomRequest] = useState(null);
+  const [walkToSpeciesRequest, setWalkToSpeciesRequest] = useState(null);
   const [walkToMemorialRequest, setWalkToMemorialRequest] = useState(null);
   const [activeSpecies, setActiveSpecies] = useState('Dog');
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
@@ -1215,6 +1216,17 @@ export default function App() {
     setSelectedMemorialId(finalMemorial.id);
   };
 
+  const handleRequestSelectSpecies = (nextSpecies) => {
+    if (!nextSpecies || nextSpecies === activeSpecies) return;
+    if (viewMode !== 'grid' && activeTab !== 'sanctuary' && !showOnlyFavorites) {
+      // Walk character to the Other Species Gate before changing to the chosen species gate
+      setWalkToSpeciesRequest(nextSpecies);
+      return;
+    }
+    setWalkToSpeciesRequest(null);
+    setActiveSpecies(nextSpecies);
+  };
+
   const handleSelectNavTab = (tab) => {
     if (
       (tab === 'tombstone' || tab === 'ash-room') &&
@@ -1842,6 +1854,8 @@ export default function App() {
             activeRoom={activeRoom}
             walkToRoomRequest={walkToRoomRequest}
             onClearWalkToRoomRequest={() => setWalkToRoomRequest(null)}
+            walkToSpeciesRequest={walkToSpeciesRequest}
+            onClearWalkToSpeciesRequest={() => setWalkToSpeciesRequest(null)}
             walkToMemorialRequest={walkToMemorialRequest}
             onClearWalkToMemorialRequest={() => setWalkToMemorialRequest(null)}
             mpPeers={mpPeers}
@@ -1906,6 +1920,8 @@ export default function App() {
             activeRoom={activeRoom}
             walkToRoomRequest={walkToRoomRequest}
             onClearWalkToRoomRequest={() => setWalkToRoomRequest(null)}
+            walkToSpeciesRequest={walkToSpeciesRequest}
+            onClearWalkToSpeciesRequest={() => setWalkToSpeciesRequest(null)}
             walkToMemorialRequest={walkToMemorialRequest}
             onClearWalkToMemorialRequest={() => setWalkToMemorialRequest(null)}
             mpPeers={mpPeers}
@@ -2148,7 +2164,7 @@ export default function App() {
         <SpeciesGateModal
           activeSpecies={activeSpecies}
           allMemorials={visibleMemorials}
-          onSelectSpecies={(sp) => setActiveSpecies(sp)}
+          onSelectSpecies={handleRequestSelectSpecies}
           onClose={() => setShowSpeciesGate(false)}
         />
       )}

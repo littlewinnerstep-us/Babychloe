@@ -291,6 +291,7 @@ let initialized = false;
 let localState = {
   name: customNickname || 'Visitor',
   room: 'tombstone',
+  species: 'Dog',
   nx: 0,
   nz: 190,
   facingX: 0,
@@ -737,13 +738,15 @@ function handleIncomingPayload(msg) {
 
     if (existing) {
       const roomChanged = existing.room !== msg.room;
+      const speciesChanged = (existing.species || 'Dog') !== (msg.species || 'Dog');
       const groupChanged = (existing.groupId || '') !== (msg.groupId || '');
       existing.name = msg.name || existing.name || 'Visitor';
       existing.room = msg.room || 'tombstone';
+      existing.species = msg.species || existing.species || 'Dog';
       existing.groupId = msg.groupId || '';
       existing.nx = nx;
       existing.nz = nz;
-      if (roomChanged) {
+      if (roomChanged || speciesChanged) {
         existing.rx = nx;
         existing.rz = nz;
       }
@@ -752,7 +755,7 @@ function handleIncomingPayload(msg) {
       existing.moving = Boolean(msg.moving);
       if (msg.avatar) existing.avatar = msg.avatar;
       existing.lastSeen = now;
-      if (roomChanged || groupChanged || existing.name !== msg.name) {
+      if (roomChanged || speciesChanged || groupChanged || existing.name !== msg.name) {
         notifyPeersChanged();
       }
     } else {
@@ -760,6 +763,7 @@ function handleIncomingPayload(msg) {
         peerId: msg.peerId,
         name: msg.name || 'Visitor',
         room: msg.room || 'tombstone',
+        species: msg.species || 'Dog',
         groupId: msg.groupId || '',
         nx,
         nz,
@@ -1859,6 +1863,7 @@ export function sendGroupChatMessage(text) {
 export function updateLocalPresence({
   name,
   room,
+  species,
   nx,
   nz,
   facingX = 0,
@@ -1872,6 +1877,7 @@ export function updateLocalPresence({
   localState = {
     name: effectiveName,
     room: room || 'tombstone',
+    species: species || localState.species || 'Dog',
     groupId: curGroupId,
     nx: Math.round(nx || 0),
     nz: Math.round(nz || 0),
@@ -1885,6 +1891,7 @@ export function updateLocalPresence({
   const snapshot = JSON.stringify([
     localState.name,
     localState.room,
+    localState.species,
     localState.groupId,
     localState.nx,
     localState.nz,
@@ -1902,6 +1909,7 @@ export function updateLocalPresence({
       type: 'presence',
       name: localState.name,
       room: localState.room,
+      species: localState.species,
       groupId: localState.groupId,
       nx: localState.nx,
       nz: localState.nz,
@@ -1923,6 +1931,7 @@ export function sendMultiplayerChat(text) {
     type: 'chat',
     senderName: localState.name,
     room: localState.room,
+    species: localState.species,
     text: clean,
   });
 
@@ -1932,6 +1941,7 @@ export function sendMultiplayerChat(text) {
     senderName: localState.name,
     text: clean,
     room: localState.room,
+    species: localState.species,
     time: now,
     isLocal: true,
     isGroup: false,
@@ -1945,6 +1955,7 @@ export function sendMultiplayerEmote(emoji, label) {
     payload: {
       kind: 'emote',
       room: localState.room,
+      species: localState.species,
       nx: localState.nx,
       nz: localState.nz,
       emoji,
@@ -1959,6 +1970,7 @@ export function sendMultiplayerAction(payload) {
     senderName: localState.name,
     payload: {
       room: localState.room,
+      species: localState.species,
       nx: localState.nx,
       nz: localState.nz,
       ...payload,

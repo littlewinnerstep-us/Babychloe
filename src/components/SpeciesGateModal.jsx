@@ -9,6 +9,7 @@ export default function SpeciesGateModal({
   onClose,
 }) {
   const [filterText, setFilterText] = useState('');
+  const [confirmSpecies, setConfirmSpecies] = useState(null);
 
   const filteredSpecies = useMemo(() => {
     const q = filterText.trim().toLowerCase();
@@ -32,6 +33,50 @@ export default function SpeciesGateModal({
             <X size={18} />
           </button>
         </div>
+
+        {confirmSpecies && (
+          <div
+            className="armtip-notif"
+            role="dialog"
+            aria-label={`Move to ${confirmSpecies.label} Gates?`}
+            style={{
+              marginBottom: 12,
+              padding: '10px 12px',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+            }}
+          >
+            <div style={{ fontSize: '0.86rem' }}>
+              ⛩️ Move to <strong>{confirmSpecies.emoji} {confirmSpecies.label} Gates</strong>?
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ padding: '5px 14px', fontSize: '0.78rem' }}
+                onClick={() => {
+                  const chosenId = confirmSpecies.id;
+                  setConfirmSpecies(null);
+                  onSelectSpecies(chosenId);
+                  onClose();
+                }}
+              >
+                ✅ Yes
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ padding: '5px 14px', fontSize: '0.78rem' }}
+                onClick={() => setConfirmSpecies(null)}
+              >
+                ✖️ No
+              </button>
+            </div>
+          </div>
+        )}
 
         <div
           style={{
@@ -75,15 +120,19 @@ export default function SpeciesGateModal({
           {filteredSpecies.map((sp) => {
             const count = allMemorials.filter((m) => (m.species || 'Dog') === sp.id).length;
             const isActive = activeSpecies === sp.id;
+            const isConfirming = confirmSpecies?.id === sp.id;
             return (
               <button
                 key={sp.id}
                 type="button"
-                className={`style-option ${isActive ? 'active' : ''}`}
+                className={`style-option ${isActive || isConfirming ? 'active' : ''}`}
                 style={{ textAlign: 'left', padding: '10px 12px' }}
                 onClick={() => {
-                  onSelectSpecies(sp.id);
-                  onClose();
+                  if (isActive) {
+                    onClose();
+                    return;
+                  }
+                  setConfirmSpecies(sp);
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
