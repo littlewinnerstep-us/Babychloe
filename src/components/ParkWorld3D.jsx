@@ -15,7 +15,7 @@ import {
   RotateCw,
   ZoomIn,
 } from 'lucide-react';
-import { loadViewPrefs, saveViewPrefs } from '../utils/viewPrefs';
+import { loadViewPrefs, saveViewPrefs, loadTipsPrefs, saveTipsPrefs } from '../utils/viewPrefs';
 import {
   OFFERING_TYPES,
   getSpeciesEmoji,
@@ -155,6 +155,7 @@ export default function ParkWorld3D({
   onRequireLogin,
   zoomGuideTipAt = 0,
   onClearZoomGuideTip,
+  isFirstVisitGuideOpen = false,
 }) {
   const initialViewPrefs = useMemo(() => loadViewPrefs(), []);
   const canvasRef = useRef(null);
@@ -176,6 +177,7 @@ export default function ParkWorld3D({
   zoomOverviewRef.current = zoomOverview;
   const [zoomMenuOpen, setZoomMenuOpen] = useState(false);
   const [zoomArmTipVisible, setZoomArmTipVisible] = useState(false);
+  const [cameraArmTipVisible, setCameraArmTipVisible] = useState(false);
   const [cameraMenuOpen, setCameraMenuOpen] = useState(false);
   const nativeFsRef = useRef(false);
 
@@ -484,6 +486,27 @@ export default function ParkWorld3D({
     }, 2000);
     return () => clearTimeout(timer);
   }, [zoomGuideTipAt, onClearZoomGuideTip]);
+
+  useEffect(() => {
+    if (isFirstVisitGuideOpen) return undefined;
+    const tp = loadTipsPrefs();
+    if (!tp.tipsEnabled || tp.cameraTipShown) return undefined;
+    const delayMs = zoomGuideTipAt ? 2150 : 250;
+    let hideTimer = null;
+    const showTimer = setTimeout(() => {
+      const latest = loadTipsPrefs();
+      if (!latest.tipsEnabled || latest.cameraTipShown) return;
+      saveTipsPrefs({ cameraTipShown: true });
+      setCameraArmTipVisible(true);
+      hideTimer = setTimeout(() => {
+        setCameraArmTipVisible(false);
+      }, 2000);
+    }, delayMs);
+    return () => {
+      clearTimeout(showTimer);
+      if (hideTimer) clearTimeout(hideTimer);
+    };
+  }, [isFirstVisitGuideOpen, zoomGuideTipAt]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
@@ -2636,6 +2659,11 @@ export default function ParkWorld3D({
         {zoomArmTipVisible && (
           <div className="armtip-notif world-zoom-armtip" role="status">
             🔍 Tap the Zoom icon to switch between <strong>1×</strong> close view and <strong>All 200</strong> plots!
+          </div>
+        )}
+        {cameraArmTipVisible && (
+          <div className="armtip-notif world-camera-armtip" role="status">
+            🎥 Tap the Camera icon to rotate or change 3D view (<strong>Follow / Close / Overview</strong>)!
           </div>
         )}
         <canvas

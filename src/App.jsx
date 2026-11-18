@@ -2109,6 +2109,7 @@ export default function App() {
             onRequireLogin={() => setShowAuthModal(true)}
             zoomGuideTipAt={zoomGuideTipAt}
             onClearZoomGuideTip={() => setZoomGuideTipAt(0)}
+            isFirstVisitGuideOpen={showFirstGuide}
           />
         ) : viewMode === 'world2d' && activeTab !== 'sanctuary' && !showOnlyFavorites ? (
           <ParkWorld2D
@@ -2415,7 +2416,7 @@ export default function App() {
         onTurnTipsOff={() => {
           setShowFirstGuide(false);
           setTipsEnabled(false);
-          saveTipsPrefs({ tipsEnabled: false, guideCompleted: true, zoomTipShown: true });
+          saveTipsPrefs({ tipsEnabled: false, guideCompleted: true, zoomTipShown: true, cameraTipShown: true });
           showGlobalNotice('🔕 Tips turned off. You can turn them back on anytime in Volume settings.');
         }}
       />

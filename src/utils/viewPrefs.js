@@ -14,6 +14,7 @@ const DEFAULT_TIPS_PREFS = {
   tipsEnabled: true,
   guideCompleted: false,
   zoomTipShown: false,
+  cameraTipShown: false,
 };
 
 export function loadViewPrefs() {
@@ -62,6 +63,7 @@ export function loadTipsPrefs() {
       tipsEnabled: parsed.tipsEnabled !== false,
       guideCompleted: Boolean(parsed.guideCompleted),
       zoomTipShown: Boolean(parsed.zoomTipShown),
+      cameraTipShown: Boolean(parsed.cameraTipShown),
     };
   } catch {
     return { ...DEFAULT_TIPS_PREFS };

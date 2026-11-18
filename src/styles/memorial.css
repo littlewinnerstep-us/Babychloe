@@ -2859,6 +2859,17 @@ body.is-mobile-hud .world-container.is-fullscreen .world-canvas-wrap {
   pointer-events: auto;
 }
 
+.world-camera-armtip {
+  position: absolute;
+  top: 174px;
+  right: 54px;
+  z-index: 24;
+  max-width: min(290px, calc(100vw - 76px));
+  margin-bottom: 0;
+  font-size: 0.74rem;
+  pointer-events: auto;
+}
+
 .first-visit-guide-overlay {
   position: fixed;
   inset: 0;
