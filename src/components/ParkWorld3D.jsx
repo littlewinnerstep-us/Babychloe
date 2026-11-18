@@ -2292,13 +2292,13 @@ export default function ParkWorld3D({
           {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
         </button>
 
-        {/* 3D Camera Icon Button on Right Side (below Dog/Species gate & Full Screen) */}
+        {/* 3D Camera Icon Button on Right Side (below Gate icon) */}
         <div
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
-            top: isFullScreen ? 88 : 52,
+            top: 176,
             right: 10,
             zIndex: 18,
             display: 'flex',
