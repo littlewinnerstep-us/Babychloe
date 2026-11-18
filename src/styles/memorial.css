@@ -1474,7 +1474,7 @@ select {
 
 .world-portal-prompt {
   position: absolute;
-  bottom: 62px;
+  bottom: 46px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 18;
@@ -1482,8 +1482,8 @@ select {
 
 .world-dpad {
   position: absolute;
-  bottom: 14px;
-  left: 14px;
+  bottom: 6px;
+  left: 8px;
   display: grid;
   grid-template-columns: repeat(3, 38px);
   grid-template-rows: repeat(3, 38px);
@@ -1519,9 +1519,9 @@ select {
 
 .world-proximity-card {
   position: absolute;
-  bottom: 14px;
-  right: 14px;
-  left: 148px;
+  bottom: 8px;
+  right: 8px;
+  left: 136px;
   max-width: 520px;
   margin-left: auto;
   background: rgba(20, 27, 25, 0.92);
@@ -1541,7 +1541,7 @@ select {
   .world-proximity-card {
     left: 10px;
     right: 10px;
-    bottom: 144px;
+    bottom: 96px;
   }
 }
 
@@ -1753,30 +1753,45 @@ select {
 
 .world-chat-preview-3rows {
   position: absolute;
-  bottom: 54px;
-  left: 146px;
-  right: 14px;
+  bottom: 44px;
+  left: 136px;
+  right: 8px;
   max-width: 340px;
+  max-height: 68px;
   margin-left: auto;
   display: flex;
   flex-direction: column;
   gap: 3px;
-  background: rgba(14, 20, 18, 0.68);
+  background: rgba(14, 20, 18, 0.74);
   backdrop-filter: blur(6px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 11px;
   padding: 6px 9px;
-  z-index: 12;
-  pointer-events: none;
+  z-index: 13;
+  pointer-events: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 226, 170, 0.42) transparent;
+}
+
+.world-chat-preview-3rows::-webkit-scrollbar {
+  width: 4px;
+}
+
+.world-chat-preview-3rows::-webkit-scrollbar-thumb {
+  background: rgba(255, 226, 170, 0.42);
+  border-radius: 999px;
 }
 
 .world-chat-preview-row {
   font-size: 0.72rem;
-  line-height: 1.3;
+  line-height: 1.32;
   color: #f4f1ea;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
 }
 
 @keyframes inviteBlinkPulse {
@@ -1816,7 +1831,7 @@ select {
 
 .world-nearby-note {
   position: absolute;
-  bottom: 62px;
+  bottom: 46px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 14;
@@ -1841,7 +1856,7 @@ select {
   .world-nearby-note {
     left: auto;
     right: 10px;
-    bottom: 60px;
+    bottom: 46px;
     transform: none;
     max-width: calc(100% - 150px);
   }
@@ -2274,9 +2289,9 @@ select {
 
 .world-chat-bar {
   position: absolute;
-  bottom: 14px;
-  left: 146px;
-  right: 14px;
+  bottom: 6px;
+  left: 136px;
+  right: 8px;
   max-width: 340px;
   margin-left: auto;
   display: flex;
@@ -2817,11 +2832,11 @@ body.is-mobile-hud .world-gate-readonly-pill {
   font-size: 1.05rem;
 }
 
-/* Analog Touch Joystick (APK only) */
+/* Analog Touch Joystick & Bottom Chat Bar positioned low at bottom edge of 2D/3D screen */
 .world-joystick-wrap {
   position: absolute;
-  bottom: calc(16px + env(safe-area-inset-bottom));
-  left: 12px;
+  bottom: 6px;
+  left: 8px;
   z-index: 16;
   display: inline-flex;
   align-items: flex-end;
@@ -2831,45 +2846,30 @@ body.is-mobile-hud .world-gate-readonly-pill {
   touch-action: none;
 }
 
-/* When not fullscreen on mobile, raise joystick & bottom overlays clear of .mobile-bottom-nav */
-body.is-mobile-hud .world-container:not(.is-fullscreen) .world-joystick-wrap {
-  bottom: calc(70px + env(safe-area-inset-bottom));
+body.is-mobile-hud .world-container .world-joystick-wrap {
+  bottom: 6px;
+  left: 8px;
 }
 
-body.is-mobile-hud .world-container:not(.is-fullscreen) .world-chat-bar {
-  left: 146px;
-  bottom: calc(70px + env(safe-area-inset-bottom));
+body.is-mobile-hud .world-container .world-chat-bar {
+  left: 136px;
+  right: 8px;
+  bottom: 6px;
 }
 
-body.is-mobile-hud .world-container:not(.is-fullscreen) .world-chat-preview-3rows {
-  left: 146px;
-  bottom: calc(114px + env(safe-area-inset-bottom));
+body.is-mobile-hud .world-container .world-chat-preview-3rows {
+  left: 136px;
+  right: 8px;
+  bottom: 44px;
 }
 
-body.is-mobile-hud .world-container:not(.is-fullscreen) .world-nearby-note,
-body.is-mobile-hud .world-container:not(.is-fullscreen) .world-portal-prompt {
-  bottom: calc(116px + env(safe-area-inset-bottom));
+body.is-mobile-hud .world-container .world-nearby-note,
+body.is-mobile-hud .world-container .world-portal-prompt {
+  bottom: 46px;
 }
 
-body.is-mobile-hud .world-container:not(.is-fullscreen) .world-proximity-card {
-  bottom: calc(168px + env(safe-area-inset-bottom));
-}
-
-/* In Full Scene mode, bottom bar is hidden so joystick & chat sit cleanly at bottom edge */
-body.is-mobile-hud .world-container.is-fullscreen .world-joystick-wrap,
-body.is-mobile-hud .world-container.is-fullscreen .world-chat-bar {
-  bottom: calc(16px + env(safe-area-inset-bottom));
-}
-
-body.is-mobile-hud .world-container.is-fullscreen .world-chat-bar,
-body.is-mobile-hud .world-container.is-fullscreen .world-chat-preview-3rows {
-  left: 146px;
-}
-
-body.is-mobile-hud .world-container.is-fullscreen .world-chat-preview-3rows,
-body.is-mobile-hud .world-container.is-fullscreen .world-nearby-note,
-body.is-mobile-hud .world-container.is-fullscreen .world-portal-prompt {
-  bottom: calc(62px + env(safe-area-inset-bottom));
+body.is-mobile-hud .world-container .world-proximity-card {
+  bottom: 96px;
 }
 
 .world-joystick-base {

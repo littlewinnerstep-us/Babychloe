@@ -94,6 +94,7 @@ const STORAGE_VOLUMES_KEY = 'evergreen_paws_volumes_v1';
 const STORAGE_READ_NOTIFS_KEY = 'evergreen_paws_read_notifs_v1';
 const STORAGE_OUTSIDE_CHAT_KEY = 'evergreen_paws_outside_chat_v1';
 const STORAGE_VISITED_KEY = 'evergreen_paws_visited_v1';
+const STORAGE_MP_CHAT_KEY = 'evergreen_paws_mp_chat_v1';
 
 const VOLUME_CHANNELS = [
   { key: 'master', label: 'Master', emoji: '🔊' },
@@ -350,10 +351,20 @@ export default function App() {
   const [mpStatus, setMpStatus] = useState('connecting');
   const mpRoomCode = 'PUBLIC';
   const mpNickname = currentUser?.name?.split(' ')[0] || currentUser?.username || 'Visitor';
-  const [mpChatLog, setMpChatLog] = useState([]);
+  const [mpChatLog, setMpChatLog] = useState(() =>
+    loadArrayPref(STORAGE_MP_CHAT_KEY).slice(-80)
+  );
   const [remoteWorldEvent, setRemoteWorldEvent] = useState(null);
   const memorialsRef = useRef(memorials);
   const recentVisitAtRef = useRef({});
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_MP_CHAT_KEY, JSON.stringify(mpChatLog.slice(-80)));
+    } catch {
+      // ignore
+    }
+  }, [mpChatLog]);
 
   useEffect(() => {
     memorialsRef.current = memorials;
@@ -824,7 +835,7 @@ export default function App() {
       onPeersChange: (peers) => setMpPeers(peers),
       onStatusChange: (status) => setMpStatus(status),
       onChatMessage: (msg) => {
-        setMpChatLog((prev) => [...prev, msg].slice(-40));
+        setMpChatLog((prev) => [...prev, msg].slice(-80));
       },
       onSyncMemorial: (memorial) => {
         setMemorials((prev) => mergeIncomingMemorial(prev, memorial));
@@ -935,7 +946,7 @@ export default function App() {
     }
     const msg = sendMultiplayerChat(text);
     if (msg) {
-      setMpChatLog((prev) => [...prev, msg].slice(-40));
+      setMpChatLog((prev) => [...prev, msg].slice(-80));
     }
   };
 

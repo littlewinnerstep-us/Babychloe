@@ -68,6 +68,7 @@ export default function MultiplayerMeetupHUD({
   const [copiedGroupCode, setCopiedGroupCode] = useState(false);
   const chatEndRef = useRef(null);
   const groupChatEndRef = useRef(null);
+  const previewChatBoxRef = useRef(null);
 
   const showInviteFeedback = (msg) => {
     setInviteFeedback(msg);
@@ -101,6 +102,12 @@ export default function MultiplayerMeetupHUD({
     }
   }, [groupChatLog, showDrawer, drawerTab]);
 
+  useEffect(() => {
+    if (!hideBottomChatBar && previewChatBoxRef.current) {
+      previewChatBoxRef.current.scrollTop = previewChatBoxRef.current.scrollHeight;
+    }
+  }, [combinedFeed.length, hideBottomChatBar]);
+
   const groupMembers = useMemo(() => {
     if (!activeGroup?.id) return [];
     return mpPeers.filter((p) => p.groupId === activeGroup.id);
@@ -125,8 +132,6 @@ export default function MultiplayerMeetupHUD({
     onSendGroupChat(text);
     setGroupChatInput('');
   };
-
-  const latestThreeChat = useMemo(() => combinedFeed.slice(-3), [combinedFeed]);
 
   const handleCopyInvite = () => {
     const base =
@@ -247,10 +252,21 @@ export default function MultiplayerMeetupHUD({
         </div>
       )}
 
-      {/* Latest 3 Chat Rows in Main View (Public & Group Chat) */}
-      {!hideBottomChatBar && latestThreeChat.length > 0 && (
-        <div className="world-chat-preview-3rows" aria-label="Recent chat messages">
-          {latestThreeChat.map((m) => (
+      {/* Scrollable Past & Recent Chat History in Main 2D/3D View (Public & Group Chat) */}
+      {!hideBottomChatBar && combinedFeed.length > 0 && (
+        <div
+          ref={previewChatBoxRef}
+          className="world-chat-preview-3rows"
+          aria-label="Chat history (scroll to read past messages)"
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerMove={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {combinedFeed.map((m) => (
             <div key={m.id || `${m.time}-${m.senderName}`} className="world-chat-preview-row">
               <strong style={{ color: m._isGroup ? '#9fe8ff' : m.isLocal ? '#ffd57e' : '#aeeac0' }}>
                 {m._isGroup ? '🔒 ' : ''}
@@ -264,7 +280,14 @@ export default function MultiplayerMeetupHUD({
 
       {/* Live Bottom Chat Bar inside Canvas Viewport */}
       {!hideBottomChatBar && (
-        <form className="world-chat-bar" onSubmit={handleChatSubmit}>
+        <form
+          className="world-chat-bar"
+          onSubmit={handleChatSubmit}
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
           <input
             type="text"
             maxLength={140}
@@ -288,7 +311,13 @@ export default function MultiplayerMeetupHUD({
 
       {/* Meetup & Group Chat Drawer */}
       {showDrawer && (
-        <div className="mp-drawer">
+        <div
+          className="mp-drawer"
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="modal-header" style={{ marginBottom: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
               <Users size={15} />
