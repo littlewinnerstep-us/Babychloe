@@ -1616,15 +1616,17 @@ select {
 .world-container.is-fullscreen {
   position: fixed;
   inset: 0;
-  z-index: 55;
+  z-index: 90;
   background: #0e1512;
-  padding: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   margin: 0;
   width: 100vw;
+  height: 100vh;
   height: 100dvh;
   display: flex;
   flex-direction: column;
   gap: 0;
+  box-sizing: border-box;
 }
 
 .world-container.is-fullscreen .world-hud-top {
@@ -1643,13 +1645,16 @@ select {
 }
 
 .world-container.is-fullscreen .world-canvas-wrap {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   border-radius: 0;
   border: none;
+  width: 100%;
   height: 100%;
 }
 
 .world-container.is-fullscreen .world-canvas {
+  width: 100% !important;
   height: 100% !important;
 }
 
@@ -2647,7 +2652,7 @@ body.is-mobile-hud .world-hud-actions .btn-ghost {
   position: absolute;
   top: 8px;
   left: 8px;
-  right: 112px;
+  right: 56px;
   z-index: 20;
   display: flex;
   flex-direction: column;
@@ -2760,53 +2765,48 @@ body.is-mobile-hud .world-container.is-fullscreen .world-canvas-wrap {
 .world-container.is-fullscreen .world-room-pill {
   top: 48px;
   left: 8px;
-  max-width: calc(100% - 120px);
-}
-
-body.is-mobile-hud .world-container.is-fullscreen .world-room-pill {
-  top: 48px;
   max-width: calc(100% - 60px);
 }
 
-body.is-mobile-hud .world-container.is-fullscreen .world-toast {
+.world-container.is-fullscreen .world-toast {
   top: 78px;
 }
 
-body.is-mobile-hud .world-container.is-fullscreen .world-group-invite-banner {
+.world-container.is-fullscreen .world-group-invite-banner {
   top: 82px;
 }
 
-/* Keep top-left room badge and toast strictly clear of right-side 36px icon stack */
-body.is-mobile-hud .world-room-pill {
+/* Keep top-left room badge and toast strictly clear of right-side 36px icon stack on all screens */
+.world-room-pill {
   top: 8px;
   left: 8px;
   right: auto;
   max-width: calc(100% - 60px);
   padding: 4px 9px;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-body.is-mobile-hud .world-toast {
+.world-toast {
   top: 38px;
   max-width: calc(100% - 108px);
   padding: 4px 10px;
   font-size: 0.72rem;
 }
 
-body.is-mobile-hud .world-group-invite-banner {
+.world-group-invite-banner {
   top: 42px;
   left: 8px;
   width: min(230px, calc(100% - 64px));
 }
 
-/* Mobile Web & APK On-Screen Menu Icon-Only Stack (Full Screen, Outside ON/OFF, Favorites, Gates) */
-body.is-mobile-hud .world-fs-floating-btn,
-body.is-mobile-hud .world-outside-chat-btn,
-body.is-mobile-hud .world-favorites-btn,
-body.is-mobile-hud .world-gate-readonly-pill {
+/* Unified On-Screen Menu Icon-Only Stack (Full Screen, Outside ON/OFF, Favorites, Gates) across Desktop, Mobile & APK */
+.world-fs-floating-btn,
+.world-outside-chat-btn,
+.world-favorites-btn,
+.world-gate-readonly-pill {
   width: 36px;
   height: 36px;
   padding: 0;
@@ -2815,22 +2815,57 @@ body.is-mobile-hud .world-gate-readonly-pill {
   right: 10px;
 }
 
-body.is-mobile-hud .world-fs-floating-btn {
+.world-fs-floating-btn {
   top: 8px;
 }
 
-body.is-mobile-hud .world-outside-chat-btn {
+.world-outside-chat-btn {
   top: 50px;
 }
 
-body.is-mobile-hud .world-favorites-btn {
+.world-favorites-btn {
   top: 92px;
   font-size: 1rem;
 }
 
-body.is-mobile-hud .world-gate-readonly-pill {
+.world-gate-readonly-pill {
   top: 134px;
   font-size: 1.05rem;
+}
+
+.world-walk-armtip {
+  position: absolute;
+  top: 40px;
+  left: 8px;
+  z-index: 17;
+  max-width: min(460px, calc(100% - 64px));
+  margin-bottom: 0;
+  padding: 6px 10px;
+  font-size: 0.74rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.world-container.is-fullscreen .world-walk-armtip {
+  top: 80px;
+}
+
+.world-walk-armtip-close {
+  border: none;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff6dc;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 /* Analog Touch Joystick & Bottom Chat Bar positioned low at bottom edge of 2D/3D screen */
@@ -2847,24 +2882,24 @@ body.is-mobile-hud .world-gate-readonly-pill {
   touch-action: none;
 }
 
-body.is-mobile-hud .world-container .world-joystick-wrap {
+.world-container .world-joystick-wrap {
   bottom: 24px;
   left: 12px;
 }
 
-body.is-mobile-hud .world-container .world-chat-bar {
+.world-container .world-chat-bar {
   left: 136px;
   right: 8px;
   bottom: 6px;
 }
 
-body.is-mobile-hud .world-container .world-chat-preview-3rows {
+.world-container .world-chat-preview-3rows {
   left: 136px;
   right: 8px;
   bottom: 44px;
 }
 
-body.is-mobile-hud .world-container .world-nearby-note {
+.world-container .world-nearby-note {
   left: 12px;
   right: auto;
   bottom: 118px;
@@ -2872,7 +2907,7 @@ body.is-mobile-hud .world-container .world-nearby-note {
   max-width: calc(100% - 24px);
 }
 
-body.is-mobile-hud .world-container .world-portal-prompt {
+.world-container .world-portal-prompt {
   bottom: 46px;
 }
 

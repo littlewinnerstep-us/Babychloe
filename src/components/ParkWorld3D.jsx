@@ -144,6 +144,32 @@ export default function ParkWorld3D({
   const [nearPortal, setNearPortal] = useState(false);
   const [nearSpeciesGate, setNearSpeciesGate] = useState(false);
   const [walkMessage, setWalkMessage] = useState('');
+  const [walkTipVisible, setWalkTipVisible] = useState(true);
+  const nativeFsRef = useRef(false);
+
+  const handleToggleFullScreen = () => {
+    setIsFullScreen((prev) => {
+      const next = !prev;
+      if (typeof document !== 'undefined') {
+        if (next) {
+          const el = document.documentElement;
+          if (el.requestFullscreen) {
+            el.requestFullscreen().then(() => { nativeFsRef.current = true; }).catch(() => {});
+          } else if (el.webkitRequestFullscreen) {
+            try { el.webkitRequestFullscreen(); nativeFsRef.current = true; } catch {}
+          }
+        } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+          nativeFsRef.current = false;
+          if (document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+          } else if (document.webkitExitFullscreen) {
+            try { document.webkitExitFullscreen(); } catch {}
+          }
+        }
+      }
+      return next;
+    });
+  };
 
   const pendingOpenGateRef = useRef(false);
   const openSpeciesGateRef = useRef(null);
@@ -320,6 +346,31 @@ export default function ParkWorld3D({
   useEffect(() => {
     camRef.current.preset = cameraMode;
   }, [cameraMode]);
+
+  useEffect(() => {
+    setWalkTipVisible(true);
+    const timer = setTimeout(() => setWalkTipVisible(false), 9000);
+    return () => clearTimeout(timer);
+  }, [isFullScreen]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const onFsChange = () => {
+      const active = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+      if (active) {
+        nativeFsRef.current = true;
+      } else if (nativeFsRef.current) {
+        nativeFsRef.current = false;
+        setIsFullScreen(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange);
+      document.removeEventListener('webkitfullscreenchange', onFsChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
@@ -912,7 +963,7 @@ export default function ParkWorld3D({
         // Subtle meadow grid lines
         ctx.strokeStyle = 'rgba(255,255,255,0.06)';
         ctx.lineWidth = 1;
-        for (let gx = -500; gx <= 500; gx += 100) {
+        for (let gx = -900; gx <= 900; gx += 100) {
           const a = project3D(gx, 0, -360);
           const b = project3D(gx, 0, maxZ);
           if (a && b) {
@@ -1966,7 +2017,7 @@ export default function ParkWorld3D({
   const worldHudNode = (
     <WorldHudBar
       isFullScreen={isFullScreen}
-      onToggleFullScreen={() => setIsFullScreen((fs) => !fs)}
+      onToggleFullScreen={handleToggleFullScreen}
       allMemorials={allMemorials}
       activeSpecies={activeSpecies}
       nearbyMemorialId={nearbyMemorialId}
@@ -1994,7 +2045,7 @@ export default function ParkWorld3D({
     />
   );
 
-  const mobileHud = Boolean(isMobileHud || isApk);
+  const mobileHud = true;
 
   return (
     <div className={`world-container ${isFullScreen ? 'is-fullscreen' : ''}`}>
@@ -2007,12 +2058,11 @@ export default function ParkWorld3D({
         <button
           type="button"
           className="world-fs-floating-btn"
-          onClick={() => setIsFullScreen((fs) => !fs)}
+          onClick={handleToggleFullScreen}
           aria-label={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
           title={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
         >
-          {isFullScreen ? <Minimize2 size={mobileHud ? 16 : 13} /> : <Maximize2 size={mobileHud ? 16 : 13} />}
-          {!mobileHud && (isFullScreen ? 'Exit Full' : 'Full Screen')}
+          {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
         </button>
         <canvas
           ref={canvasRef}
@@ -2031,9 +2081,30 @@ export default function ParkWorld3D({
             : `🧊 3D ${activeSpecies} Tombstone Garden`}
           <span className="world-hint-text">
             {' '}
-            • Drag to orbit 3D camera • Tap ground/monument or use D-pad / WASD
+            • Walk with WASD / Arrow keys / Mouse click &amp; drag or Joystick
           </span>
         </div>
+
+        {walkTipVisible && (
+          <div
+            className="armtip-notif world-walk-armtip"
+            role="status"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span>
+              💡 Walk around using <strong>WASD</strong> or <strong>Arrow</strong> keyboard, click/drag with <strong>Mouse</strong>, or use the <strong>Joystick</strong>!
+            </span>
+            <button
+              type="button"
+              className="world-walk-armtip-close"
+              onClick={() => setWalkTipVisible(false)}
+              aria-label="Close walk tip"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {walkMessage && (
           <div className="world-toast">

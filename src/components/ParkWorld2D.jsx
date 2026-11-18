@@ -156,6 +156,32 @@ export default function ParkWorld2D({
   const [nearPortal, setNearPortal] = useState(false);
   const [nearSpeciesGate, setNearSpeciesGate] = useState(false);
   const [walkMessage, setWalkMessage] = useState('');
+  const [walkTipVisible, setWalkTipVisible] = useState(true);
+  const nativeFsRef = useRef(false);
+
+  const handleToggleFullScreen = () => {
+    setIsFullScreen((prev) => {
+      const next = !prev;
+      if (typeof document !== 'undefined') {
+        if (next) {
+          const el = document.documentElement;
+          if (el.requestFullscreen) {
+            el.requestFullscreen().then(() => { nativeFsRef.current = true; }).catch(() => {});
+          } else if (el.webkitRequestFullscreen) {
+            try { el.webkitRequestFullscreen(); nativeFsRef.current = true; } catch {}
+          }
+        } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+          nativeFsRef.current = false;
+          if (document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+          } else if (document.webkitExitFullscreen) {
+            try { document.webkitExitFullscreen(); } catch {}
+          }
+        }
+      }
+      return next;
+    });
+  };
 
   const pendingOpenGateRef = useRef(false);
   const openSpeciesGateRef = useRef(null);
@@ -262,6 +288,31 @@ export default function ParkWorld2D({
   useEffect(() => {
     memorialsRef.current = memorials;
   }, [memorials]);
+
+  useEffect(() => {
+    setWalkTipVisible(true);
+    const timer = setTimeout(() => setWalkTipVisible(false), 9000);
+    return () => clearTimeout(timer);
+  }, [isFullScreen]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const onFsChange = () => {
+      const active = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+      if (active) {
+        nativeFsRef.current = true;
+      } else if (nativeFsRef.current) {
+        nativeFsRef.current = false;
+        setIsFullScreen(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange);
+      document.removeEventListener('webkitfullscreenchange', onFsChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
@@ -748,17 +799,21 @@ export default function ParkWorld2D({
         }
       }
 
-      // Camera centering (clamped to world bounds)
+      // Camera centering & desktop full-screen edge-to-edge zoom
+      const zoom = Math.max(1, viewW / bounds.width, viewH / bounds.height);
+      const effW = viewW / zoom;
+      const effH = viewH / zoom;
       const camX =
-        bounds.width <= viewW
-          ? -(viewW - bounds.width) / 2
-          : Math.max(0, Math.min(bounds.width - viewW, p.x - viewW / 2));
+        bounds.width <= effW
+          ? -(effW - bounds.width) / 2
+          : Math.max(0, Math.min(bounds.width - effW, p.x - effW / 2));
       const camY =
-        bounds.height <= viewH
-          ? -(viewH - bounds.height) / 2
-          : Math.max(0, Math.min(bounds.height - viewH, p.y - viewH / 2));
+        bounds.height <= effH
+          ? -(effH - bounds.height) / 2
+          : Math.max(0, Math.min(bounds.height - effH, p.y - effH / 2));
 
       ctx.save();
+      ctx.scale(zoom, zoom);
       ctx.translate(-camX, -camY);
 
       const atm = atmosphereRef.current;
@@ -1215,8 +1270,8 @@ export default function ParkWorld2D({
           const offset = npcQuoteOffsetsRef.current[npc.id] || 0;
           const qIdx = (Math.floor(now / 9000) + idx + offset) % Math.max(1, qList.length);
           npcSpeechQueue2D.push({
-            x: nx - camX,
-            y: ny - camY - 26,
+            x: (nx - camX) * zoom,
+            y: (ny - camY - 26) * zoom,
             speaker: npc.name,
             text: qList[qIdx] || '',
           });
@@ -1587,17 +1642,20 @@ export default function ParkWorld2D({
     const bounds = { ...WORLD_BOUNDS[room], height: roomHeightRef.current };
     const p = playerRef.current;
 
+    const zoom = Math.max(1, viewW / bounds.width, viewH / bounds.height);
+    const effW = viewW / zoom;
+    const effH = viewH / zoom;
     const camX =
-      bounds.width <= viewW
-        ? -(viewW - bounds.width) / 2
-        : Math.max(0, Math.min(bounds.width - viewW, p.x - viewW / 2));
+      bounds.width <= effW
+        ? -(effW - bounds.width) / 2
+        : Math.max(0, Math.min(bounds.width - effW, p.x - effW / 2));
     const camY =
-      bounds.height <= viewH
-        ? -(viewH - bounds.height) / 2
-        : Math.max(0, Math.min(bounds.height - viewH, p.y - viewH / 2));
+      bounds.height <= effH
+        ? -(effH - bounds.height) / 2
+        : Math.max(0, Math.min(bounds.height - effH, p.y - effH / 2));
 
-    const worldX = clickX + camX;
-    const worldY = clickY + camY;
+    const worldX = clickX / zoom + camX;
+    const worldY = clickY / zoom + camY;
 
     // 1. Check if user clicked/tapped the Species Sanctuary Gate (East side at 1135, 410)
     if (worldX >= 1068 && worldX <= 1204 && worldY >= 335 && worldY <= 454) {
@@ -1677,7 +1735,7 @@ export default function ParkWorld2D({
   const worldHudNode = (
     <WorldHudBar
       isFullScreen={isFullScreen}
-      onToggleFullScreen={() => setIsFullScreen((fs) => !fs)}
+      onToggleFullScreen={handleToggleFullScreen}
       allMemorials={allMemorials}
       activeSpecies={activeSpecies}
       nearbyMemorialId={nearbyMemorialId}
@@ -1699,7 +1757,7 @@ export default function ParkWorld2D({
     />
   );
 
-  const mobileHud = Boolean(isMobileHud || isApk);
+  const mobileHud = true;
 
   return (
     <div className={`world-container ${isFullScreen ? 'is-fullscreen' : ''}`}>
@@ -1712,12 +1770,11 @@ export default function ParkWorld2D({
         <button
           type="button"
           className="world-fs-floating-btn"
-          onClick={() => setIsFullScreen((fs) => !fs)}
+          onClick={handleToggleFullScreen}
           aria-label={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
           title={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
         >
-          {isFullScreen ? <Minimize2 size={mobileHud ? 16 : 13} /> : <Maximize2 size={mobileHud ? 16 : 13} />}
-          {!mobileHud && (isFullScreen ? 'Exit Full' : 'Full Screen')}
+          {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
         </button>
         <canvas
           ref={canvasRef}
@@ -1730,8 +1787,29 @@ export default function ParkWorld2D({
           {activeRoom === 'ash-room'
             ? `🏛️ ${activeSpecies} Ash Room (Hall of Serenity)`
             : `🌿 ${activeSpecies} Tombstone Garden`}
-          <span className="world-hint-text"> • Tap ground/monument or use D-pad / WASD</span>
+          <span className="world-hint-text"> • Walk with WASD / Arrow keys / Mouse click or Joystick</span>
         </div>
+
+        {walkTipVisible && (
+          <div
+            className="armtip-notif world-walk-armtip"
+            role="status"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span>
+              💡 Walk around using <strong>WASD</strong> or <strong>Arrow</strong> keyboard, click ground with <strong>Mouse</strong>, or use the <strong>Joystick</strong>!
+            </span>
+            <button
+              type="button"
+              className="world-walk-armtip-close"
+              onClick={() => setWalkTipVisible(false)}
+              aria-label="Close walk tip"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* Toast / Walk Message */}
         {walkMessage && (
