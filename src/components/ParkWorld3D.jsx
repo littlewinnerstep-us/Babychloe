@@ -75,9 +75,10 @@ function loadAvatarPrefs() {
 }
 
 // 10 tombs max on left row + 10 tombs max on right row = 20 per row (10 rows = 200 max)
+// 135-unit column spacing & 250-unit row spacing leaves ~1 full tomb plot of empty space between plots
 const COLS_3D = [
-  -860, -780, -700, -620, -540, -460, -380, -300, -220, -140,
-  140, 220, 300, 380, 460, 540, 620, 700, 780, 860,
+  -1400, -1265, -1130, -995, -860, -725, -590, -455, -320, -185,
+  185, 320, 455, 590, 725, 860, 995, 1130, 1265, 1400,
 ];
 
 export default function ParkWorld3D({
@@ -510,14 +511,14 @@ export default function ParkWorld3D({
       const slot = Number.isFinite(n) && n >= 1 && n <= 200 ? n - 1 : Math.min(199, 20 + idx);
       const col = COLS_3D[slot % COLS_3D.length];
       const row = Math.floor(slot / COLS_3D.length);
-      list.push({ ...m, worldX: col, worldZ: -170 + row * 195 });
+      list.push({ ...m, worldX: col, worldZ: -170 + row * 250 });
     });
     ashNiches.forEach((m, idx) => {
       const n = parseInt((m.locationCode || '').match(/(\d+)\s*$/)?.[1] || '', 10);
       const slot = Number.isFinite(n) && n >= 1 && n <= 200 ? n - 1 : Math.min(199, 20 + idx);
       const col = COLS_3D[slot % COLS_3D.length];
       const row = Math.floor(slot / COLS_3D.length);
-      list.push({ ...m, worldX: col, worldZ: -170 + row * 195 });
+      list.push({ ...m, worldX: col, worldZ: -170 + row * 250 });
     });
     return list;
   }, [memorials]);
@@ -799,7 +800,7 @@ export default function ParkWorld3D({
 
       // Clamp 3D world bounds (expanding dynamically as more memorials are added)
       const maxZ = maxZRef.current;
-      p.x = Math.max(-950, Math.min(950, p.x));
+      p.x = Math.max(-1500, Math.min(1500, p.x));
       p.z = Math.max(-360, Math.min(maxZ, p.z));
 
       if (p.moving || p.history.length === 0) {
@@ -1090,7 +1091,7 @@ export default function ParkWorld3D({
         // Subtle meadow grid lines
         ctx.strokeStyle = 'rgba(255,255,255,0.06)';
         ctx.lineWidth = 1;
-        for (let gx = -900; gx <= 900; gx += 100) {
+        for (let gx = -1600; gx <= 1600; gx += 160) {
           const a = project3D(gx, 0, -360);
           const b = project3D(gx, 0, maxZ);
           if (a && b) {
@@ -1100,29 +1101,29 @@ export default function ParkWorld3D({
             ctx.stroke();
           }
         }
-        // Main Stone Walkway along Z
+        // Expanded Main Stone Walkway along Z
         const pathColor = atm === 'night' ? '#3d4952' : '#c6bea9';
         for (let pz = -330; pz < maxZ - 20; pz += 66) {
           drawGroundPoly(
             [
-              [-36, 0, pz],
-              [36, 0, pz],
-              [36, 0, pz + 66],
-              [-36, 0, pz + 66],
+              [-72, 0, pz],
+              [72, 0, pz],
+              [72, 0, pz + 66],
+              [-72, 0, pz + 66],
             ],
             pathColor,
             'rgba(0,0,0,0.12)'
           );
         }
-        // Cross paths
-        for (let cz = -150; cz < maxZ - 60; cz += 200) {
-          for (let px = -360; px < 360; px += 90) {
+        // Expanded Cross paths spanning all 10+10 columns
+        for (let cz = -45; cz < maxZ - 40; cz += 250) {
+          for (let px = -1440; px < 1440; px += 180) {
             drawGroundPoly(
               [
-                [px, 0, cz - 24],
-                [px + 90, 0, cz - 24],
-                [px + 90, 0, cz + 24],
-                [px, 0, cz + 24],
+                [px, 0, cz - 28],
+                [px + 180, 0, cz - 28],
+                [px + 180, 0, cz + 28],
+                [px, 0, cz + 28],
               ],
               pathColor,
               'rgba(0,0,0,0.08)'

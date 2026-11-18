@@ -67,15 +67,19 @@ function loadAvatarPrefs() {
   return DEFAULT_AVATAR;
 }
 
+const CENTER_X = 1400;
+const GATE_X = 2720;
+
 const WORLD_BOUNDS = {
-  tombstone: { width: 1200, height: 820, portalX: 600, portalY: 90 },
-  'ash-room': { width: 1200, height: 820, portalX: 600, portalY: 735 },
+  tombstone: { width: 2800, height: 820, portalX: CENTER_X, portalY: 90 },
+  'ash-room': { width: 2800, height: 820, portalX: CENTER_X, portalY: 735 },
 };
 
 // 10 tombs max on left row + 10 tombs max on right row = 20 per row (10 rows = 200 max)
+// 120px column spacing & 240px row spacing leaves ~1 full tomb plot of breathing room between plots
 const COLS_2D = [
-  60, 112, 164, 216, 268, 320, 372, 424, 476, 528,
-  672, 724, 776, 828, 880, 932, 984, 1036, 1088, 1140,
+  140, 260, 380, 500, 620, 740, 860, 980, 1100, 1220,
+  1580, 1700, 1820, 1940, 2060, 2180, 2300, 2420, 2540, 2660,
 ];
 
 function drawRoundedRect(ctx, x, y, w, h, r) {
@@ -215,11 +219,11 @@ export default function ParkWorld2D({
     pendingOpenIdRef.current = null;
     pendingTargetSpeciesRef.current = targetSpecies;
     p.targetMemorialId = null;
-    if (Math.hypot(p.x - 1135, p.y - 410) < 54) {
-      p.x = 1020;
+    if (Math.hypot(p.x - GATE_X, p.y - 410) < 54) {
+      p.x = GATE_X - 115;
       p.y = 410;
     }
-    p.targetX = 1135;
+    p.targetX = GATE_X;
     p.targetY = 410;
     setWalkMessage(`Walking to ${getSpeciesEmoji(targetSpecies)} ${targetSpecies} Gates...`);
     setTimeout(() => setWalkMessage(''), 2600);
@@ -255,7 +259,7 @@ export default function ParkWorld2D({
   }, [inspectedId, onRecordVisit]);
 
   const playerRef = useRef({
-    x: 600 + getLocalSpawnOffset(),
+    x: CENTER_X + getLocalSpawnOffset(),
     y: activeRoom === 'ash-room' ? 660 : 540,
     facingX: 0,
     facingY: 1,
@@ -409,7 +413,7 @@ export default function ParkWorld2D({
         spawnFloatingParticles(target.worldX, target.worldY - 22, remoteWorldEvent.emoji || '✨', 6);
       }
     } else if (Number.isFinite(remoteWorldEvent.nx) && Number.isFinite(remoteWorldEvent.nz)) {
-      spawnFloatingParticles(600 + remoteWorldEvent.nx, 410 + remoteWorldEvent.nz - 16, remoteWorldEvent.emoji || '✨', 6);
+      spawnFloatingParticles(CENTER_X + remoteWorldEvent.nx, 410 + remoteWorldEvent.nz - 16, remoteWorldEvent.emoji || '✨', 6);
     }
     if (remoteWorldEvent.text) {
       setWalkMessage(remoteWorldEvent.text);
@@ -427,7 +431,7 @@ export default function ParkWorld2D({
       p.targetY = null;
       p.targetMemorialId = null;
       p.portalCooldownUntil = performance.now() + 900;
-      p.x = 600 + getLocalSpawnOffset();
+      p.x = CENTER_X + getLocalSpawnOffset();
       p.y = roomRef.current === 'ash-room' ? 665 : 165;
       p.facingX = 0;
       p.facingY = roomRef.current === 'ash-room' ? -1 : 1;
@@ -440,7 +444,7 @@ export default function ParkWorld2D({
       name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
       room: roomRef.current,
       species: activeSpecies,
-      nx: p.x - 600,
+      nx: p.x - CENTER_X,
       nz: p.y - 410,
       facingX: p.facingX,
       facingZ: p.facingY,
@@ -469,10 +473,10 @@ export default function ParkWorld2D({
       p.targetMemorialId = null;
       p.portalCooldownUntil = performance.now() + 900;
       if (activeRoom === 'ash-room') {
-        p.x = 600 + getLocalSpawnOffset();
+        p.x = CENTER_X + getLocalSpawnOffset();
         p.y = 665;
       } else {
-        p.x = 600 + getLocalSpawnOffset();
+        p.x = CENTER_X + getLocalSpawnOffset();
         p.y = 165;
       }
       p.history = [];
@@ -518,14 +522,14 @@ export default function ParkWorld2D({
       const slot = Number.isFinite(n) && n >= 1 && n <= 200 ? n - 1 : Math.min(199, 20 + idx);
       const col = COLS_2D[slot % COLS_2D.length];
       const row = Math.floor(slot / COLS_2D.length);
-      map.push({ ...m, worldX: col, worldY: 220 + row * 195 });
+      map.push({ ...m, worldX: col, worldY: 220 + row * 240 });
     });
     ashNiches.forEach((m, idx) => {
       const n = parseInt((m.locationCode || '').match(/(\d+)\s*$/)?.[1] || '', 10);
       const slot = Number.isFinite(n) && n >= 1 && n <= 200 ? n - 1 : Math.min(199, 20 + idx);
       const col = COLS_2D[slot % COLS_2D.length];
       const row = Math.floor(slot / COLS_2D.length);
-      map.push({ ...m, worldX: col, worldY: 200 + row * 195 });
+      map.push({ ...m, worldX: col, worldY: 200 + row * 240 });
     });
     return map;
   }, [memorials]);
@@ -608,7 +612,7 @@ export default function ParkWorld2D({
       const p = playerRef.current;
       const bounds = WORLD_BOUNDS[roomRef.current] || WORLD_BOUNDS.tombstone;
       p.portalCooldownUntil = performance.now() + 900;
-      p.targetX = Math.max(46, Math.min(bounds.width - 46, 600 + (peer.nx || 0) + 34));
+      p.targetX = Math.max(46, Math.min(bounds.width - 46, CENTER_X + (peer.nx || 0) + 34));
       p.targetY = Math.max(66, Math.min(bounds.height - 40, 410 + (peer.nz || 0) + 28));
       p.targetMemorialId = null;
       setWalkMessage(`Walking to ${peer.name}...`);
@@ -803,7 +807,7 @@ export default function ParkWorld2D({
         name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
         room,
         species: speciesRef.current,
-        nx: p.x - 600,
+        nx: p.x - CENTER_X,
         nz: p.y - 410,
         facingX: p.facingX,
         facingZ: p.facingY,
@@ -825,7 +829,7 @@ export default function ParkWorld2D({
         setNearPortal(isNearPortalNow);
       }
 
-      const gateDist = Math.hypot(p.x - 1135, p.y - 410);
+      const gateDist = Math.hypot(p.x - GATE_X, p.y - 410);
       const isNearGateNow = gateDist < 92;
       if (isNearGateNow !== nearGateRef.current) {
         nearGateRef.current = isNearGateNow;
@@ -839,7 +843,7 @@ export default function ParkWorld2D({
         speciesRef.current = nextSpecies;
         p.targetX = null;
         p.targetY = null;
-        p.x = 600 + getLocalSpawnOffset();
+        p.x = CENTER_X + getLocalSpawnOffset();
         p.y = room === 'ash-room' ? 665 : 165;
         p.facingX = 0;
         p.facingY = room === 'ash-room' ? -1 : 1;
@@ -848,7 +852,7 @@ export default function ParkWorld2D({
           name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
           room,
           species: nextSpecies,
-          nx: p.x - 600,
+          nx: p.x - CENTER_X,
           nz: p.y - 410,
           facingX: p.facingX,
           facingZ: p.facingY,
@@ -879,10 +883,10 @@ export default function ParkWorld2D({
         p.targetX = null;
         p.targetY = null;
         if (nextRoom === 'ash-room') {
-          p.x = 600 + getLocalSpawnOffset();
+          p.x = CENTER_X + getLocalSpawnOffset();
           p.y = 665;
         } else {
-          p.x = 600 + getLocalSpawnOffset();
+          p.x = CENTER_X + getLocalSpawnOffset();
           p.y = 165;
         }
         p.history = [];
@@ -890,7 +894,7 @@ export default function ParkWorld2D({
           name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
           room: nextRoom,
           species: speciesRef.current,
-          nx: p.x - 600,
+          nx: p.x - CENTER_X,
           nz: p.y - 410,
           facingX: p.facingX,
           facingZ: p.facingY,
@@ -963,32 +967,30 @@ export default function ParkWorld2D({
         ctx.fillStyle = grassGrad;
         ctx.fillRect(0, 0, bounds.width, bounds.height);
 
-        // Winding stone paths
+        // Expanded stone roads & cross paths
         ctx.strokeStyle = atm === 'night' ? '#36434c' : '#b7b09c';
-        ctx.lineWidth = 46;
+        ctx.lineWidth = 86;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
-        ctx.moveTo(600, 95);
-        ctx.lineTo(600, 760);
-        ctx.moveTo(220, 290);
-        ctx.lineTo(980, 290);
-        ctx.moveTo(200, 505);
-        ctx.lineTo(1000, 505);
-        ctx.moveTo(140, 680);
-        ctx.lineTo(1060, 680);
+        ctx.moveTo(CENTER_X, 95);
+        ctx.lineTo(CENTER_X, Math.max(760, curH - 60));
+        for (let cy = 330; cy < curH - 80; cy += 240) {
+          ctx.moveTo(120, cy);
+          ctx.lineTo(bounds.width - 120, cy);
+        }
         ctx.stroke();
 
         // Inner path texture
         ctx.strokeStyle = atm === 'night' ? '#46545f' : '#cfc7b2';
-        ctx.lineWidth = 34;
+        ctx.lineWidth = 68;
         ctx.stroke();
 
         // Tranquil reflection pond
         ctx.save();
         ctx.beginPath();
-        ctx.ellipse(600, 415, 118, 56, 0, 0, Math.PI * 2);
-        const pondGrad = ctx.createRadialGradient(600, 405, 10, 600, 415, 120);
+        ctx.ellipse(CENTER_X, 415, 138, 62, 0, 0, Math.PI * 2);
+        const pondGrad = ctx.createRadialGradient(CENTER_X, 405, 10, CENTER_X, 415, 140);
         pondGrad.addColorStop(0, atm === 'night' ? '#2c5a73' : '#74b3c8');
         pondGrad.addColorStop(1, atm === 'night' ? '#163142' : '#43798c');
         ctx.fillStyle = pondGrad;
@@ -1129,15 +1131,15 @@ export default function ParkWorld2D({
 
         // Gold-bordered Crimson Sanctuary Runner
         ctx.fillStyle = '#5c262a';
-        ctx.fillRect(540, 120, 120, 610);
+        ctx.fillRect(CENTER_X - 80, 120, 160, Math.max(610, curH - 180));
         ctx.strokeStyle = '#d4a853';
         ctx.lineWidth = 3;
-        ctx.strokeRect(544, 124, 112, 602);
-        ctx.fillRect(160, 355, 880, 74);
-        ctx.strokeRect(164, 359, 872, 66);
+        ctx.strokeRect(CENTER_X - 76, 124, 152, Math.max(602, curH - 188));
+        ctx.fillRect(140, 355, bounds.width - 280, 82);
+        ctx.strokeRect(144, 359, bounds.width - 288, 74);
 
         // Central Bronze Incense Brazier Altar
-        const ax = 600;
+        const ax = CENTER_X;
         const ay = 392;
         const altarGlow = ctx.createRadialGradient(ax, ay, 8, ax, ay, 85);
         altarGlow.addColorStop(0, 'rgba(255, 196, 108, 0.45)');
@@ -1408,21 +1410,21 @@ export default function ParkWorld2D({
       // Species Sanctuary Gate (East side at 1135, 410)
       ctx.save();
       ctx.fillStyle = '#943030';
-      ctx.fillRect(1114, 382, 10, 56);
-      ctx.fillRect(1148, 382, 10, 56);
+      ctx.fillRect(GATE_X - 21, 382, 10, 56);
+      ctx.fillRect(GATE_X + 13, 382, 10, 56);
       ctx.fillStyle = '#b84242';
-      drawRoundedRect(ctx, 1104, 374, 64, 12, 5);
+      drawRoundedRect(ctx, GATE_X - 31, 374, 64, 12, 5);
       ctx.fill();
       ctx.strokeStyle = '#ffd57e';
       ctx.lineWidth = 1.4;
       ctx.stroke();
       ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
       ctx.fillStyle = 'rgba(20, 16, 18, 0.88)';
-      drawRoundedRect(ctx, 1082, 348, 108, 19, 6);
+      drawRoundedRect(ctx, GATE_X - 53, 348, 108, 19, 6);
       ctx.fill();
       ctx.fillStyle = '#ffe5ad';
       ctx.textAlign = 'center';
-      ctx.fillText('⛩️ Other Species', 1136, 361);
+      ctx.fillText('⛩️ Other Species', GATE_X + 1, 361);
       ctx.restore();
 
       // ====================
@@ -1435,7 +1437,7 @@ export default function ParkWorld2D({
         peer.rz += (peer.nz - peer.rz) * Math.min(1, dt * 10);
         if (peer.moving) peer.bob = (peer.bob || 0) + dt * 12;
 
-        const px = 600 + peer.rx;
+        const px = CENTER_X + peer.rx;
         const py = 410 + peer.rz;
         const pAv = peer.avatar || DEFAULT_AVATAR;
         const pBob = peer.moving ? Math.abs(Math.sin(peer.bob || 0)) * 4 : 0;
@@ -1784,7 +1786,7 @@ export default function ParkWorld2D({
     const worldY = clickY / zoom + camY;
 
     // 1. Check if user clicked/tapped the Species Sanctuary Gate (East side at 1135, 410)
-    if (worldX >= 1068 && worldX <= 1204 && worldY >= 335 && worldY <= 454) {
+    if (worldX >= GATE_X - 67 && worldX <= GATE_X + 69 && worldY >= 335 && worldY <= 454) {
       walkOrOpenSpeciesGate();
       return;
     }
