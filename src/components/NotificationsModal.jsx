@@ -1,20 +1,42 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, Bell } from 'lucide-react';
 
 export default function NotificationsModal({
   notifications = [],
   readIds = [],
   groupInvites = [],
+  friendRequests = { incoming: [], outgoing: [] },
   onAcceptInvite,
   onIgnoreInvite,
+  onAcceptFriendRequest,
+  onIgnoreFriendRequest,
+  onCancelFriendRequest,
   onClose,
 }) {
   const [categoryFilter, setCategoryFilter] = useState('All');
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 15000);
+    return () => clearInterval(t);
+  }, []);
 
   const formatMinsLeft = (expiresAt) => {
     const mins = Math.max(1, Math.ceil((Number(expiresAt || 0) - Date.now()) / 60000));
     return `${mins}m`;
   };
+
+  const formatCountdown24h = (expiresAt) => {
+    const diffMs = Math.max(0, Number(expiresAt || 0) - Date.now());
+    const totalMins = Math.max(1, Math.ceil(diffMs / 60000));
+    const hours = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
+    if (hours > 0) return `${hours}h ${mins}m left`;
+    return `${mins}m left`;
+  };
+
+  const incomingReqs = friendRequests?.incoming || [];
+  const outgoingReqs = friendRequests?.outgoing || [];
 
   const filtered = useMemo(() => {
     if (categoryFilter === 'All') return notifications;
@@ -56,6 +78,94 @@ export default function NotificationsModal({
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '55vh', overflowY: 'auto' }}>
+          {incomingReqs.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="field-label" style={{ marginBottom: 0 }}>
+                🤝 Friend Requests ({incomingReqs.length})
+              </div>
+              {incomingReqs.map((req) => (
+                <div
+                  key={req.id}
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 12,
+                    background: 'var(--bg-elevated)',
+                    border: '1.5px solid #aeeac0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.8rem' }}>
+                    <strong>🤝 {req.fromName} wants to add you as a friend</strong>
+                    <span style={{ color: '#ffd57e', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+                      ⏱ {formatCountdown24h(req.expiresAt)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ padding: '5px 12px', fontSize: '0.76rem' }}
+                      onClick={() => onAcceptFriendRequest && onAcceptFriendRequest(req.id)}
+                    >
+                      ✅ Accept
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      style={{ padding: '5px 12px', fontSize: '0.76rem' }}
+                      onClick={() => onIgnoreFriendRequest && onIgnoreFriendRequest(req.id)}
+                    >
+                      ✖️ Ignore
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {outgoingReqs.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div className="field-label" style={{ marginBottom: 0 }}>
+                ⏳ Sent Friend Requests ({outgoingReqs.length})
+              </div>
+              {outgoingReqs.map((req) => (
+                <div
+                  key={req.id}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 12,
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-soft)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                    fontSize: '0.78rem',
+                  }}
+                >
+                  <div>
+                    <span>Waiting for <strong>{req.toName || req.toUsername}</strong></span>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      ⏱ Auto-cancels in {formatCountdown24h(req.expiresAt)}
+                    </div>
+                  </div>
+                  {onCancelFriendRequest && (
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      style={{ padding: '4px 9px', fontSize: '0.72rem' }}
+                      onClick={() => onCancelFriendRequest(req.id)}
+                    >
+                      ✖️ Cancel
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {groupInvites.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div className="field-label" style={{ marginBottom: 0 }}>

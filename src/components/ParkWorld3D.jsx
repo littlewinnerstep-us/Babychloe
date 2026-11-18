@@ -105,6 +105,7 @@ export default function ParkWorld3D({
   favorites = [],
   showOnlyFavorites = false,
   friends = [],
+  friendRequests = { incoming: [], outgoing: [] },
   groupInvites = [],
   accountsList = [],
   remoteWorldEvent = null,
@@ -113,6 +114,9 @@ export default function ParkWorld3D({
   onToggleShowFavorites,
   onToggleFavorite,
   onToggleFriend,
+  onAcceptFriendRequest,
+  onIgnoreFriendRequest,
+  onCancelFriendRequest,
   onInviteFriendToGroup,
   onAcceptInvite,
   onIgnoreInvite,
@@ -2347,6 +2351,7 @@ export default function ParkWorld3D({
           showOutsideChat={showOutsideChat}
           favorites={favorites}
           friends={friends}
+          friendRequests={friendRequests}
           groupInvites={groupInvites}
           accountsList={accountsList}
           currentUser={currentUser}
@@ -2359,6 +2364,9 @@ export default function ParkWorld3D({
           showOnlyFavorites={showOnlyFavorites}
           onToggleShowFavorites={onToggleShowFavorites}
           onToggleFriend={onToggleFriend}
+          onAcceptFriendRequest={onAcceptFriendRequest}
+          onIgnoreFriendRequest={onIgnoreFriendRequest}
+          onCancelFriendRequest={onCancelFriendRequest}
           onInviteFriendToGroup={onInviteFriendToGroup}
           onAcceptInvite={onAcceptInvite}
           onIgnoreInvite={onIgnoreInvite}

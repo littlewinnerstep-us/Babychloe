@@ -14,6 +14,7 @@ const ADMIN_CONFIG_TOPIC = 'evergreen-paws-park/v2/admin/config';
 const ADMIN_NOTIF_TOPIC_PREFIX = 'evergreen-paws-park/v2/admin/notif/';
 const GROUP_TOPIC_PREFIX = 'evergreen-paws-park/v2/group/';
 const GROUP_INVITE_TOPIC_PREFIX = 'evergreen-paws-park/v2/group-invite/';
+const FRIEND_REQ_TOPIC_PREFIX = 'evergreen-paws-park/v2/friend-req/';
 const STORAGE_ROOM_KEY = 'evergreen_paws_meetup_room_v1';
 const STORAGE_NICKNAME_KEY = 'evergreen_paws_nickname_v1';
 const STORAGE_ONLINE_KEY = 'evergreen_paws_mp_online_v1';
@@ -23,9 +24,12 @@ const STORAGE_ADMIN_NOTIFS_KEY = 'evergreen_paws_admin_notifs_v1';
 const STORAGE_GROUP_KEY = 'evergreen_paws_group_v1';
 const STORAGE_GROUP_CHAT_KEY = 'evergreen_paws_group_chat_v1';
 const STORAGE_GROUP_INVITES_KEY = 'evergreen_paws_group_invites_v1';
+const STORAGE_FRIEND_REQS_IN_KEY = 'evergreen_paws_friend_reqs_in_v1';
+const STORAGE_FRIEND_REQS_OUT_KEY = 'evergreen_paws_friend_reqs_out_v1';
 const PEER_TIMEOUT_MS = 45000;
 export const GROUP_MSG_TTL_MS = 23 * 60 * 1000;
 export const GROUP_INVITE_TTL_MS = 30 * 60 * 1000;
+export const FRIEND_REQ_TTL_MS = 24 * 60 * 60 * 1000;
 const STARTER_IDS = new Set(['mem-barnaby', 'mem-mochi', 'mem-koda', 'mem-clover', 'mem-luna', 'mem-yuzu', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6']);
 
 const myPeerId = `mp_${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`;
@@ -208,6 +212,9 @@ let groupChatMessages = (() => {
 
 let currentUserIdentity = { username: '', name: '' };
 const groupInvitesMap = new Map(); // id -> invite
+const incomingFriendReqsMap = new Map(); // id -> friend request
+const outgoingFriendReqsMap = new Map(); // id -> friend request
+const handledFriendRespIds = new Set();
 
 (() => {
   try {
@@ -220,6 +227,30 @@ const groupInvitesMap = new Map(); // id -> invite
           arr.forEach((inv) => {
             if (inv && inv.id && Number(inv.expiresAt) > now) {
               groupInvitesMap.set(inv.id, inv);
+            }
+          });
+        }
+      }
+      const rawIn = localStorage.getItem(STORAGE_FRIEND_REQS_IN_KEY);
+      if (rawIn) {
+        const arrIn = JSON.parse(rawIn);
+        if (Array.isArray(arrIn)) {
+          const now = Date.now();
+          arrIn.forEach((req) => {
+            if (req && req.id && Number(req.expiresAt) > now) {
+              incomingFriendReqsMap.set(req.id, req);
+            }
+          });
+        }
+      }
+      const rawOut = localStorage.getItem(STORAGE_FRIEND_REQS_OUT_KEY);
+      if (rawOut) {
+        const arrOut = JSON.parse(rawOut);
+        if (Array.isArray(arrOut)) {
+          const now = Date.now();
+          arrOut.forEach((req) => {
+            if (req && req.id && Number(req.expiresAt) > now) {
+              outgoingFriendReqsMap.set(req.id, req);
             }
           });
         }
@@ -242,6 +273,8 @@ let callbacks = {
   onGroupChange: null,
   onAccountsChange: null,
   onGroupInvitesChange: null,
+  onFriendRequestsChange: null,
+  onFriendRequestAccepted: null,
 };
 
 const peersMap = new Map(); // peerId -> peer state
@@ -594,6 +627,43 @@ function handleIncomingPayload(msg) {
     return;
   }
 
+  if (msg.type === 'friend_request' && msg.request && msg.request.id) {
+    const req = msg.request;
+    const now = Date.now();
+    if (!Number.isFinite(req.expiresAt) || req.expiresAt <= now) {
+      incomingFriendReqsMap.delete(req.id);
+      outgoingFriendReqsMap.delete(req.id);
+      persistFriendRequests();
+      notifyFriendRequestsChanged();
+      return;
+    }
+    if (!isInviteTargetedToMe(req)) return;
+    if (handledFriendRespIds.has(req.id)) return;
+    incomingFriendReqsMap.set(req.id, req);
+    persistFriendRequests();
+    notifyFriendRequestsChanged();
+    return;
+  }
+
+  if (msg.type === 'friend_request_response' && msg.requestId) {
+    const req = msg.request || outgoingFriendReqsMap.get(msg.requestId) || incomingFriendReqsMap.get(msg.requestId);
+    const hadOutgoing = outgoingFriendReqsMap.delete(msg.requestId);
+    const hadIncoming = incomingFriendReqsMap.delete(msg.requestId);
+    if (hadOutgoing || hadIncoming) {
+      persistFriendRequests();
+      notifyFriendRequestsChanged();
+    }
+    if (msg.status === 'accepted' && req && (hadOutgoing || isInviteFromMe(req)) && !handledFriendRespIds.has(msg.requestId)) {
+      handledFriendRespIds.add(msg.requestId);
+      if (typeof callbacks.onFriendRequestAccepted === 'function') {
+        callbacks.onFriendRequestAccepted(req);
+      }
+    } else if (msg.status === 'ignored' || msg.status === 'cancelled' || msg.status === 'expired') {
+      handledFriendRespIds.add(msg.requestId);
+    }
+    return;
+  }
+
   if (msg.type === 'group_chat') {
     if (!activeGroup || !msg.groupId || msg.groupId !== activeGroup.id) return;
     if (!isOnlineMode) return;
@@ -784,6 +854,7 @@ function processMqttBuffer(entry) {
         entry.ws.send(buildMqttSubscribe(5, ADMIN_CONFIG_TOPIC));
         entry.ws.send(buildMqttSubscribe(6, `${ADMIN_NOTIF_TOPIC_PREFIX}+`));
         entry.ws.send(buildMqttSubscribe(8, `${GROUP_INVITE_TOPIC_PREFIX}+`));
+        entry.ws.send(buildMqttSubscribe(9, `${FRIEND_REQ_TOPIC_PREFIX}+`));
         if (activeGroup?.id) {
           entry.ws.send(buildMqttSubscribe(7, `${GROUP_TOPIC_PREFIX}${activeGroup.id}`));
         }
@@ -925,6 +996,7 @@ export function initMultiplayer(nextCallbacks = {}) {
       if (changed) notifyPeersChanged();
       pruneExpiredGroupMessages();
       pruneExpiredGroupInvites();
+      pruneExpiredFriendRequests();
     }, 3000);
   }
 
@@ -1354,6 +1426,21 @@ function isInviteTargetedToMe(inv) {
   return false;
 }
 
+function isInviteFromMe(inv) {
+  if (!inv) return false;
+  if (inv.fromPeerId && inv.fromPeerId === myPeerId) return true;
+  const fromUser = String(inv.fromUsername || '').trim().toLowerCase();
+  const fromName = String(inv.fromName || '').trim().toLowerCase();
+  const myUser = String(currentUserIdentity.username || '').trim().toLowerCase();
+  const myFull = String(currentUserIdentity.name || '').trim().toLowerCase();
+  const myFirst = myFull.split(/\s+/)[0] || '';
+  const localFirst = String(localState.name || '').trim().toLowerCase();
+  if (myUser && (fromUser === myUser || fromName === myUser)) return true;
+  if (myFull && (fromName === myFull || fromName === myFirst || fromUser === myFull)) return true;
+  if (!myUser && !myFull && localFirst && localFirst !== 'visitor' && fromName === localFirst) return true;
+  return false;
+}
+
 export function setCurrentUserIdentity(user) {
   currentUserIdentity = {
     username: String(user?.username || '').trim(),
@@ -1361,6 +1448,8 @@ export function setCurrentUserIdentity(user) {
   };
   pruneExpiredGroupInvites();
   notifyGroupInvitesChanged();
+  pruneExpiredFriendRequests();
+  notifyFriendRequestsChanged();
 }
 
 export function getPendingGroupInvites() {
@@ -1435,6 +1524,212 @@ export function ignoreGroupInvite(inviteId) {
     persistGroupInvites();
     notifyGroupInvitesChanged();
   }
+}
+
+function persistFriendRequests() {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(
+        STORAGE_FRIEND_REQS_IN_KEY,
+        JSON.stringify(Array.from(incomingFriendReqsMap.values()))
+      );
+      localStorage.setItem(
+        STORAGE_FRIEND_REQS_OUT_KEY,
+        JSON.stringify(Array.from(outgoingFriendReqsMap.values()))
+      );
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function notifyFriendRequestsChanged() {
+  if (typeof callbacks.onFriendRequestsChange === 'function') {
+    const now = Date.now();
+    const incoming = Array.from(incomingFriendReqsMap.values())
+      .filter((r) => r && r.expiresAt > now)
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const outgoing = Array.from(outgoingFriendReqsMap.values())
+      .filter((r) => r && r.expiresAt > now)
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    callbacks.onFriendRequestsChange({ incoming, outgoing });
+  }
+}
+
+export function pruneExpiredFriendRequests() {
+  const now = Date.now();
+  let removed = false;
+  for (const [id, req] of incomingFriendReqsMap.entries()) {
+    if (!req || !Number.isFinite(req.expiresAt) || req.expiresAt <= now) {
+      incomingFriendReqsMap.delete(id);
+      removed = true;
+    }
+  }
+  for (const [id, req] of outgoingFriendReqsMap.entries()) {
+    if (!req || !Number.isFinite(req.expiresAt) || req.expiresAt <= now) {
+      outgoingFriendReqsMap.delete(id);
+      removed = true;
+    }
+  }
+  if (removed) {
+    persistFriendRequests();
+    notifyFriendRequestsChanged();
+  }
+}
+
+export function getPendingFriendRequests() {
+  pruneExpiredFriendRequests();
+  const now = Date.now();
+  return {
+    incoming: Array.from(incomingFriendReqsMap.values())
+      .filter((r) => r && r.expiresAt > now)
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
+    outgoing: Array.from(outgoingFriendReqsMap.values())
+      .filter((r) => r && r.expiresAt > now)
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
+  };
+}
+
+export function sendFriendRequest({
+  toName = '',
+  toUsername = '',
+  toPeerId = '',
+  fromName = '',
+  fromUsername = '',
+} = {}) {
+  const cleanTargetName = String(toName || toUsername || '').trim();
+  const cleanTargetUser = String(toUsername || '').trim();
+  if (!cleanTargetName && !toPeerId) {
+    return { ok: false, error: 'Friend name or username is required.' };
+  }
+  const senderLabel = String(fromName || localState.name || 'Visitor').trim() || 'Visitor';
+  const senderUser = String(fromUsername || currentUserIdentity.username || '').trim();
+  const targetKey = (cleanTargetUser || cleanTargetName).toLowerCase();
+
+  for (const [existingId, existingReq] of outgoingFriendReqsMap.entries()) {
+    const exName = String(existingReq?.toName || '').trim().toLowerCase();
+    const exUser = String(existingReq?.toUsername || '').trim().toLowerCase();
+    if (exName === cleanTargetName.toLowerCase() || (targetKey && (exUser === targetKey || exName === targetKey))) {
+      outgoingFriendReqsMap.delete(existingId);
+    }
+  }
+
+  const now = Date.now();
+  seqCounter += 1;
+  const id = `freq-${now}-${myPeerId}-${seqCounter}`;
+  const request = {
+    id,
+    fromName: senderLabel,
+    fromUsername: senderUser,
+    fromPeerId: myPeerId,
+    toName: cleanTargetName,
+    toUsername: cleanTargetUser,
+    toPeerId: String(toPeerId || '').trim(),
+    createdAt: now,
+    expiresAt: now + FRIEND_REQ_TTL_MS,
+  };
+
+  outgoingFriendReqsMap.set(id, request);
+  persistFriendRequests();
+  notifyFriendRequestsChanged();
+
+  const payload = {
+    type: 'friend_request',
+    peerId: myPeerId,
+    msgId: `${myPeerId}_${seqCounter}`,
+    ts: now,
+    request,
+  };
+  markSeen(payload.msgId);
+  broadcastGlobalTopic(`${FRIEND_REQ_TOPIC_PREFIX}${id}`, payload, true);
+  return { ok: true, request };
+}
+
+export function acceptFriendRequest(reqId) {
+  const req = incomingFriendReqsMap.get(reqId);
+  if (!req || req.expiresAt <= Date.now()) {
+    incomingFriendReqsMap.delete(reqId);
+    persistFriendRequests();
+    notifyFriendRequestsChanged();
+    return null;
+  }
+  incomingFriendReqsMap.delete(reqId);
+  handledFriendRespIds.add(reqId);
+  persistFriendRequests();
+  notifyFriendRequestsChanged();
+
+  seqCounter += 1;
+  const payload = {
+    type: 'friend_request_response',
+    peerId: myPeerId,
+    msgId: `${myPeerId}_${seqCounter}`,
+    ts: Date.now(),
+    requestId: reqId,
+    status: 'accepted',
+    request: req,
+  };
+  markSeen(payload.msgId);
+  broadcastGlobalTopic(`${FRIEND_REQ_TOPIC_PREFIX}${reqId}`, payload, true);
+  return req;
+}
+
+export function ignoreFriendRequest(reqId) {
+  const req = incomingFriendReqsMap.get(reqId);
+  const deleted = incomingFriendReqsMap.delete(reqId);
+  handledFriendRespIds.add(reqId);
+  if (deleted) {
+    persistFriendRequests();
+    notifyFriendRequestsChanged();
+  }
+  seqCounter += 1;
+  const payload = {
+    type: 'friend_request_response',
+    peerId: myPeerId,
+    msgId: `${myPeerId}_${seqCounter}`,
+    ts: Date.now(),
+    requestId: reqId,
+    status: 'ignored',
+    request: req || { id: reqId },
+  };
+  markSeen(payload.msgId);
+  broadcastGlobalTopic(`${FRIEND_REQ_TOPIC_PREFIX}${reqId}`, payload, true);
+}
+
+export function cancelOutgoingFriendRequest(reqIdOrName) {
+  const clean = String(reqIdOrName || '').trim();
+  if (!clean) return false;
+  let targetReq = outgoingFriendReqsMap.get(clean);
+  if (!targetReq) {
+    const cleanLower = clean.toLowerCase();
+    for (const req of outgoingFriendReqsMap.values()) {
+      if (
+        (req.toName || '').trim().toLowerCase() === cleanLower ||
+        (req.toUsername || '').trim().toLowerCase() === cleanLower
+      ) {
+        targetReq = req;
+        break;
+      }
+    }
+  }
+  if (!targetReq) return false;
+  outgoingFriendReqsMap.delete(targetReq.id);
+  handledFriendRespIds.add(targetReq.id);
+  persistFriendRequests();
+  notifyFriendRequestsChanged();
+
+  seqCounter += 1;
+  const payload = {
+    type: 'friend_request_response',
+    peerId: myPeerId,
+    msgId: `${myPeerId}_${seqCounter}`,
+    ts: Date.now(),
+    requestId: targetReq.id,
+    status: 'cancelled',
+    request: targetReq,
+  };
+  markSeen(payload.msgId);
+  broadcastGlobalTopic(`${FRIEND_REQ_TOPIC_PREFIX}${targetReq.id}`, payload, true);
+  return true;
 }
 
 function subscribeGroupTopic(groupId) {

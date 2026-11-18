@@ -32,6 +32,7 @@ export default function MultiplayerMeetupHUD({
   showOutsideChat = true,
   favorites = [],
   friends = [],
+  friendRequests = { incoming: [], outgoing: [] },
   groupInvites = [],
   accountsList = [],
   currentUser = null,
@@ -44,6 +45,9 @@ export default function MultiplayerMeetupHUD({
   showOnlyFavorites = false,
   onToggleShowFavorites,
   onToggleFriend,
+  onAcceptFriendRequest,
+  onIgnoreFriendRequest,
+  onCancelFriendRequest,
   onInviteFriendToGroup,
   onAcceptInvite,
   onIgnoreInvite,
@@ -70,6 +74,13 @@ export default function MultiplayerMeetupHUD({
   const groupChatEndRef = useRef(null);
   const previewChatBoxRef = useRef(null);
 
+  const [, setClockTick] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setClockTick((n) => n + 1), 15000);
+    return () => clearInterval(t);
+  }, []);
+
   const showInviteFeedback = (msg) => {
     setInviteFeedback(msg);
     setTimeout(() => setInviteFeedback(''), 3200);
@@ -79,6 +90,18 @@ export default function MultiplayerMeetupHUD({
     const mins = Math.max(1, Math.ceil((Number(expiresAt || 0) - Date.now()) / 60000));
     return `${mins}m`;
   };
+
+  const formatCountdown24h = (expiresAt) => {
+    const diffMs = Math.max(0, Number(expiresAt || 0) - Date.now());
+    const totalMins = Math.max(1, Math.ceil(diffMs / 60000));
+    const hours = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
+  };
+
+  const incomingFriendReqs = friendRequests?.incoming || [];
+  const outgoingFriendReqs = friendRequests?.outgoing || [];
 
   const combinedFeed = useMemo(() => {
     const outside = showOutsideChat
@@ -218,37 +241,87 @@ export default function MultiplayerMeetupHUD({
         {!compactIcons && <span>{activeSpecies} Gates</span>}
       </div>
 
-      {/* Left-Screen Blinking Group Chat Invite Banner (Accept / Ignore, 30m auto-cancel) */}
-      {groupInvites.length > 0 && (
-        <div className="world-group-invite-banner" role="alert" aria-live="polite">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, fontSize: '0.76rem' }}>
-            <strong>🔔 Group Chat Invite</strong>
-            <span style={{ fontSize: '0.68rem', color: '#ffd57e' }}>
-              ⏱ {formatMinsLeft(groupInvites[0].expiresAt)} left
-            </span>
-          </div>
-          <div style={{ fontSize: '0.74rem', color: '#ece7db', lineHeight: 1.3 }}>
-            <strong>{groupInvites[0].fromName}</strong> invited you to{' '}
-            <strong>“{groupInvites[0].groupName}”</strong>
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button
-              type="button"
-              className="btn-primary"
-              style={{ flex: 1, justifyContent: 'center', padding: '4px 8px', fontSize: '0.72rem' }}
-              onClick={() => onAcceptInvite && onAcceptInvite(groupInvites[0].id)}
+      {/* Left-Screen Blinking Group Invite & Friend Request Banner */}
+      {(groupInvites.length > 0 || incomingFriendReqs.length > 0) && (
+        <div
+          className="world-group-invite-banner"
+          role="alert"
+          aria-live="polite"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {groupInvites.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, fontSize: '0.76rem' }}>
+                <strong>🔔 Group Chat Invite</strong>
+                <span style={{ fontSize: '0.68rem', color: '#ffd57e' }}>
+                  ⏱ {formatMinsLeft(groupInvites[0].expiresAt)} left
+                </span>
+              </div>
+              <div style={{ fontSize: '0.74rem', color: '#ece7db', lineHeight: 1.3 }}>
+                <strong>{groupInvites[0].fromName}</strong> invited you to{' '}
+                <strong>“{groupInvites[0].groupName}”</strong>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  style={{ flex: 1, justifyContent: 'center', padding: '4px 8px', fontSize: '0.72rem' }}
+                  onClick={() => onAcceptInvite && onAcceptInvite(groupInvites[0].id)}
+                >
+                  ✅ Accept
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  style={{ flex: 1, justifyContent: 'center', padding: '4px 8px', fontSize: '0.72rem' }}
+                  onClick={() => onIgnoreInvite && onIgnoreInvite(groupInvites[0].id)}
+                >
+                  ✖️ Ignore
+                </button>
+              </div>
+            </div>
+          )}
+
+          {incomingFriendReqs.length > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 5,
+                paddingTop: groupInvites.length > 0 ? 6 : 0,
+                borderTop: groupInvites.length > 0 ? '1px solid rgba(255,255,255,0.16)' : 'none',
+              }}
             >
-              ✅ Accept
-            </button>
-            <button
-              type="button"
-              className="btn-ghost"
-              style={{ flex: 1, justifyContent: 'center', padding: '4px 8px', fontSize: '0.72rem' }}
-              onClick={() => onIgnoreInvite && onIgnoreInvite(groupInvites[0].id)}
-            >
-              ✖️ Ignore
-            </button>
-          </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, fontSize: '0.76rem' }}>
+                <strong>🤝 Friend Request</strong>
+                <span style={{ fontSize: '0.68rem', color: '#ffd57e' }}>
+                  ⏱ {formatCountdown24h(incomingFriendReqs[0].expiresAt)} left
+                </span>
+              </div>
+              <div style={{ fontSize: '0.74rem', color: '#ece7db', lineHeight: 1.3 }}>
+                <strong>{incomingFriendReqs[0].fromName}</strong> wants to be your friend
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  style={{ flex: 1, justifyContent: 'center', padding: '4px 8px', fontSize: '0.72rem' }}
+                  onClick={() => onAcceptFriendRequest && onAcceptFriendRequest(incomingFriendReqs[0].id)}
+                >
+                  ✅ Accept
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  style={{ flex: 1, justifyContent: 'center', padding: '4px 8px', fontSize: '0.72rem' }}
+                  onClick={() => onIgnoreFriendRequest && onIgnoreFriendRequest(incomingFriendReqs[0].id)}
+                >
+                  ✖️ Ignore
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -364,7 +437,7 @@ export default function MultiplayerMeetupHUD({
               className={`modal-tab ${drawerTab === 'friends' ? 'active' : ''}`}
               onClick={() => setDrawerTab('friends')}
             >
-              🤝 Friends ({friends.length})
+              🤝 Friends ({friends.length}){incomingFriendReqs.length > 0 ? ` • 🔔${incomingFriendReqs.length}` : ''}
             </button>
             <button
               type="button"
@@ -429,8 +502,13 @@ export default function MultiplayerMeetupHUD({
                   </div>
 
                   {mpPeers.map((peer) => {
-                    const isFriend = friends.some(
-                      (f) => f.toLowerCase() === (peer.name || '').toLowerCase()
+                    const pNameLower = (peer.name || '').trim().toLowerCase();
+                    const isFriend = friends.some((f) => f.toLowerCase() === pNameLower);
+                    const pendingOut = outgoingFriendReqs.find(
+                      (r) => (r.toName || '').trim().toLowerCase() === pNameLower || (r.toUsername || '').trim().toLowerCase() === pNameLower
+                    );
+                    const pendingIn = incomingFriendReqs.find(
+                      (r) => (r.fromName || '').trim().toLowerCase() === pNameLower || (r.fromUsername || '').trim().toLowerCase() === pNameLower
                     );
                     const inSameGroup = activeGroup && peer.groupId === activeGroup.id;
                     return (
@@ -452,12 +530,38 @@ export default function MultiplayerMeetupHUD({
                           {onToggleFriend && (
                             <button
                               type="button"
-                              className={isFriend ? 'btn-primary' : 'btn-ghost'}
+                              className={isFriend || pendingIn ? 'btn-primary' : 'btn-ghost'}
                               style={{ padding: '3px 6px', fontSize: '0.68rem' }}
-                              onClick={() => onToggleFriend(peer.name)}
-                              title={isFriend ? 'Friend added (tap to remove)' : 'Add Friend'}
+                              onClick={() => {
+                                if (pendingIn && onAcceptFriendRequest) {
+                                  onAcceptFriendRequest(pendingIn.id);
+                                  showInviteFeedback(`🤝 Accepted ${peer.name} as Friend!`);
+                                } else {
+                                  onToggleFriend(peer.name, peer);
+                                  if (!isFriend && !pendingOut) {
+                                    showInviteFeedback(`📨 Friend request sent to ${peer.name} (24h)`);
+                                  }
+                                }
+                              }}
+                              title={
+                                isFriend
+                                  ? 'Friend added (tap to remove)'
+                                  : pendingIn
+                                    ? 'Accept Friend Request'
+                                    : pendingOut
+                                      ? `Pending (${formatCountdown24h(pendingOut.expiresAt)} left — tap to cancel)`
+                                      : 'Send Friend Request'
+                              }
                             >
-                              {isFriend ? <UserCheck size={10} /> : <UserPlus size={10} />}
+                              {isFriend ? (
+                                <UserCheck size={10} />
+                              ) : pendingIn ? (
+                                '✅'
+                              ) : pendingOut ? (
+                                '⏳'
+                              ) : (
+                                <UserPlus size={10} />
+                              )}
                             </button>
                           )}
                           {onInviteFriendToGroup && (
@@ -566,9 +670,23 @@ export default function MultiplayerMeetupHUD({
                   const clean = friendInput.trim();
                   if (!clean) return;
                   if (onToggleFriend) {
-                    const exists = friends.some((f) => f.toLowerCase() === clean.toLowerCase());
-                    if (!exists) onToggleFriend(clean);
-                    showInviteFeedback(exists ? `${clean} is already your friend.` : `🤝 Added ${clean} as Friend!`);
+                    const cleanLower = clean.toLowerCase();
+                    const exists = friends.some((f) => f.toLowerCase() === cleanLower);
+                    const alreadySent = outgoingFriendReqs.some(
+                      (r) =>
+                        (r.toName || '').trim().toLowerCase() === cleanLower ||
+                        (r.toUsername || '').trim().toLowerCase() === cleanLower
+                    );
+                    if (!exists && !alreadySent) {
+                      onToggleFriend(clean);
+                    }
+                    showInviteFeedback(
+                      exists
+                        ? `${clean} is already your friend.`
+                        : alreadySent
+                          ? `⏳ Friend Request to ${clean} is already pending (24h).`
+                          : `📨 Sent Friend Request to ${clean} (expires in 24h)`
+                    );
                   }
                   setFriendInput('');
                 }}
@@ -588,13 +706,81 @@ export default function MultiplayerMeetupHUD({
                 </button>
               </form>
 
+              {incomingFriendReqs.length > 0 && (
+                <>
+                  <div className="field-label" style={{ marginBottom: 0, color: '#aeeac0' }}>
+                    🔔 Incoming Friend Requests ({incomingFriendReqs.length})
+                  </div>
+                  <div className="mp-visitors-list" style={{ maxHeight: 115 }}>
+                    {incomingFriendReqs.map((req) => (
+                      <div key={req.id} className="mp-visitor-row" style={{ borderColor: 'rgba(174, 234, 192, 0.5)' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div>🤝 <strong>{req.fromName}</strong></div>
+                          <div style={{ fontSize: '0.67rem', color: '#ffd57e' }}>
+                            ⏱ {formatCountdown24h(req.expiresAt)} left to accept
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            style={{ padding: '3px 7px', fontSize: '0.68rem' }}
+                            onClick={() => onAcceptFriendRequest && onAcceptFriendRequest(req.id)}
+                          >
+                            ✅ Accept
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            style={{ padding: '3px 6px', fontSize: '0.68rem' }}
+                            onClick={() => onIgnoreFriendRequest && onIgnoreFriendRequest(req.id)}
+                          >
+                            ✖️ Ignore
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {outgoingFriendReqs.length > 0 && (
+                <>
+                  <div className="field-label" style={{ marginBottom: 0 }}>
+                    ⏳ Sent Requests — 24h Auto-Cancel ({outgoingFriendReqs.length})
+                  </div>
+                  <div className="mp-visitors-list" style={{ maxHeight: 95 }}>
+                    {outgoingFriendReqs.map((req) => (
+                      <div key={req.id} className="mp-visitor-row">
+                        <div style={{ minWidth: 0 }}>
+                          <div>⏳ <strong>{req.toName || req.toUsername}</strong></div>
+                          <div style={{ fontSize: '0.67rem', color: 'var(--text-muted)' }}>
+                            ⏱ {formatCountdown24h(req.expiresAt)} left
+                          </div>
+                        </div>
+                        {onCancelFriendRequest && (
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            style={{ padding: '3px 7px', fontSize: '0.68rem' }}
+                            onClick={() => onCancelFriendRequest(req.id)}
+                          >
+                            ✖️ Cancel
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
               <div className="field-label" style={{ marginBottom: 0 }}>
                 Your Friends ({friends.length})
               </div>
               <div className="mp-visitors-list" style={{ maxHeight: 155 }}>
                 {friends.length === 0 ? (
                   <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', padding: '4px 2px' }}>
-                    No friends added yet. Add someone above or tap a visitor in Room / Memorials.
+                    No friends added yet. Send a friend request above or tap a visitor in Room / Memorials.
                   </div>
                 ) : (
                   friends.map((fr) => (
@@ -646,8 +832,20 @@ export default function MultiplayerMeetupHUD({
                       .slice(0, 12)
                       .map((acc) => {
                         const label = acc.name || acc.username;
+                        const labelLower = label.toLowerCase();
+                        const userLower = (acc.username || '').toLowerCase();
                         const isFr = friends.some(
-                          (f) => f.toLowerCase() === label.toLowerCase() || f.toLowerCase() === (acc.username || '').toLowerCase()
+                          (f) => f.toLowerCase() === labelLower || f.toLowerCase() === userLower
+                        );
+                        const outReq = outgoingFriendReqs.find(
+                          (r) =>
+                            (r.toName || '').trim().toLowerCase() === labelLower ||
+                            (userLower && (r.toUsername || '').trim().toLowerCase() === userLower)
+                        );
+                        const inReq = incomingFriendReqs.find(
+                          (r) =>
+                            (r.fromName || '').trim().toLowerCase() === labelLower ||
+                            (userLower && (r.fromUsername || '').trim().toLowerCase() === userLower)
                         );
                         return (
                           <div key={acc.usernameLower || label} className="mp-visitor-row">
@@ -658,11 +856,27 @@ export default function MultiplayerMeetupHUD({
                             {onToggleFriend && (
                               <button
                                 type="button"
-                                className={isFr ? 'btn-primary' : 'btn-ghost'}
+                                className={isFr || inReq ? 'btn-primary' : 'btn-ghost'}
                                 style={{ padding: '3px 7px', fontSize: '0.68rem' }}
-                                onClick={() => onToggleFriend(label)}
+                                onClick={() => {
+                                  if (inReq && onAcceptFriendRequest) {
+                                    onAcceptFriendRequest(inReq.id);
+                                    showInviteFeedback(`🤝 Accepted ${label}!`);
+                                  } else {
+                                    onToggleFriend(label);
+                                    if (!isFr && !outReq) {
+                                      showInviteFeedback(`📨 Sent Friend Request to ${label} (24h)`);
+                                    }
+                                  }
+                                }}
                               >
-                                {isFr ? '🤝 Friend' : '+ Add'}
+                                {isFr
+                                  ? '🤝 Friend'
+                                  : inReq
+                                    ? '✅ Accept'
+                                    : outReq
+                                      ? `⏳ ${formatCountdown24h(outReq.expiresAt)}`
+                                      : '+ Add'}
                               </button>
                             )}
                           </div>

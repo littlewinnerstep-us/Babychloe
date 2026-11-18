@@ -80,6 +80,11 @@ import {
   sendGroupInvite,
   acceptGroupInvite,
   ignoreGroupInvite,
+  getPendingFriendRequests,
+  sendFriendRequest,
+  acceptFriendRequest,
+  ignoreFriendRequest,
+  cancelOutgoingFriendRequest,
   setCurrentUserIdentity,
 } from './utils/multiplayerEngine';
 
@@ -280,6 +285,7 @@ export default function App() {
     loadArrayPref(STORAGE_VISITED_KEY)
   );
   const [friends, setFriends] = useState(() => loadArrayPref(STORAGE_FRIENDS_KEY));
+  const [friendRequests, setFriendRequests] = useState(getPendingFriendRequests);
   const [mpOnline, setMpOnline] = useState(isMultiplayerOnline);
   const [activeGroup, setActiveGroup] = useState(getActiveGroup);
   const [groupChatLog, setGroupChatLog] = useState(getGroupChatHistory);
@@ -666,14 +672,99 @@ export default function App() {
     setWalkToMemorialRequest({ memorial, ts: Date.now() });
   };
 
-  const handleToggleFriend = (friendName) => {
-    const clean = String(friendName || '').trim();
+  const handleAcceptFriendRequest = (reqId) => {
+    const req = acceptFriendRequest(reqId);
+    setFriendRequests(getPendingFriendRequests());
+    if (req) {
+      const friendLabel = req.fromName || req.fromUsername;
+      if (friendLabel) {
+        setFriends((prev) =>
+          prev.some((f) => f.toLowerCase() === friendLabel.toLowerCase())
+            ? prev
+            : [...prev, friendLabel]
+        );
+      }
+      showGlobalNotice(`🤝 You and ${friendLabel || 'Visitor'} are now friends!`);
+    } else {
+      showGlobalNotice('⏳ That Friend Request expired (24h timeout) and was auto-cancelled.');
+    }
+  };
+
+  const handleIgnoreFriendRequest = (reqId) => {
+    ignoreFriendRequest(reqId);
+    setFriendRequests(getPendingFriendRequests());
+    showGlobalNotice('✖️ Friend request ignored and cancelled.');
+  };
+
+  const handleCancelFriendRequest = (reqIdOrName) => {
+    if (cancelOutgoingFriendRequest(reqIdOrName)) {
+      setFriendRequests(getPendingFriendRequests());
+      showGlobalNotice('✖️ Friend request cancelled.');
+    }
+  };
+
+  const handleToggleFriend = (friendName, peerObj = null) => {
+    const clean = String(friendName || peerObj?.name || '').trim();
     if (!clean) return;
-    setFriends((prev) =>
-      prev.some((f) => f.toLowerCase() === clean.toLowerCase())
-        ? prev.filter((f) => f.toLowerCase() !== clean.toLowerCase())
-        : [...prev, clean]
+    const cleanLower = clean.toLowerCase();
+
+    const matchedAccount = accountsList.find(
+      (a) =>
+        a &&
+        ((a.name || '').toLowerCase() === cleanLower ||
+          (a.username || '').toLowerCase() === cleanLower)
     );
+    const targetName = matchedAccount?.name || clean;
+    const targetUser = matchedAccount?.username || '';
+    const targetNameLower = targetName.toLowerCase();
+    const targetUserLower = targetUser.toLowerCase();
+
+    const isAlreadyFriend = friends.some((f) => {
+      const fl = f.toLowerCase();
+      return fl === cleanLower || fl === targetNameLower || (targetUserLower && fl === targetUserLower);
+    });
+    if (isAlreadyFriend) {
+      setFriends((prev) =>
+        prev.filter((f) => {
+          const fl = f.toLowerCase();
+          return fl !== cleanLower && fl !== targetNameLower && (!targetUserLower || fl !== targetUserLower);
+        })
+      );
+      showGlobalNotice(`Removed ${targetName} from friends.`);
+      return;
+    }
+
+    const pendingIncoming = (friendRequests.incoming || []).find((r) => {
+      const fn = (r.fromName || '').trim().toLowerCase();
+      const fu = (r.fromUsername || '').trim().toLowerCase();
+      return fn === cleanLower || fn === targetNameLower || (targetUserLower && fu === targetUserLower);
+    });
+    if (pendingIncoming) {
+      handleAcceptFriendRequest(pendingIncoming.id);
+      return;
+    }
+
+    const pendingOutgoing = (friendRequests.outgoing || []).find((r) => {
+      const tn = (r.toName || '').trim().toLowerCase();
+      const tu = (r.toUsername || '').trim().toLowerCase();
+      return tn === cleanLower || tn === targetNameLower || (targetUserLower && tu === targetUserLower);
+    });
+    if (pendingOutgoing) {
+      handleCancelFriendRequest(pendingOutgoing.id);
+      return;
+    }
+
+    const res = sendFriendRequest({
+      toName: targetName,
+      toUsername: targetUser,
+      toPeerId: peerObj?.peerId || '',
+      fromName: currentUser?.name || mpNickname || 'Visitor',
+      fromUsername: currentUser?.username || '',
+    });
+    setFriendRequests(getPendingFriendRequests());
+    if (res?.ok) {
+      showGlobalNotice(`📨 Friend request sent to ${targetName} (24h countdown to accept).`);
+    }
   };
 
   const handleLogin = (user) => {
@@ -858,6 +949,20 @@ export default function App() {
       onGroupInvitesChange: (list) => {
         setGroupInvites(list);
       },
+      onFriendRequestsChange: (reqs) => {
+        setFriendRequests(reqs);
+      },
+      onFriendRequestAccepted: (req) => {
+        const friendLabel = req?.toName || req?.toUsername;
+        if (friendLabel) {
+          setFriends((prev) =>
+            prev.some((f) => f.toLowerCase() === friendLabel.toLowerCase())
+              ? prev
+              : [...prev, friendLabel]
+          );
+          showGlobalNotice(`🤝 ${friendLabel} accepted your Friend Request!`);
+        }
+      },
       onRemoteEvent: (evt) => {
         if (!evt) return;
         if (evt.kind === 'visit' && evt.memorialId) {
@@ -934,6 +1039,7 @@ export default function App() {
     syncAllLocalMemorials(memorialsRef.current, true);
     const invTimer = setInterval(() => {
       setGroupInvites(getPendingGroupInvites());
+      setFriendRequests(getPendingFriendRequests());
       setInviteClockTick((n) => n + 1);
     }, 30000);
     return () => clearInterval(invTimer);
@@ -1203,18 +1309,18 @@ export default function App() {
           <div className="top-actions" style={{ position: 'relative' }}>
             <button
               type="button"
-              className={`top-music-btn notif-bell-btn ${groupInvites.length > 0 ? 'has-invite' : ''}`}
+              className={`top-music-btn notif-bell-btn ${(groupInvites.length > 0 || (friendRequests.incoming?.length || 0) > 0) ? 'has-invite' : ''}`}
               onClick={() => {
                 setShowNotificationsModal(true);
                 setReadNotifIds((prev) => Array.from(new Set([...prev, ...notifications.map((n) => n.id)])));
               }}
-              title="Sanctuary News, Updates & Group Invites"
+              title="Sanctuary News, Updates, Friend Requests & Group Invites"
               aria-label="Notifications"
             >
               <Bell size={16} />
-              {(notifications.some((n) => !readNotifIds.includes(n.id)) || groupInvites.length > 0) && (
+              {(notifications.some((n) => !readNotifIds.includes(n.id)) || groupInvites.length > 0 || (friendRequests.incoming?.length || 0) > 0) && (
                 <span className="notif-badge" aria-hidden="true">
-                  {notifications.filter((n) => !readNotifIds.includes(n.id)).length + groupInvites.length}
+                  {notifications.filter((n) => !readNotifIds.includes(n.id)).length + groupInvites.length + (friendRequests.incoming?.length || 0)}
                 </span>
               )}
             </button>
@@ -1750,6 +1856,7 @@ export default function App() {
             favorites={favorites}
             showOnlyFavorites={showFavoritesModal}
             friends={friends}
+            friendRequests={friendRequests}
             groupInvites={groupInvites}
             accountsList={accountsList}
             remoteWorldEvent={remoteWorldEvent}
@@ -1758,6 +1865,9 @@ export default function App() {
             onToggleShowFavorites={() => setShowFavoritesModal(true)}
             onToggleFavorite={handleToggleFavorite}
             onToggleFriend={handleToggleFriend}
+            onAcceptFriendRequest={handleAcceptFriendRequest}
+            onIgnoreFriendRequest={handleIgnoreFriendRequest}
+            onCancelFriendRequest={handleCancelFriendRequest}
             onInviteFriendToGroup={handleInviteFriendToGroup}
             onAcceptInvite={handleAcceptGroupInvite}
             onIgnoreInvite={handleIgnoreGroupInvite}
@@ -1810,6 +1920,7 @@ export default function App() {
             favorites={favorites}
             showOnlyFavorites={showFavoritesModal}
             friends={friends}
+            friendRequests={friendRequests}
             groupInvites={groupInvites}
             accountsList={accountsList}
             remoteWorldEvent={remoteWorldEvent}
@@ -1818,6 +1929,9 @@ export default function App() {
             onToggleShowFavorites={() => setShowFavoritesModal(true)}
             onToggleFavorite={handleToggleFavorite}
             onToggleFriend={handleToggleFriend}
+            onAcceptFriendRequest={handleAcceptFriendRequest}
+            onIgnoreFriendRequest={handleIgnoreFriendRequest}
+            onCancelFriendRequest={handleCancelFriendRequest}
             onInviteFriendToGroup={handleInviteFriendToGroup}
             onAcceptInvite={handleAcceptGroupInvite}
             onIgnoreInvite={handleIgnoreGroupInvite}
@@ -1964,9 +2078,13 @@ export default function App() {
           isFavorite={favorites.includes(selectedMemorial.id)}
           onToggleFavorite={handleToggleFavorite}
           isFriend={friends.some(
-            (f) => f.toLowerCase() === (selectedMemorial.ownerName || '').toLowerCase()
+            (f) =>
+              f.toLowerCase() === (selectedMemorial.ownerName || '').toLowerCase() ||
+              (selectedMemorial.ownerUsername && f.toLowerCase() === selectedMemorial.ownerUsername.toLowerCase())
           )}
+          friendRequests={friendRequests}
           onToggleFriend={handleToggleFriend}
+          onAcceptFriendRequest={handleAcceptFriendRequest}
           onClose={() => setSelectedMemorialId(null)}
           onPerformOffering={handlePerformOffering}
           onAddTribute={handleAddTribute}
@@ -2003,8 +2121,12 @@ export default function App() {
           notifications={notifications}
           readIds={readNotifIds}
           groupInvites={groupInvites}
+          friendRequests={friendRequests}
           onAcceptInvite={handleAcceptGroupInvite}
           onIgnoreInvite={handleIgnoreGroupInvite}
+          onAcceptFriendRequest={handleAcceptFriendRequest}
+          onIgnoreFriendRequest={handleIgnoreFriendRequest}
+          onCancelFriendRequest={handleCancelFriendRequest}
           onClose={() => setShowNotificationsModal(false)}
         />
       )}

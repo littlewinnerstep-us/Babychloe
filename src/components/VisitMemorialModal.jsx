@@ -38,7 +38,9 @@ export default function VisitMemorialModal({
   isFavorite = false,
   onToggleFavorite,
   isFriend = false,
+  friendRequests = { incoming: [], outgoing: [] },
   onToggleFriend,
+  onAcceptFriendRequest,
   onClose,
   onPerformOffering,
   onAddTribute,
@@ -215,18 +217,48 @@ export default function VisitMemorialModal({
                   {isFavorite ? '💖 Favorited' : '🤍 Favorite Pet'}
                 </button>
               )}
-              {!isOwner && onToggleFriend && memorial.ownerName && (
-                <button
-                  type="button"
-                  className={isFriend ? 'btn-primary' : 'btn-ghost'}
-                  style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-                  onClick={() => onToggleFriend(memorial.ownerName)}
-                >
-                  {isFriend
-                    ? '🤝 Friend Added'
-                    : `🤝 Add ${(memorial.ownerName || 'Friend').split(' ')[0]} as Friend`}
-                </button>
-              )}
+              {!isOwner && onToggleFriend && memorial.ownerName && (() => {
+                const ownerLower = String(memorial.ownerName || '').trim().toLowerCase();
+                const ownerUserLower = String(memorial.ownerUsername || '').trim().toLowerCase();
+                const pendingIn = (friendRequests?.incoming || []).find(
+                  (r) =>
+                    (r.fromName || '').trim().toLowerCase() === ownerLower ||
+                    (ownerUserLower && (r.fromUsername || '').trim().toLowerCase() === ownerUserLower)
+                );
+                const pendingOut = (friendRequests?.outgoing || []).find(
+                  (r) =>
+                    (r.toName || '').trim().toLowerCase() === ownerLower ||
+                    (ownerUserLower && (r.toUsername || '').trim().toLowerCase() === ownerUserLower)
+                );
+                return (
+                  <button
+                    type="button"
+                    className={isFriend || pendingIn ? 'btn-primary' : 'btn-ghost'}
+                    style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                    onClick={() => {
+                      if (pendingIn && onAcceptFriendRequest) {
+                        onAcceptFriendRequest(pendingIn.id);
+                        showArmtip(`🤝 Accepted friend request from ${memorial.ownerName}!`);
+                      } else {
+                        onToggleFriend(memorial.ownerName);
+                        if (!isFriend && !pendingOut) {
+                          showArmtip(`📨 Friend request sent to ${memorial.ownerName} (24h countdown).`);
+                        } else if (pendingOut) {
+                          showArmtip(`✖️ Cancelled friend request to ${memorial.ownerName}.`);
+                        }
+                      }
+                    }}
+                  >
+                    {isFriend
+                      ? '🤝 Friend Added'
+                      : pendingIn
+                        ? '✅ Accept Friend Request'
+                        : pendingOut
+                          ? '⏳ Friend Req Sent (24h)'
+                          : `🤝 Add ${(memorial.ownerName || 'Friend').split(' ')[0]} as Friend`}
+                  </button>
+                );
+              })()}
             </div>
           </div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close visit">
