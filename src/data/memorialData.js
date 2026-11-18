@@ -709,141 +709,335 @@ export function getNextPlotCode(memorials, species, space) {
   return formatSequentialCode(targetSpace, Math.min(nextNum, MAX_PLOTS_PER_GARDEN));
 }
 
-export const GARDEN_NPCS_DATA = [
-  {
-    id: 'npc-maya',
-    name: 'Maya Lin',
-    cloak: '#6b8e78',
-    hair: '#221d1b',
-    x2d: 440,
-    y2d: 410,
-    patrol2d: 34,
-    speed2d: 0.45,
-    x3d: -125,
-    z3d: 15,
-    patrol3d: 32,
-    speed3d: 0.65,
-    sitting: false,
-    quotes: [
-      'The reflections on the pond are so peaceful.',
-      'The lanterns look so gentle over the pond tonight.',
-      'Sometimes the ripples on the water move even without wind—perhaps an unseen paw brushing the shore from the afterlife.',
-      'Life is a brief lantern we hold together; beyond the silver mist, their gentle spirit still remembers the warmth of your hand.',
-      'May sorrow settle softly like evening dew. What you loved so truly can never really be lost.',
-    ],
-  },
-  {
-    id: 'npc-kenji',
-    name: 'Elder Kenji',
-    cloak: '#7b6450',
-    hair: '#dfe5ec',
-    x2d: 785,
-    y2d: 385,
-    patrol2d: 0,
-    speed2d: 0,
-    x3d: 165,
-    z3d: 75,
-    patrol3d: 0,
-    speed3d: 0,
-    sitting: true,
-    quotes: [
-      'They wait for us in the sunbeams...',
-      'Between waking life and the afterlife lies only a thin veil; listen closely at dusk and you may hear quiet footsteps beside you.',
-      'A loyal companion never fades into nothingness—they simply step ahead into a sunlit meadow where time has no weight.',
-      'Grief is only the shadow cast by deep devotion. Be kind to your aching heart; their spirit rests beyond all sorrow.',
-      'Those who taught us how to love without conditions keep a lantern burning for us until we meet again.',
-    ],
-  },
-  {
-    id: 'npc-hana',
-    name: 'Keeper Hana',
-    cloak: '#a47551',
-    hair: '#3b2b24',
-    x2d: 600,
-    y2d: 255,
-    patrol2d: 50,
-    speed2d: 0.35,
-    x3d: -60,
-    z3d: -215,
-    patrol3d: 40,
-    speed3d: 0.45,
-    sitting: false,
-    quotes: [
-      'Walk through the archway ahead to enter the Ash Room.',
-      'Step inside the archway ahead to visit the Ash Room.',
-      'Folks say lantern smoke drifting through the archway carries whispered promises straight across the border of the afterlife.',
-      'In this life they walked faithfully at our heels; in the next, they watch gently over the paths we still must tread.',
-      'My deepest condolences for your loss. Even in heavy silence, every candle you light reaches across the distance between worlds.',
-    ],
-  },
+// Rich non-repeating quote pool covering life, afterlife, and condolences for the lost.
+export const MEMORIAL_WISDOM_QUOTES = [
+  // Life & Devotion (1-35)
+  'Life is measured not in the years we are given, but in the quiet mornings and warm sunbeams we shared.',
+  'Every pawprint they left in your life became a gentle map pointing back to unconditional love.',
+  'In a hurried world, they taught us how to be completely present for a single afternoon walk.',
+  'A faithful companion never asks for grand promises—only a warm voice and a place beside your chair.',
+  'The smallest heartbeats often leave the deepest echoes across an entire lifetime.',
+  'They knew the rhythm of your footsteps before you even reached the door.',
+  'Through ordinary Tuesdays and quiet winters, their loyalty turned a house into a sanctuary.',
+  'Nothing truly lived with tenderness is ever wasted; every gentle day remains woven into who you are.',
+  'Even their sleepiest sigh carried a trust that asked nothing in return.',
+  'Life with a beloved pet is a short story written in boundless affection.',
+  'They showed us that joy can be as simple as fresh grass, warm sun, and being together.',
+  'In every season of your life, they met you with the exact same unwavering kindness.',
+  'The love you gave them shaped every single day of their world.',
+  'A lifetime of small rituals—morning greetings, shared silences—becomes our dearest treasure.',
+  'They never counted the hours, only the moments you came home.',
+  'Some souls arrive in fur and feathers just to teach our hearts how to soften.',
+  'Even the briefest life shines brightly when it is surrounded by safety and care.',
+  'You were their whole universe, and you made that universe gentle.',
+  'Every memory of their playful spirit is proof of how deeply they were cherished.',
+  'Time moves forward, yet the warmth of a life shared in love never cools.',
+  'They taught us patience without a single spoken word.',
+  'In the garden of memory, every shared afternoon blooms again when the wind stirs.',
+  'To be loved by an animal is to be known without judgment and forgiven without hesitation.',
+  'Each gentle habit they had still lingers like sunlight on a quiet windowsill.',
+  'Their life may have been shorter than ours, yet it was complete because it was full of love.',
+  'A good life is one where a little soul felt safe from its first day to its last.',
+  'Even in old age, their eyes still lit up the moment they heard your name.',
+  'We carry their lessons of loyalty into every kindness we show the world afterward.',
+  'No calendar can measure the worth of a companion who stood by you through every storm.',
+  'The quiet joy they brought to ordinary days was a gift beyond measure.',
+  'Every gentle touch you offered them was a promise kept.',
+  'In remembering how they lived, we honor the brightest part of our own hearts.',
+  'Their tiny footsteps crossed your life briefly, yet changed your soul forever.',
+  'Love was the only language they ever needed to speak fluently.',
+  'What they gave us in life was pure grace wrapped in quiet companionship.',
+
+  // Afterlife & Beyond the Veil (36-70)
+  'Beyond the silver mist of this world, they run across meadows where time has no weight.',
+  'Between waking life and the afterlife lies only a thin veil; listen at dusk and you may feel them near.',
+  'A loyal spirit never fades into nothingness—they simply step ahead into endless morning light.',
+  'Beyond the quiet horizon, their weary body is whole again and light as spring air.',
+  'Folks say lantern glow and flower scent carry whispered promises straight across the border of the afterlife.',
+  'They did not vanish into darkness; they crossed into a sunlit field where no winter ever reaches.',
+  'In the afterlife, every good companion rests in warm sunbeams waiting for familiar footsteps.',
+  'Death cannot untie a bond woven through lifetime trust; love speaks across both worlds.',
+  'Watch how evening mist rises gently from the grass—like a peaceful soul stepping into eternity.',
+  'Though their earthly journey ended, their spirit still recognizes the sound of your voice.',
+  'Somewhere past the quiet stars, they are chasing warm breezes with effortless grace.',
+  'Ashes and stone hold only the vessel; what truly lived within them now runs free in peace.',
+  'Mysterious are the threads between life and the afterlife—sometimes a sudden hush feels like a gentle nuzzle.',
+  'They wait where the grass stays soft, the water stays clear, and no pain can ever follow.',
+  'Even across the unseen shore, the bond between guardian and companion never weakens.',
+  'When the breeze turns unexpectedly warm, perhaps they are passing close by to check on you.',
+  'In the next world, every loyal heart is greeted with endless shade, cool streams, and rest.',
+  'What is born of pure devotion belongs to eternity, not merely to a few fleeting years.',
+  'They crossed ahead not to leave you behind, but to rest where sorrow cannot touch them.',
+  'At midnight, the quiet sanctuary hums with soft starlight, as if gentle spirits gather among the flowers.',
+  'The bridge between this life and the next is built entirely out of remembered love.',
+  'No distance between worlds is too wide for a heart that remembers your scent and voice.',
+  'In eternity, there are no tired legs, no lonely nights, and no final goodbyes.',
+  'Those who taught us how to love without conditions keep a quiet light waiting for us.',
+  'Beyond the veil, they still tilt their head at the sound of kindness.',
+  'Every blossom placed here sends a quiet greeting across the meadow of the afterlife.',
+  'Their spirit stepped lightly out of pain and into a stillness deeper than any sleep.',
+  'When two souls belong together, farewell is only a pause across two sides of one road.',
+  'Up where the evening sky turns gold, they are resting in the warmest patch of light.',
+  'They are safe now in the gentle keeping of eternity, free from every ache.',
+  'Time cannot erase a spiritual bond; it only brings us closer to meeting again.',
+  'In the quiet beyond, their playful spark shines untouched by age or weariness.',
+  'A soul this pure does not end—it simply returns to the peace from which it came.',
+  'Look up at the calm night sky; love like theirs always leaves a star behind.',
+  'Across the quiet river of time, they rest contentedly until your paths cross once more.',
+
+  // Condolences & Comfort for the Lost (71-105)
+  'My deepest condolences for your loss. May sorrow settle softly like evening dew.',
+  'I am so sorry for the goodbye you had to whisper. Please take every quiet moment you need here.',
+  'Grief is only the shadow cast by deep devotion. Be gentle with your aching heart today.',
+  'Tears are simply love that has nowhere else to rest—let them fall without apology.',
+  'May peace slowly mend your days, knowing you gave them a lifetime of safety and kindness.',
+  'No words can make a quiet home feel full again, yet you are never alone in missing them.',
+  'Please accept my heartfelt condolences; the pain you feel honors how deeply you cared.',
+  'When the silence at home feels heavy, remember you were the best part of their whole life.',
+  'Be patient with your grief—losing a faithful friend leaves a space shaped just like them.',
+  'May every gentle memory soften the sharp edge of today’s sorrow.',
+  'I am truly sorry for your heartache. Loving them to the very end was the bravest gift of all.',
+  'Even in the deepest quiet, every flower you bring speaks of a love that still endures.',
+  'You stood by them through their final breath; may that devotion bring you comfort now.',
+  'Condolences from one caretaker to another—some goodbyes hurt because the bond was extraordinary.',
+  'May the calm of this garden wrap around your shoulders like a warm blanket tonight.',
+  'It is okay if your heart still listens for paws on the floor; love takes time to learn stillness.',
+  'Wishing you gentle mornings and soft memories as you carry their love forward.',
+  'You did not fail them by letting them rest—you spared them pain at the cost of your own heart.',
+  'May each breath here feel a little lighter, surrounded by others who understand this loss.',
+  'Sending quiet comfort to your weary spirit; what you shared was rare and beautiful.',
+  'Let the stillness of these rows hold your sorrow for a little while.',
+  'There is no timeline for healing after losing someone who loved you every single day.',
+  'May the warmth of remembered sunbeams slowly outweigh the ache of their absence.',
+  'My sincerest sympathies—only someone who has loved deeply knows how quiet the house becomes.',
+  'Hold onto the knowledge that they fell asleep knowing they were completely cherished.',
+  'When grief comes in waves, let this sanctuary be a safe harbor for your heart.',
+  'May kindness meet you in every corner as you walk through this season of mourning.',
+  'Even through tears, your devotion shines—they were so fortunate to have you.',
+  'Take your time along the path; every step taken in remembrance is sacred.',
+  'May tomorrow feel a shade gentler than today, carrying their warmth beside you.',
+  'I am sorry for the empty spot beside you. Their love remains yours forever.',
+  'Let the flowers speak the things your heart is too tired to put into words.',
+  'You gave them a gentle life and a peaceful farewell; may your heart find rest in that truth.',
+  'Peace be with you in your mourning—their memory is held with honor here.',
+  'Whenever you miss them most, know that love of this kind never truly leaves you.',
 ];
 
-export const ASH_NPCS_DATA = [
-  {
-    id: 'npc-sora',
-    name: 'Sora',
-    cloak: '#5b7294',
-    hair: '#1f232b',
-    x2d: 470,
-    y2d: 430,
-    patrol2d: 0,
-    speed2d: 0,
-    x3d: -110,
-    z3d: 40,
-    patrol3d: 0,
-    speed3d: 0,
-    sitting: true,
-    quotes: [
-      'The sandalwood incense is so calming.',
-      'Watch how incense smoke curls upward and dissolves—like a gentle soul slipping quietly from time into eternity.',
-      'Though their chapter in this waking world ended too soon, their spirit still knows the sound of your voice in the quiet.',
-      'Please take every quiet moment you need here. Tears are simply love that has nowhere else to rest.',
-    ],
-  },
-  {
-    id: 'npc-claire',
-    name: 'Claire',
-    cloak: '#a86b7a',
-    hair: '#6e4532',
-    x2d: 840,
-    y2d: 265,
-    patrol2d: 28,
-    speed2d: 0.4,
-    x3d: 195,
-    z3d: -115,
-    patrol3d: 28,
-    speed3d: 0.5,
-    sitting: false,
-    quotes: [
-      'Every candle keeps a cherished memory glowing.',
-      'Bringing fresh blossoms to the alcoves feels peaceful.',
-      'At midnight, the glass alcoves seem to hum with soft starlight, as if small spirits gather to admire the flowers left for them.',
-      'Death cannot untie a bond woven through lifetime trust; beyond this life, love remains the one language both worlds understand.',
-      'I am so sorry for the goodbye you had to whisper. May the warm glow of these alcoves bring comfort to your heart.',
-    ],
-  },
-  {
-    id: 'npc-keeper',
-    name: 'Sanctuary Keeper',
-    cloak: '#856548',
-    hair: '#d5dde4',
-    x2d: 690,
-    y2d: 360,
-    patrol2d: 22,
-    speed2d: 0.3,
-    x3d: 85,
-    z3d: 120,
-    patrol3d: 24,
-    speed3d: 0.35,
-    sitting: false,
-    quotes: [
-      'Every candle keeps a cherished memory glowing.',
-      'Ashes hold only the quiet vessel of an earthly journey; what truly lived within them now runs free among silver stars.',
-      'Mysterious are the threads between life and the afterlife—sometimes a sudden warm hush indoors feels like a gentle farewell nuzzle.',
-      'May peace slowly mend your days, knowing you gave them a lifetime filled with safety, kindness, and devotion.',
-    ],
-  },
+const GARDENER_NAMES = [
+  'Gardener Maya', 'Gardener Kenji', 'Gardener Hana', 'Gardener Mateo', 'Gardener Lin',
+  'Gardener Rowan', 'Gardener Mei', 'Gardener Theo', 'Gardener Iris', 'Gardener Noah',
+  'Gardener Wren', 'Gardener Sora', 'Gardener Arthur', 'Gardener Elena', 'Gardener Leo',
+  'Gardener Ivy', 'Gardener Julian', 'Gardener Nao', 'Gardener Clara', 'Gardener Oliver',
+  'Gardener Hazel', 'Gardener Ren', 'Gardener Faye', 'Gardener Miles', 'Gardener June',
 ];
+
+const ASH_KEEPER_NAMES = [
+  'Sora', 'Claire', 'Sanctuary Keeper', 'Aiko', 'Julian',
+  'Mina', 'Elias', 'Nadia', 'Haruto', 'Celeste',
+  'Yuna', 'Gideon', 'Tessa', 'Kaito', 'Miriam',
+  'Soren', 'Lydia', 'Daisuke', 'Freya', 'Bram',
+  'Kaori', 'Lucian', 'Maeve', 'Riku', 'Sylvie',
+];
+
+const GARDENER_CLOAKS = ['#5c7f67', '#6b8e78', '#4f735a', '#76895e', '#657c52', '#52796f', '#748a6d'];
+const ASH_CLOAKS = ['#5b7294', '#a86b7a', '#856548', '#6a6f8c', '#7c6477', '#5e7a78', '#8b6f5a'];
+const NPC_HAIRS = ['#221d1b', '#dfe5ec', '#3b2b24', '#6e4532', '#1f232b', '#8d6e53', '#c8c4be'];
+const GARDENER_TOOLS = ['🪴', '🌿', '🌷', '🧹', '🌼'];
+
+function buildBandNpcs(isGarden) {
+  const npcs = [];
+  const names = isGarden ? GARDENER_NAMES : ASH_KEEPER_NAMES;
+  const cloaks = isGarden ? GARDENER_CLOAKS : ASH_CLOAKS;
+  const baseRowY2d = isGarden ? 220 : 200;
+  // 5 two-row bands covering rows 0..9, 5 NPCs per band = 25 NPCs
+  const slotX2d = [200, 800, 1400, 2000, 2600];
+  const slotX3d = [-1360, -680, 0, 680, 1360];
+
+  for (let band = 0; band < 5; band++) {
+    const rowA = band * 2;
+    const rowB = band * 2 + 1;
+    const minY2d = baseRowY2d + rowA * 240 - 38;
+    const maxY2d = baseRowY2d + rowB * 240 + 38;
+    const minZ3d = -170 + rowA * 250 - 42;
+    const maxZ3d = -170 + rowB * 250 + 42;
+
+    for (let slot = 0; slot < 5; slot++) {
+      const idx = band * 5 + slot;
+      const startRow = (band + slot) % 2 === 0 ? rowA : rowB;
+      const y2d = baseRowY2d + startRow * 240 + (slot % 2 === 0 ? 18 : -18);
+      const z3d = -170 + startRow * 250 + (slot % 2 === 0 ? 22 : -22);
+      // 4 distinct quotes per NPC from the 105-quote pool (no repeats across NPCs in a room)
+      const qStart = (idx * 4) % MEMORIAL_WISDOM_QUOTES.length;
+      const quotes = [0, 1, 2, 3].map(
+        (k) => MEMORIAL_WISDOM_QUOTES[(qStart + k) % MEMORIAL_WISDOM_QUOTES.length]
+      );
+
+      npcs.push({
+        id: `${isGarden ? 'g-npc' : 'a-npc'}-${idx}`,
+        name: names[idx % names.length],
+        role: isGarden ? 'gardener' : 'keeper',
+        tool: isGarden ? GARDENER_TOOLS[idx % GARDENER_TOOLS.length] : null,
+        cloak: cloaks[idx % cloaks.length],
+        hair: NPC_HAIRS[(idx * 3 + band) % NPC_HAIRS.length],
+        band,
+        slot,
+        x2d: slotX2d[slot],
+        y2d,
+        minX2d: 120,
+        maxX2d: 2680,
+        minY2d,
+        maxY2d,
+        speed2d: 20 + ((idx * 5) % 12),
+        x3d: slotX3d[slot],
+        z3d,
+        minX3d: -1420,
+        maxX3d: 1420,
+        minZ3d,
+        maxZ3d,
+        speed3d: 22 + ((idx * 5) % 12),
+        quotes,
+      });
+    }
+  }
+  return npcs;
+}
+
+export const GARDEN_NPCS_DATA = buildBandNpcs(true);
+
+export const ASH_NPCS_DATA = buildBandNpcs(false);
+
+/**
+ * Advances stateful NPC positions in-place within their assigned 2-row band,
+ * alternating between slow end-to-end walking and working pauses while enforcing
+ * a minimum anti-collision separation (`minSep`, ~5 tombs away).
+ */
+export function stepBandNpcs(stateList, npcs, dt, mode = '2d', minSep = 600) {
+  if (!stateList || stateList.length !== npcs.length) {
+    stateList.length = 0;
+    npcs.forEach((npc, idx) => {
+      const is2d = mode === '2d';
+      const x = is2d ? npc.x2d : npc.x3d;
+      const y = is2d ? npc.y2d : npc.z3d;
+      stateList.push({
+        id: npc.id,
+        x,
+        y,
+        tx: x,
+        ty: y,
+        mode: idx % 3 === 0 ? 'work' : 'walk',
+        timer: 2.5 + ((idx * 1.37) % 4.5),
+        facing: idx % 2 === 0 ? 1 : -1,
+        bob: idx * 0.9,
+      });
+    });
+  }
+
+  const clampedDt = Math.min(0.08, Math.max(0.001, dt));
+  const is2d = mode === '2d';
+
+  const pickTarget = (npc, i, curState) => {
+    const minX = is2d ? npc.minX2d : npc.minX3d;
+    const maxX = is2d ? npc.maxX2d : npc.maxX3d;
+    const minY = is2d ? npc.minY2d : npc.minZ3d;
+    const maxY = is2d ? npc.maxY2d : npc.maxZ3d;
+
+    let bestX = curState.x;
+    let bestY = curState.y;
+    let bestScore = -1;
+
+    for (let attempt = 0; attempt < 14; attempt++) {
+      // Encourage end-to-end roaming across the full 2-row band
+      const rx = minX + Math.random() * (maxX - minX);
+      const ry = minY + Math.random() * (maxY - minY);
+      let minDist = Infinity;
+      for (let j = 0; j < stateList.length; j++) {
+        if (i === j) continue;
+        const d = Math.hypot(rx - stateList[j].x, ry - stateList[j].y);
+        if (d < minDist) minDist = d;
+      }
+      if (minDist >= minSep) {
+        return { x: rx, y: ry };
+      }
+      if (minDist > bestScore) {
+        bestScore = minDist;
+        bestX = rx;
+        bestY = ry;
+      }
+    }
+    return { x: bestX, y: bestY };
+  };
+
+  for (let i = 0; i < stateList.length; i++) {
+    const st = stateList[i];
+    const npc = npcs[i];
+    const minX = is2d ? npc.minX2d : npc.minX3d;
+    const maxX = is2d ? npc.maxX2d : npc.maxX3d;
+    const minY = is2d ? npc.minY2d : npc.minZ3d;
+    const maxY = is2d ? npc.maxY2d : npc.maxZ3d;
+    const speed = is2d ? npc.speed2d : npc.speed3d;
+
+    // Anti-collision repulsion from any NPC closer than minSep (5 tombs away)
+    let repX = 0;
+    let repY = 0;
+    let tooClose = false;
+    for (let j = 0; j < stateList.length; j++) {
+      if (i === j) continue;
+      const other = stateList[j];
+      const dx = st.x - other.x;
+      const dy = st.y - other.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < minSep) {
+        tooClose = true;
+        const push = ((minSep - dist) / minSep) * speed * 1.45;
+        if (dist > 1) {
+          repX += (dx / dist) * push;
+          repY += (dy / dist) * push;
+        } else {
+          repX += (i < j ? -1 : 1) * push;
+        }
+      }
+    }
+
+    if (tooClose) {
+      st.x = Math.max(minX, Math.min(maxX, st.x + repX * clampedDt));
+      st.y = Math.max(minY, Math.min(maxY, st.y + repY * clampedDt));
+      if (Math.abs(repX) > 0.5) st.facing = repX >= 0 ? 1 : -1;
+      if (st.mode === 'work') {
+        const nextPt = pickTarget(npc, i, st);
+        st.tx = nextPt.x;
+        st.ty = nextPt.y;
+        st.mode = 'walk';
+        st.timer = 14 + Math.random() * 10;
+      }
+    }
+
+    st.timer -= clampedDt;
+    if (st.mode === 'work') {
+      st.bob += clampedDt * 3.5;
+      if (st.timer <= 0) {
+        const nextPt = pickTarget(npc, i, st);
+        st.tx = nextPt.x;
+        st.ty = nextPt.y;
+        st.mode = 'walk';
+        st.timer = 16 + Math.random() * 14;
+      }
+    } else {
+      const dx = st.tx - st.x;
+      const dy = st.ty - st.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 10 || st.timer <= 0) {
+        st.mode = 'work';
+        st.timer = 3.5 + Math.random() * 4.5;
+      } else {
+        const step = Math.min(dist, speed * clampedDt);
+        st.x = Math.max(minX, Math.min(maxX, st.x + (dx / dist) * step));
+        st.y = Math.max(minY, Math.min(maxY, st.y + (dy / dist) * step));
+        st.bob += clampedDt * 6;
+        if (Math.abs(dx) > 1) st.facing = dx >= 0 ? 1 : -1;
+      }
+    }
+  }
+}
 
 export function formatTimeAgo(createdAt, fallbackLabel = '', entryId = '') {
   let ts = Number(createdAt);

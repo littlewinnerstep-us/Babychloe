@@ -19,6 +19,7 @@ import {
   getSpeciesEmoji,
   GARDEN_NPCS_DATA,
   ASH_NPCS_DATA,
+  stepBandNpcs,
   getUserIdentityKey,
   isMemorialOwner,
 } from '../data/memorialData';
@@ -291,6 +292,7 @@ export default function ParkWorld3D({
   const showOutsideChatRef = useRef(showOutsideChat);
   showOutsideChatRef.current = showOutsideChat;
   const npcQuoteOffsetsRef = useRef({});
+  const npcSimRef = useRef({ tombstone: [], 'ash-room': [] });
   const particlesRef = useRef([]);
   const weatherParticlesRef = useRef([]);
   const lightningFlashRef = useRef(0);
@@ -1577,17 +1579,27 @@ export default function ParkWorld3D({
 
       // 4. 3D Ambient NPCs
       const npcs = room === 'tombstone' ? GARDEN_NPCS_DATA : ASH_NPCS_DATA;
+      const npcStates = npcSimRef.current[room] || (npcSimRef.current[room] = []);
+      stepBandNpcs(npcStates, npcs, dt, '3d', 675);
       npcs.forEach((npc, idx) => {
-        const nx =
-          npc.x3d + (npc.patrol3d ? Math.sin(now * 0.001 * npc.speed3d + idx * 2) * npc.patrol3d : 0);
-        const nz = npc.z3d;
+        const st = npcStates[idx];
+        const nx = st ? st.x : npc.x3d;
+        const nz = st ? st.y : npc.z3d;
+        const walkBob = st && st.mode === 'walk' ? Math.abs(Math.sin(st.bob)) * 2.5 : 0;
         pushEntity(nx, nz, () => {
-          const headPt = draw3DBox(nx, 0, nz, 18, 30, 14, {
+          const headPt = draw3DBox(nx, walkBob, nz, 18, 30, 14, {
             top: npc.cloak,
             front: npc.cloak,
             side: npc.cloak,
           });
-          const head = project3D(nx, 37, nz);
+          if (npc.role === 'gardener') {
+            draw3DBox(nx, walkBob + 6, nz + 1, 12, 16, 14.5, {
+              top: '#d9cbb3',
+              front: '#d9cbb3',
+              side: '#c7b89e',
+            });
+          }
+          const head = project3D(nx, 37 + walkBob, nz);
           if (head) {
             ctx.fillStyle = '#f2cfb6';
             ctx.beginPath();
@@ -1597,6 +1609,24 @@ export default function ParkWorld3D({
             ctx.beginPath();
             ctx.arc(head.sx, head.sy - 2 * head.scale, 8.2 * head.scale, Math.PI, 0);
             ctx.fill();
+            if (npc.role === 'gardener') {
+              ctx.fillStyle = '#dfc17b';
+              ctx.beginPath();
+              ctx.ellipse(head.sx, head.sy - 5.5 * head.scale, 13 * head.scale, 4 * head.scale, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = '#caa659';
+              ctx.fillRect(
+                head.sx - 6.5 * head.scale,
+                head.sy - 12 * head.scale,
+                13 * head.scale,
+                6.5 * head.scale
+              );
+              if (npc.tool) {
+                ctx.font = `${Math.max(11, Math.round(13 * head.scale))}px serif`;
+                ctx.textAlign = 'center';
+                ctx.fillText(npc.tool, head.sx + (st?.facing || 1) * 14 * head.scale, head.sy + 14 * head.scale);
+              }
+            }
             newNpcHits.push({
               id: npc.id,
               name: npc.name,
@@ -1606,13 +1636,13 @@ export default function ParkWorld3D({
             });
           }
           const anchor = head || headPt;
-          if (anchor && Math.hypot(p.x - nx, p.z - nz) < 118) {
+          if (anchor && Math.hypot(p.x - nx, p.z - nz) < 128) {
             const qList = npc.quotes || [];
             const offset = npcQuoteOffsetsRef.current[npc.id] || 0;
             const qIdx = (Math.floor(now / 9000) + idx + offset) % Math.max(1, qList.length);
             npcSpeechQueue.push({
               sx: anchor.sx,
-              sy: anchor.sy - 14 * (anchor.scale || 1),
+              sy: anchor.sy - 16 * (anchor.scale || 1),
               speaker: npc.name,
               text: qList[qIdx] || '',
             });

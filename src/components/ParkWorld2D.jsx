@@ -16,6 +16,7 @@ import {
   getSpeciesEmoji,
   GARDEN_NPCS_DATA,
   ASH_NPCS_DATA,
+  stepBandNpcs,
   getUserIdentityKey,
   isMemorialOwner,
 } from '../data/memorialData';
@@ -305,6 +306,7 @@ export default function ParkWorld2D({
   showOutsideChatRef.current = showOutsideChat;
   const npcQuoteOffsetsRef = useRef({});
   const npcPosListRef = useRef([]);
+  const npcSimRef = useRef({ tombstone: [], 'ash-room': [] });
   const roomHeightRef = useRef(820);
 
   const userPets = useMemo(() => {
@@ -1389,14 +1391,17 @@ export default function ParkWorld2D({
       // DRAW AMBIENT NPCs
       // ====================
       const npcs = room === 'tombstone' ? GARDEN_NPCS_DATA : ASH_NPCS_DATA;
+      const npcStates = npcSimRef.current[room] || (npcSimRef.current[room] = []);
+      stepBandNpcs(npcStates, npcs, dt, '2d', 600);
       const npcSpeechQueue2D = [];
       const curNpcPositions = [];
       npcs.forEach((npc, idx) => {
-        let nx = npc.x2d;
-        const ny = npc.y2d;
-        if (npc.patrol2d > 0) {
-          nx += Math.sin(now * 0.001 * npc.speed2d + idx * 2) * npc.patrol2d;
-        }
+        const st = npcStates[idx];
+        const nx = st ? st.x : npc.x2d;
+        const ny = st ? st.y : npc.y2d;
+        const walkBob = st && st.mode === 'walk' ? Math.abs(Math.sin(st.bob)) * 2.4 : 0;
+        const workSway = st && st.mode === 'work' ? Math.sin(st.bob) * 1.4 : 0;
+        const bodyY = ny - walkBob;
         curNpcPositions.push({ id: npc.id, name: npc.name, x: nx, y: ny });
         // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.26)';
@@ -1405,18 +1410,37 @@ export default function ParkWorld2D({
         ctx.fill();
         // Body
         ctx.fillStyle = npc.cloak;
-        drawRoundedRect(ctx, nx - 9, ny - 6, 18, 19, 6);
+        drawRoundedRect(ctx, nx - 9, bodyY - 6, 18, 19, 6);
         ctx.fill();
+        if (npc.role === 'gardener') {
+          ctx.fillStyle = '#d9cbb3';
+          drawRoundedRect(ctx, nx - 5.5, bodyY - 1, 11, 12, 3);
+          ctx.fill();
+        }
         // Head
         ctx.fillStyle = '#f2cfb6';
         ctx.beginPath();
-        ctx.arc(nx, ny - 13, 8, 0, Math.PI * 2);
+        ctx.arc(nx + workSway * 0.4, bodyY - 13, 8, 0, Math.PI * 2);
         ctx.fill();
         // Hair
         ctx.fillStyle = npc.hair;
         ctx.beginPath();
-        ctx.arc(nx, ny - 15, 8.2, Math.PI, 0);
+        ctx.arc(nx + workSway * 0.4, bodyY - 15, 8.2, Math.PI, 0);
         ctx.fill();
+        if (npc.role === 'gardener') {
+          ctx.fillStyle = '#dfc17b';
+          ctx.beginPath();
+          ctx.ellipse(nx + workSway * 0.4, bodyY - 18, 12, 3.6, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#caa659';
+          drawRoundedRect(ctx, nx + workSway * 0.4 - 6.5, bodyY - 24, 13, 6.5, 3);
+          ctx.fill();
+          if (npc.tool) {
+            ctx.font = '12px serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(npc.tool, nx + (st?.facing || 1) * 14, bodyY + 5 + workSway * 0.5);
+          }
+        }
 
         // Speech bubble queued for viewport-clamped wrapped rendering when player is near NPC
         const distToNpc = Math.hypot(p.x - nx, p.y - ny);
@@ -1426,7 +1450,7 @@ export default function ParkWorld2D({
           const qIdx = (Math.floor(now / 9000) + idx + offset) % Math.max(1, qList.length);
           npcSpeechQueue2D.push({
             x: (nx - camX) * zoom,
-            y: (ny - camY - 26) * zoom,
+            y: (ny - camY - 28) * zoom,
             speaker: npc.name,
             text: qList[qIdx] || '',
           });
