@@ -340,21 +340,33 @@ export default function App() {
         if (!res.ok || cancelled) return;
         const data = await res.json();
         const remoteVer = data && data.version ? String(data.version) : '';
-        if (!remoteVer || remoteVer === APP_BUILD_VERSION) return;
+        const remoteBuilt = data && data.buildTimestamp ? String(data.buildTimestamp) : '';
+        const versionChanged = Boolean(remoteVer && remoteVer !== APP_BUILD_VERSION);
+        const buildChanged = Boolean(remoteBuilt && remoteBuilt !== APP_BUILD_TIMESTAMP);
+        if (!versionChanged && !buildChanged) return;
+        const reloadKey = `${remoteVer}|${remoteBuilt}`;
         let alreadyReloaded = '';
         try {
           alreadyReloaded = sessionStorage.getItem('evergreen_auto_reloaded_ver') || '';
         } catch {
           // ignore
         }
-        if (alreadyReloaded === remoteVer) return;
+        if (alreadyReloaded === reloadKey) return;
         try {
-          sessionStorage.setItem('evergreen_auto_reloaded_ver', remoteVer);
+          sessionStorage.setItem('evergreen_auto_reloaded_ver', reloadKey);
         } catch {
           // ignore
         }
+        if (typeof caches !== 'undefined' && caches.keys) {
+          try {
+            const keys = await caches.keys();
+            await Promise.all(keys.map((k) => caches.delete(k)));
+          } catch {
+            // ignore
+          }
+        }
         const url = new URL(window.location.href);
-        url.searchParams.set('v', remoteVer);
+        url.searchParams.set('v', remoteVer || APP_BUILD_VERSION);
         url.searchParams.set('t', String(Date.now()));
         window.location.replace(url.toString());
       } catch {

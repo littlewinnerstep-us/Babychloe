@@ -72,13 +72,22 @@ export default function UpdateCheckModal({ isApk = false, onClose }) {
     handleCheckUpdate();
   }, [handleCheckUpdate]);
 
-  const handleApplyUpdate = () => {
+  const handleApplyUpdate = async () => {
     const t = Date.now();
+    if (typeof caches !== 'undefined' && caches.keys) {
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      } catch {
+        // ignore
+      }
+    }
     if (isApk) {
       window.location.replace(`https://littlewinnerstep-us.github.io/Babychloe/?apk=1&t=${t}`);
       return;
     }
     const url = new URL(window.location.href);
+    url.searchParams.set('v', remoteInfo?.version || APP_BUILD_VERSION);
     url.searchParams.set('t', String(t));
     window.location.replace(url.toString());
   };
