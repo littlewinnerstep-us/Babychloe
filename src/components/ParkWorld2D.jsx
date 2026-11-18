@@ -72,7 +72,11 @@ const WORLD_BOUNDS = {
   'ash-room': { width: 1200, height: 820, portalX: 600, portalY: 735 },
 };
 
-const COLS_2D = [190, 395, 805, 1010];
+// 10 tombs max on left row + 10 tombs max on right row = 20 per row (10 rows = 200 max)
+const COLS_2D = [
+  60, 112, 164, 216, 268, 320, 372, 424, 476, 528,
+  672, 724, 776, 828, 880, 932, 984, 1036, 1088, 1140,
+];
 
 function drawRoundedRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -510,13 +514,17 @@ export default function ParkWorld2D({
 
     const map = [];
     tombstones.forEach((m, idx) => {
-      const col = COLS_2D[idx % COLS_2D.length];
-      const row = Math.floor(idx / COLS_2D.length);
+      const n = parseInt((m.locationCode || '').match(/(\d+)\s*$/)?.[1] || '', 10);
+      const slot = Number.isFinite(n) && n >= 1 && n <= 200 ? n - 1 : Math.min(199, 20 + idx);
+      const col = COLS_2D[slot % COLS_2D.length];
+      const row = Math.floor(slot / COLS_2D.length);
       map.push({ ...m, worldX: col, worldY: 220 + row * 195 });
     });
     ashNiches.forEach((m, idx) => {
-      const col = COLS_2D[idx % COLS_2D.length];
-      const row = Math.floor(idx / COLS_2D.length);
+      const n = parseInt((m.locationCode || '').match(/(\d+)\s*$/)?.[1] || '', 10);
+      const slot = Number.isFinite(n) && n >= 1 && n <= 200 ? n - 1 : Math.min(199, 20 + idx);
+      const col = COLS_2D[slot % COLS_2D.length];
+      const row = Math.floor(slot / COLS_2D.length);
       map.push({ ...m, worldX: col, worldY: 200 + row * 195 });
     });
     return map;

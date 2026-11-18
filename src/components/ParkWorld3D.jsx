@@ -74,7 +74,11 @@ function loadAvatarPrefs() {
   return DEFAULT_AVATAR;
 }
 
-const COLS_3D = [-390, -200, 200, 390];
+// 10 tombs max on left row + 10 tombs max on right row = 20 per row (10 rows = 200 max)
+const COLS_3D = [
+  -860, -780, -700, -620, -540, -460, -380, -300, -220, -140,
+  140, 220, 300, 380, 460, 540, 620, 700, 780, 860,
+];
 
 export default function ParkWorld3D({
   isApk = false,
@@ -502,13 +506,17 @@ export default function ParkWorld3D({
     const ashNiches = memorials.filter((m) => m.space === 'ash-room').sort(sortSeq);
     const list = [];
     tombstones.forEach((m, idx) => {
-      const col = COLS_3D[idx % COLS_3D.length];
-      const row = Math.floor(idx / COLS_3D.length);
+      const n = parseInt((m.locationCode || '').match(/(\d+)\s*$/)?.[1] || '', 10);
+      const slot = Number.isFinite(n) && n >= 1 && n <= 200 ? n - 1 : Math.min(199, 20 + idx);
+      const col = COLS_3D[slot % COLS_3D.length];
+      const row = Math.floor(slot / COLS_3D.length);
       list.push({ ...m, worldX: col, worldZ: -170 + row * 195 });
     });
     ashNiches.forEach((m, idx) => {
-      const col = COLS_3D[idx % COLS_3D.length];
-      const row = Math.floor(idx / COLS_3D.length);
+      const n = parseInt((m.locationCode || '').match(/(\d+)\s*$/)?.[1] || '', 10);
+      const slot = Number.isFinite(n) && n >= 1 && n <= 200 ? n - 1 : Math.min(199, 20 + idx);
+      const col = COLS_3D[slot % COLS_3D.length];
+      const row = Math.floor(slot / COLS_3D.length);
       list.push({ ...m, worldX: col, worldZ: -170 + row * 195 });
     });
     return list;
@@ -791,7 +799,7 @@ export default function ParkWorld3D({
 
       // Clamp 3D world bounds (expanding dynamically as more memorials are added)
       const maxZ = maxZRef.current;
-      p.x = Math.max(-500, Math.min(500, p.x));
+      p.x = Math.max(-950, Math.min(950, p.x));
       p.z = Math.max(-360, Math.min(maxZ, p.z));
 
       if (p.moving || p.history.length === 0) {

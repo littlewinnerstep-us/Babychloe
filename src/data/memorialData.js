@@ -607,6 +607,9 @@ const STARTER_ORDER = {
   'mem-yuzu': 6,
 };
 
+export const MAX_PLOTS_PER_GARDEN = 200;
+export const RESERVED_PLOT_END = 20;
+
 function parsePlotNumber(code) {
   const m = String(code || '').match(/(\d+)\s*$/);
   return m ? Math.max(1, parseInt(m[1], 10)) : null;
@@ -647,11 +650,18 @@ export function normalizeAndDeduplicateMemorials(memorials) {
     const used = usedPerBucket.get(bucketKey);
 
     let num = parsePlotNumber(m.locationCode);
-    if (!num) {
-      num = 1;
+    // Plots 1-20 are reserved blank; current & new plots are arranged in 21-200
+    if (!num || num <= RESERVED_PLOT_END || num > MAX_PLOTS_PER_GARDEN) {
+      num = RESERVED_PLOT_END + 1;
     }
-    while (used.has(num)) {
+    while (used.has(num) && num <= MAX_PLOTS_PER_GARDEN) {
       num += 1;
+    }
+    if (num > MAX_PLOTS_PER_GARDEN) {
+      num = RESERVED_PLOT_END + 1;
+      while (used.has(num)) {
+        num += 1;
+      }
     }
     used.add(num);
 
@@ -687,11 +697,11 @@ export function getNextPlotCode(memorials, species, space) {
     }
   });
 
-  let nextNum = 1;
-  while (used.has(nextNum)) {
+  let nextNum = RESERVED_PLOT_END + 1;
+  while (used.has(nextNum) && nextNum <= MAX_PLOTS_PER_GARDEN) {
     nextNum += 1;
   }
-  return formatSequentialCode(targetSpace, nextNum);
+  return formatSequentialCode(targetSpace, Math.min(nextNum, MAX_PLOTS_PER_GARDEN));
 }
 
 export const GARDEN_NPCS_DATA = [
