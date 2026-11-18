@@ -42,6 +42,7 @@ import {
 import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
 import AvatarCustomizerDrawer from './AvatarCustomizerDrawer';
 import SpeciesGateModal from './SpeciesGateModal';
+import PlotNicheListModal from './PlotNicheListModal';
 import WorldJoystick from './WorldJoystick';
 import WorldHudBar from './WorldHudBar';
 
@@ -169,6 +170,7 @@ export default function ParkWorld2D({
   const [showAvatarPanel, setShowAvatarPanel] = useState(false);
   const [showMeetupPanel, setShowMeetupPanel] = useState(false);
   const [showSpeciesGate, setShowSpeciesGate] = useState(false);
+  const [showPlotListModal, setShowPlotListModal] = useState(false);
   const [nearbyMemorialId, setNearbyMemorialId] = useState(null);
   const [inspectedId, setInspectedId] = useState(null);
   const [armtipText, setArmtipText] = useState('');
@@ -2060,6 +2062,19 @@ export default function ParkWorld2D({
         >
           {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
         </button>
+        <button
+          type="button"
+          className="world-fs-floating-btn"
+          style={{ top: 176, right: 10, zIndex: 18, fontSize: '1rem' }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowPlotListModal(true);
+          }}
+          aria-label={activeRoom === 'ash-room' ? 'Niche List' : 'Plot List'}
+          title={activeRoom === 'ash-room' ? 'Niche List' : 'Plot List'}
+        >
+          {activeRoom === 'ash-room' ? '🏺' : '🪦'}
+        </button>
         <canvas
           ref={canvasRef}
           className="world-canvas"
@@ -2414,6 +2429,15 @@ export default function ParkWorld2D({
           onWalkToPeer={handleWalkToPeer}
         />
       </div>
+
+      <PlotNicheListModal
+        isOpen={showPlotListModal}
+        onClose={() => setShowPlotListModal(false)}
+        activeRoom={activeRoom}
+        activeSpecies={activeSpecies}
+        memorials={memorials}
+        onVisitPet={handleWalkToPet}
+      />
 
       {showSpeciesGate && (
         <SpeciesGateModal

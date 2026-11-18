@@ -46,6 +46,7 @@ import {
 import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
 import AvatarCustomizerDrawer from './AvatarCustomizerDrawer';
 import SpeciesGateModal from './SpeciesGateModal';
+import PlotNicheListModal from './PlotNicheListModal';
 import WorldJoystick from './WorldJoystick';
 import WorldHudBar from './WorldHudBar';
 
@@ -158,6 +159,7 @@ export default function ParkWorld3D({
   const [showAvatarPanel, setShowAvatarPanel] = useState(false);
   const [showMeetupPanel, setShowMeetupPanel] = useState(false);
   const [showSpeciesGate, setShowSpeciesGate] = useState(false);
+  const [showPlotListModal, setShowPlotListModal] = useState(false);
   const [nearbyMemorialId, setNearbyMemorialId] = useState(null);
   const [inspectedId, setInspectedId] = useState(null);
   const [armtipText, setArmtipText] = useState('');
@@ -2443,6 +2445,18 @@ export default function ParkWorld3D({
           >
             <Video size={16} />
           </button>
+          {!cameraMenuOpen && (
+            <button
+              type="button"
+              className="world-fs-floating-btn"
+              style={{ position: 'static', fontSize: '1rem' }}
+              onClick={() => setShowPlotListModal(true)}
+              aria-label={activeRoom === 'ash-room' ? 'Niche List' : 'Plot List'}
+              title={activeRoom === 'ash-room' ? 'Niche List' : 'Plot List'}
+            >
+              {activeRoom === 'ash-room' ? '🏺' : '🪦'}
+            </button>
+          )}
           {cameraMenuOpen && (
             <div
               style={{
@@ -2846,6 +2860,15 @@ export default function ParkWorld3D({
           onWalkToPeer={handleWalkToPeer}
         />
       </div>
+
+      <PlotNicheListModal
+        isOpen={showPlotListModal}
+        onClose={() => setShowPlotListModal(false)}
+        activeRoom={activeRoom}
+        activeSpecies={activeSpecies}
+        memorials={memorials}
+        onVisitPet={handleWalkToPet}
+      />
 
       {showSpeciesGate && (
         <SpeciesGateModal
