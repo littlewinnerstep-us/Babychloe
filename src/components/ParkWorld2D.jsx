@@ -70,7 +70,7 @@ function loadAvatarPrefs() {
 }
 
 const CENTER_X = 1400;
-const GATE_X = 2720;
+const GATE_X = CENTER_X; // End of map middle road (bottom of x=1400)
 
 const WORLD_BOUNDS = {
   tombstone: { width: 2800, height: 820, portalX: CENTER_X, portalY: 90 },
@@ -217,20 +217,23 @@ export default function ParkWorld2D({
   };
   openSpeciesGateRef.current = openSpeciesGate;
 
+  const getGateY = () => Math.max(2460, roomHeightRef.current - 95);
+
   const startWalkToSpeciesGate = (targetSpecies) => {
     if (!targetSpecies || targetSpecies === speciesRef.current) return;
     const p = playerRef.current;
+    const gateY = getGateY();
     setInspectedId(null);
     pendingOpenGateRef.current = false;
     pendingOpenIdRef.current = null;
     pendingTargetSpeciesRef.current = targetSpecies;
     p.targetMemorialId = null;
-    if (Math.hypot(p.x - GATE_X, p.y - 410) < 54) {
-      p.x = GATE_X - 115;
-      p.y = 410;
+    if (Math.hypot(p.x - GATE_X, p.y - gateY) < 54) {
+      p.x = GATE_X;
+      p.y = gateY - 115;
     }
     p.targetX = GATE_X;
-    p.targetY = 410;
+    p.targetY = gateY;
     setWalkMessage(`Walking to ${getSpeciesEmoji(targetSpecies)} ${targetSpecies} Gates...`);
     setTimeout(() => setWalkMessage(''), 2600);
   };
@@ -244,8 +247,8 @@ export default function ParkWorld2D({
       return;
     }
     pendingOpenGateRef.current = true;
-    playerRef.current.targetX = 1085;
-    playerRef.current.targetY = 410;
+    playerRef.current.targetX = GATE_X;
+    playerRef.current.targetY = getGateY() - 45;
     playerRef.current.targetMemorialId = null;
     setWalkMessage('Walking to Species Sanctuary Gate...');
     setTimeout(() => setWalkMessage(''), 2200);
@@ -834,7 +837,8 @@ export default function ParkWorld2D({
         setNearPortal(isNearPortalNow);
       }
 
-      const gateDist = Math.hypot(p.x - GATE_X, p.y - 410);
+      const gateY = Math.max(2460, bounds.height - 95);
+      const gateDist = Math.hypot(p.x - GATE_X, p.y - gateY);
       const isNearGateNow = gateDist < 92;
       if (isNearGateNow !== nearGateRef.current) {
         nearGateRef.current = isNearGateNow;
@@ -1462,24 +1466,24 @@ export default function ParkWorld2D({
       });
       npcPosListRef.current = curNpcPositions;
 
-      // Species Sanctuary Gate (East side at 1135, 410)
+      // Species Sanctuary Gate (End of map middle road at x=CENTER_X, y=gateY)
       ctx.save();
       ctx.fillStyle = '#943030';
-      ctx.fillRect(GATE_X - 21, 382, 10, 56);
-      ctx.fillRect(GATE_X + 13, 382, 10, 56);
+      ctx.fillRect(GATE_X - 21, gateY - 28, 10, 56);
+      ctx.fillRect(GATE_X + 13, gateY - 28, 10, 56);
       ctx.fillStyle = '#b84242';
-      drawRoundedRect(ctx, GATE_X - 31, 374, 64, 12, 5);
+      drawRoundedRect(ctx, GATE_X - 31, gateY - 36, 64, 12, 5);
       ctx.fill();
       ctx.strokeStyle = '#ffd57e';
       ctx.lineWidth = 1.4;
       ctx.stroke();
       ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
       ctx.fillStyle = 'rgba(20, 16, 18, 0.88)';
-      drawRoundedRect(ctx, GATE_X - 53, 348, 108, 19, 6);
+      drawRoundedRect(ctx, GATE_X - 53, gateY - 62, 108, 19, 6);
       ctx.fill();
       ctx.fillStyle = '#ffe5ad';
       ctx.textAlign = 'center';
-      ctx.fillText('⛩️ Other Species', GATE_X + 1, 361);
+      ctx.fillText('⛩️ Other Species', GATE_X + 1, gateY - 49);
       ctx.restore();
 
       // ====================
@@ -1840,8 +1844,9 @@ export default function ParkWorld2D({
     const worldX = clickX / zoom + camX;
     const worldY = clickY / zoom + camY;
 
-    // 1. Check if user clicked/tapped the Species Sanctuary Gate (East side at 1135, 410)
-    if (worldX >= GATE_X - 67 && worldX <= GATE_X + 69 && worldY >= 335 && worldY <= 454) {
+    // 1. Check if user clicked/tapped the Species Sanctuary Gate (End of map middle road)
+    const gateY = getGateY();
+    if (worldX >= GATE_X - 67 && worldX <= GATE_X + 69 && worldY >= gateY - 75 && worldY <= gateY + 44) {
       walkOrOpenSpeciesGate();
       return;
     }

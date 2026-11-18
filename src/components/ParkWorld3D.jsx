@@ -206,19 +206,22 @@ export default function ParkWorld3D({
   };
   openSpeciesGateRef.current = openSpeciesGate;
 
+  const getGateZ = () => Math.max(2130, maxZRef.current - 65);
+
   const startWalkToSpeciesGate = (targetSpecies) => {
     if (!targetSpecies || targetSpecies === speciesRef.current) return;
     const p = playerRef.current;
+    const gateZ = getGateZ();
     setInspectedId(null);
     pendingOpenGateRef.current = false;
     pendingOpenIdRef.current = null;
     pendingTargetSpeciesRef.current = targetSpecies;
-    if (Math.hypot(p.x - 460, p.z - 0) < 54) {
-      p.x = 355;
-      p.z = 0;
+    if (Math.hypot(p.x - 0, p.z - gateZ) < 54) {
+      p.x = 0;
+      p.z = gateZ - 110;
     }
-    p.targetX = 460;
-    p.targetZ = 0;
+    p.targetX = 0;
+    p.targetZ = gateZ;
     setWalkMessage(`Walking to ${getSpeciesEmoji(targetSpecies)} ${targetSpecies} Gates...`);
     setTimeout(() => setWalkMessage(''), 2600);
   };
@@ -232,8 +235,8 @@ export default function ParkWorld3D({
       return;
     }
     pendingOpenGateRef.current = true;
-    playerRef.current.targetX = 415;
-    playerRef.current.targetZ = 0;
+    playerRef.current.targetX = 0;
+    playerRef.current.targetZ = getGateZ() - 48;
     setWalkMessage('Walking to Species Sanctuary Gate...');
     setTimeout(() => setWalkMessage(''), 2200);
   };
@@ -841,7 +844,8 @@ export default function ParkWorld3D({
         setNearPortal(isNearPortalNow);
       }
 
-      const gateDist = Math.hypot(p.x - 460, p.z - 0);
+      const gateZ = Math.max(2130, maxZ - 65);
+      const gateDist = Math.hypot(p.x - 0, p.z - gateZ);
       const isNearGateNow = gateDist < 92;
       if (isNearGateNow !== nearGateRef.current) {
         nearGateRef.current = isNearGateNow;
@@ -1654,17 +1658,17 @@ export default function ParkWorld3D({
         });
       });
 
-      // 2b. Species Sanctuary Gate (East side at x=460, z=0)
-      pushEntity(460, 0, () => {
-        const leftPost = draw3DBox(460, 0, -28, 12, 82, 12, { top: '#b84242', front: '#943030', side: '#6e2020' });
-        const rightPost = draw3DBox(460, 0, 28, 12, 82, 12, { top: '#b84242', front: '#943030', side: '#6e2020' });
-        const topGate = draw3DBox(460, 76, 0, 16, 12, 76, {
+      // 2b. Species Sanctuary Gate (End of map middle road at x=0, z=gateZ)
+      pushEntity(0, gateZ, () => {
+        const leftPost = draw3DBox(-28, 0, gateZ, 12, 82, 12, { top: '#b84242', front: '#943030', side: '#6e2020' });
+        const rightPost = draw3DBox(28, 0, gateZ, 12, 82, 12, { top: '#b84242', front: '#943030', side: '#6e2020' });
+        const topGate = draw3DBox(0, 76, gateZ, 76, 12, 16, {
           top: '#e0a958',
           front: '#8f2929',
           side: '#6b1d1d',
           stroke: '#ffd57e',
         });
-        const gateCenter = project3D(460, 42, 0);
+        const gateCenter = project3D(0, 42, gateZ);
         if (topGate) {
           ctx.font = `700 ${Math.max(10, Math.round(12 * topGate.scale))}px "Plus Jakarta Sans", sans-serif`;
           const gTxt = '⛩️ Other Species Gate';
