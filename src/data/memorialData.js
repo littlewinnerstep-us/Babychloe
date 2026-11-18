@@ -258,7 +258,7 @@ export const INITIAL_MEMORIALS = [
     breed: 'Golden Retriever',
     space: 'tombstone',
     styleId: 'classic-granite',
-    locationCode: 'Plot G-1',
+    locationCode: 'Plot G-21',
     zoneName: 'Whispering Meadow',
     birthDate: '2011-04-12',
     passedDate: '2025-09-18',
@@ -336,7 +336,7 @@ export const INITIAL_MEMORIALS = [
     breed: 'Scottish Fold',
     space: 'ash-room',
     styleId: 'celadon-urn',
-    locationCode: 'Niche A-1',
+    locationCode: 'Niche A-21',
     zoneName: 'Hall of Serenity',
     birthDate: '2013-02-08',
     passedDate: '2026-01-22',
@@ -395,7 +395,7 @@ export const INITIAL_MEMORIALS = [
     breed: 'Siberian Husky',
     space: 'tombstone',
     styleId: 'moss-celtic',
-    locationCode: 'Plot G-2',
+    locationCode: 'Plot G-22',
     zoneName: 'Pinecrest Slope',
     birthDate: '2012-11-19',
     passedDate: '2025-12-04',
@@ -447,7 +447,7 @@ export const INITIAL_MEMORIALS = [
     breed: 'Holland Lop',
     space: 'tombstone',
     styleId: 'rose-heart',
-    locationCode: 'Plot G-1',
+    locationCode: 'Plot G-21',
     zoneName: 'Sunlit Clover Patch',
     birthDate: '2018-03-21',
     passedDate: '2026-02-14',
@@ -499,7 +499,7 @@ export const INITIAL_MEMORIALS = [
     breed: 'Tuxedo Shorthair',
     space: 'ash-room',
     styleId: 'starlight-glass',
-    locationCode: 'Niche A-2',
+    locationCode: 'Niche A-22',
     zoneName: 'Moonlight Gallery',
     birthDate: '2010-08-30',
     passedDate: '2025-11-11',
@@ -551,7 +551,7 @@ export const INITIAL_MEMORIALS = [
     breed: 'Shiba Inu',
     space: 'ash-room',
     styleId: 'gilded-lotus',
-    locationCode: 'Niche A-1',
+    locationCode: 'Niche A-21',
     zoneName: 'Cedar Alcove',
     birthDate: '2014-05-03',
     passedDate: '2026-03-09',
@@ -622,7 +622,12 @@ function formatSequentialCode(space, num) {
 export function normalizeAndDeduplicateMemorials(memorials) {
   if (!Array.isArray(memorials)) return INITIAL_MEMORIALS;
 
-  const valid = memorials.filter((m) => m && typeof m === 'object' && m.id);
+  const valid = memorials.filter((m) => {
+    if (!m || typeof m !== 'object' || !m.id) return false;
+    const rawNum = parsePlotNumber(m.locationCode);
+    if (rawNum && rawNum >= 666 && rawNum <= 668) return false;
+    return true;
+  });
   if (valid.length === 0) return INITIAL_MEMORIALS;
 
   const sorted = valid

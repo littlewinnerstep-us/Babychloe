@@ -1275,7 +1275,7 @@ export default function ParkWorld2D({
           ctx.textAlign = 'center';
           ctx.fillText((m.name || 'Pet').slice(0, 10), mx, my + 3);
           ctx.font = '600 8.5px "Plus Jakarta Sans", sans-serif';
-          ctx.fillText(m.locationCode || 'Plot G-1', mx, my + 14);
+          ctx.fillText(m.locationCode || 'Plot G-21', mx, my + 14);
         } else {
           // Ash Room Columbarium Alcove
           const alcGlow = ctx.createRadialGradient(mx, my - 6, 4, mx, my - 6, 56);
