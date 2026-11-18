@@ -1992,15 +1992,66 @@ select {
 
 .env-weather-bar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 8px;
   background: var(--bg-surface);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
-  padding: 8px 12px;
-  margin-bottom: 14px;
+  padding: 6px 10px;
+  margin-bottom: 12px;
+}
+
+.env-weather-bar.is-collapsed {
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 8px;
+}
+
+.env-icon-trigger-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.env-icon-trigger {
+  border: 1px solid var(--border-soft);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 5px 10px;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.env-icon-trigger.active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+
+.env-icon-close {
+  margin-left: auto;
+  border: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.env-dropdown-panel {
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-soft);
 }
 
 .env-group {

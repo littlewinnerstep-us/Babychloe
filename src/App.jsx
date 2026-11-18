@@ -22,6 +22,8 @@ import {
   Bell,
   ShieldCheck,
   RefreshCw,
+  Calendar,
+  CloudSun,
   X,
 } from 'lucide-react';
 import {
@@ -295,8 +297,21 @@ export default function App() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [accountsList, setAccountsList] = useState(getRegisteredAccounts);
   const [globalNotice, setGlobalNotice] = useState('');
+  const [openEnvPanel, setOpenEnvPanel] = useState(null); // null | 'season' | 'weather' | 'volume'
+  const envBarRef = useRef(null);
   const isApk = useMemo(() => isApkEnvironment(), []);
   const isMobileHud = useIsMobileHud(isApk);
+
+  useEffect(() => {
+    if (!openEnvPanel || typeof document === 'undefined') return undefined;
+    const handleOutside = (e) => {
+      if (envBarRef.current && !envBarRef.current.contains(e.target)) {
+        setOpenEnvPanel(null);
+      }
+    };
+    document.addEventListener('pointerdown', handleOutside);
+    return () => document.removeEventListener('pointerdown', handleOutside);
+  }, [openEnvPanel]);
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -1444,138 +1459,199 @@ export default function App() {
           </div>
         </section>
 
-        {/* 4 Seasons, Weather & Sound Controls */}
-        <div className="env-weather-bar">
-          <div className="env-group">
-            <span className="env-label">Season:</span>
-            {SEASONS.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                className={`env-pill ${season === s.id ? 'active' : ''}`}
-                onClick={() => handleSelectSeason(s.id)}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
+        {/* Auto-Hidden Season, Weather & Volume Icon Menus */}
+        <div ref={envBarRef} className={`env-weather-bar ${openEnvPanel ? 'is-expanded' : 'is-collapsed'}`}>
+          <div className="env-icon-trigger-row" role="toolbar" aria-label="Season, Weather and Volume menus">
+            <button
+              type="button"
+              className={`env-icon-trigger ${openEnvPanel === 'season' ? 'active' : ''}`}
+              onClick={() => setOpenEnvPanel((p) => (p === 'season' ? null : 'season'))}
+              title={`Season: ${SEASONS.find((s) => s.id === season)?.label || season}`}
+              aria-label="Season menu"
+              aria-expanded={openEnvPanel === 'season'}
+            >
+              <Calendar size={14} />
+              <span>{(SEASONS.find((s) => s.id === season)?.label || '🌸').split(' ')[0]}</span>
+            </button>
 
-          <div className="env-group">
-            <span className="env-label">Weather:</span>
-            {WEATHERS.filter((w) => (SEASON_WEATHER_WEIGHTS[season]?.[w.id] || 0) > 0).map((w) => (
-              <button
-                key={w.id}
-                type="button"
-                className={`env-pill ${weather === w.id ? 'active' : ''}`}
-                onClick={() => setWeather(w.id)}
-              >
-                {w.label}
-              </button>
-            ))}
             <button
               type="button"
-              className={`env-pill ${randomWeather ? 'active' : ''}`}
-              onClick={() => setRandomWeather((r) => !r)}
-              title="Toggle automatic random weather & day/night cycle"
+              className={`env-icon-trigger ${openEnvPanel === 'weather' ? 'active' : ''}`}
+              onClick={() => setOpenEnvPanel((p) => (p === 'weather' ? null : 'weather'))}
+              title={`Weather: ${WEATHERS.find((w) => w.id === weather)?.label || weather}`}
+              aria-label="Weather menu"
+              aria-expanded={openEnvPanel === 'weather'}
             >
-              <Shuffle size={12} /> Auto Random
+              <CloudSun size={14} />
+              <span>{(WEATHERS.find((w) => w.id === weather)?.label || '✨').split(' ')[0]}</span>
             </button>
+
             <button
               type="button"
-              className="env-pill"
-              onClick={handleRandomizeWeather}
-              title="Randomize season, weather & sky now"
+              className={`env-icon-trigger ${openEnvPanel === 'volume' ? 'active' : ''}`}
+              onClick={() => setOpenEnvPanel((p) => (p === 'volume' ? null : 'volume'))}
+              title="Sound Volume Controls"
+              aria-label="Volume menu"
+              aria-expanded={openEnvPanel === 'volume'}
             >
-              🎲 Now
+              {soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
             </button>
-            <button
-              type="button"
-              className={`env-pill ${weatherEffectsEnabled ? 'active' : ''}`}
-              onClick={() => setWeatherEffectsEnabled((v) => !v)}
-              title="Turn all weather visual effects on or off"
-            >
-              {weatherEffectsEnabled ? '🌦️ Weather FX: ON' : '☀️ Weather FX: OFF'}
-            </button>
-            <button
-              type="button"
-              className={`env-pill ${weatherSoundEnabled && weatherEffectsEnabled ? 'active' : ''}`}
-              onClick={() => setWeatherSoundEnabled((v) => !v)}
-              title="Turn weather sound effects (rain/wind/thunder) on or off"
-            >
-              {weatherSoundEnabled ? '🔊 Weather Sound: ON' : '🔇 Weather Sound: OFF'}
-            </button>
-            {atmosphere === 'morning' ? (
+
+            {openEnvPanel && (
               <button
                 type="button"
-                className="env-pill"
-                onClick={() => {
-                  if (!soundEnabled) setSoundEnabled(true);
-                  setSoundState(buildAudioState(true));
-                  unlockAudioFromGesture();
-                  playMorningBird(true);
-                }}
-                title="Hear gentle morning songbirds"
+                className="env-icon-close"
+                onClick={() => setOpenEnvPanel(null)}
+                aria-label="Hide environment panel"
+                title="Hide"
               >
-                🐦 Morning Birds
+                <X size={13} />
               </button>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="env-pill"
-                  onClick={() => {
-                    if (!soundEnabled) {
-                      setSoundEnabled(true);
-                    }
-                    setSoundState(buildAudioState(true));
-                    unlockAudioFromGesture();
-                    playDogBarkAndHowl(true);
-                  }}
-                  title="Hear distant dog bark & moonlight howl (Dusk/Night)"
-                >
-                  🐕 Bark/Howl
-                </button>
-                <button
-                  type="button"
-                  className="env-pill"
-                  onClick={() => {
-                    if (!soundEnabled) {
-                      setSoundEnabled(true);
-                    }
-                    setSoundState(buildAudioState(true));
-                    unlockAudioFromGesture();
-                    playOwlHoot(true);
-                  }}
-                  title="Hear distant owl hoot (Dusk/Night)"
-                >
-                  🦉 Owl
-                </button>
-              </>
             )}
           </div>
 
-          <div className="volume-mixer-row" aria-label="Sound volume controls">
-            <span className="env-label">Volumes:</span>
-            {VOLUME_CHANNELS.map((ch) => {
-              const pct = Math.round((soundVolumes[ch.key] ?? 0.5) * 100);
-              return (
-                <label key={ch.key} className="volume-slider-item" title={`${ch.label} Volume (${pct}%)`}>
-                  <span className="volume-slider-label">
-                    {ch.emoji} {ch.label}
-                  </span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={pct}
-                    onChange={(e) => handleVolumeSliderChange(ch.key, e.target.value)}
-                  />
-                  <span className="volume-slider-pct">{pct}%</span>
-                </label>
-              );
-            })}
-          </div>
+          {openEnvPanel === 'season' && (
+            <div className="env-group env-dropdown-panel">
+              <span className="env-label">Season:</span>
+              {SEASONS.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`env-pill ${season === s.id ? 'active' : ''}`}
+                  onClick={() => {
+                    handleSelectSeason(s.id);
+                    setOpenEnvPanel(null);
+                  }}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {openEnvPanel === 'weather' && (
+            <div className="env-group env-dropdown-panel">
+              <span className="env-label">Weather:</span>
+              {WEATHERS.filter((w) => (SEASON_WEATHER_WEIGHTS[season]?.[w.id] || 0) > 0).map((w) => (
+                <button
+                  key={w.id}
+                  type="button"
+                  className={`env-pill ${weather === w.id ? 'active' : ''}`}
+                  onClick={() => {
+                    setWeather(w.id);
+                    setOpenEnvPanel(null);
+                  }}
+                >
+                  {w.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className={`env-pill ${randomWeather ? 'active' : ''}`}
+                onClick={() => setRandomWeather((r) => !r)}
+                title="Toggle automatic random weather & day/night cycle"
+              >
+                <Shuffle size={12} /> Auto Random
+              </button>
+              <button
+                type="button"
+                className="env-pill"
+                onClick={handleRandomizeWeather}
+                title="Randomize season, weather & sky now"
+              >
+                🎲 Now
+              </button>
+              <button
+                type="button"
+                className={`env-pill ${weatherEffectsEnabled ? 'active' : ''}`}
+                onClick={() => setWeatherEffectsEnabled((v) => !v)}
+                title="Turn all weather visual effects on or off"
+              >
+                {weatherEffectsEnabled ? '🌦️ Weather FX: ON' : '☀️ Weather FX: OFF'}
+              </button>
+              <button
+                type="button"
+                className={`env-pill ${weatherSoundEnabled && weatherEffectsEnabled ? 'active' : ''}`}
+                onClick={() => setWeatherSoundEnabled((v) => !v)}
+                title="Turn weather sound effects (rain/wind/thunder) on or off"
+              >
+                {weatherSoundEnabled ? '🔊 Weather Sound: ON' : '🔇 Weather Sound: OFF'}
+              </button>
+              {atmosphere === 'morning' ? (
+                <button
+                  type="button"
+                  className="env-pill"
+                  onClick={() => {
+                    if (!soundEnabled) setSoundEnabled(true);
+                    setSoundState(buildAudioState(true));
+                    unlockAudioFromGesture();
+                    playMorningBird(true);
+                  }}
+                  title="Hear gentle morning songbirds"
+                >
+                  🐦 Morning Birds
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="env-pill"
+                    onClick={() => {
+                      if (!soundEnabled) {
+                        setSoundEnabled(true);
+                      }
+                      setSoundState(buildAudioState(true));
+                      unlockAudioFromGesture();
+                      playDogBarkAndHowl(true);
+                    }}
+                    title="Hear distant dog bark & moonlight howl (Dusk/Night)"
+                  >
+                    🐕 Bark/Howl
+                  </button>
+                  <button
+                    type="button"
+                    className="env-pill"
+                    onClick={() => {
+                      if (!soundEnabled) {
+                        setSoundEnabled(true);
+                      }
+                      setSoundState(buildAudioState(true));
+                      unlockAudioFromGesture();
+                      playOwlHoot(true);
+                    }}
+                    title="Hear distant owl hoot (Dusk/Night)"
+                  >
+                    🦉 Owl
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {openEnvPanel === 'volume' && (
+            <div className="volume-mixer-row env-dropdown-panel" aria-label="Sound volume controls">
+              <span className="env-label">Volumes:</span>
+              {VOLUME_CHANNELS.map((ch) => {
+                const pct = Math.round((soundVolumes[ch.key] ?? 0.5) * 100);
+                return (
+                  <label key={ch.key} className="volume-slider-item" title={`${ch.label} Volume (${pct}%)`}>
+                    <span className="volume-slider-label">
+                      {ch.emoji} {ch.label}
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={pct}
+                      onChange={(e) => handleVolumeSliderChange(ch.key, e.target.value)}
+                    />
+                    <span className="volume-slider-pct">{pct}%</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Section Header + View Mode Switch */}
