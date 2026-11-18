@@ -906,24 +906,80 @@ export const GARDEN_NPCS_DATA = buildBandNpcs(true);
 
 export const ASH_NPCS_DATA = buildBandNpcs(false);
 
+const PLOT_COLS_2D = [
+  140, 260, 380, 500, 620, 740, 860, 980, 1100, 1220,
+  1580, 1700, 1820, 1940, 2060, 2180, 2300, 2420, 2540, 2660,
+];
+const PLOT_COLS_3D = [
+  -1400, -1265, -1130, -995, -860, -725, -590, -455, -320, -185,
+  185, 320, 455, 590, 725, 860, 995, 1130, 1265, 1400,
+];
+
+/**
+ * Prevents characters and NPCs from stepping onto or inside any tomb or niche plot
+ * by smoothly sliding them around the plot's anti-collision boundary.
+ */
+export function resolvePlotCollision(
+  x,
+  y,
+  mode = '2d',
+  room = 'tombstone',
+  rx = 44,
+  ry = 40
+) {
+  const cols = mode === '3d' ? PLOT_COLS_3D : PLOT_COLS_2D;
+  const baseRowY = mode === '3d' ? -170 : room === 'ash-room' ? 200 : 220;
+  const rowStep = mode === '3d' ? 250 : 240;
+
+  let nx = x;
+  let ny = y;
+  const approxRow = Math.max(0, Math.min(9, Math.round((ny - baseRowY) / rowStep)));
+  const rStart = Math.max(0, approxRow - 1);
+  const rEnd = Math.min(9, approxRow + 1);
+
+  for (let r = rStart; r <= rEnd; r++) {
+    const py = baseRowY + r * rowStep;
+    if (Math.abs(ny - py) >= ry) continue;
+    for (let c = 0; c < cols.length; c++) {
+      const px = cols[c];
+      const dx = nx - px;
+      if (Math.abs(dx) >= rx) continue;
+      const dy = ny - py;
+      const ex = dx / rx;
+      const ey = dy / ry;
+      const d = Math.hypot(ex, ey);
+      if (d < 1) {
+        if (d < 0.001) {
+          ny = py + ry;
+        } else {
+          nx = px + (ex / d) * rx;
+          ny = py + (ey / d) * ry;
+        }
+      }
+    }
+  }
+  return { x: nx, y: ny };
+}
+
 /**
  * Advances stateful NPC positions in-place within their assigned 2-row band,
  * alternating between slow end-to-end walking and working pauses while enforcing
- * a minimum anti-collision separation (`minSep`, ~5 tombs away).
+ * a minimum anti-collision separation (`minSep`, ~5 tombs away) and plot avoidance.
  */
-export function stepBandNpcs(stateList, npcs, dt, mode = '2d', minSep = 600) {
+export function stepBandNpcs(stateList, npcs, dt, mode = '2d', minSep = 600, room = 'tombstone') {
   if (!stateList || stateList.length !== npcs.length) {
     stateList.length = 0;
     npcs.forEach((npc, idx) => {
       const is2d = mode === '2d';
-      const x = is2d ? npc.x2d : npc.x3d;
-      const y = is2d ? npc.y2d : npc.z3d;
+      const rawX = is2d ? npc.x2d : npc.x3d;
+      const rawY = is2d ? npc.y2d : npc.z3d;
+      const safe = resolvePlotCollision(rawX, rawY, mode, room);
       stateList.push({
         id: npc.id,
-        x,
-        y,
-        tx: x,
-        ty: y,
+        x: safe.x,
+        y: safe.y,
+        tx: safe.x,
+        ty: safe.y,
         mode: idx % 3 === 0 ? 'work' : 'walk',
         timer: 2.5 + ((idx * 1.37) % 4.5),
         facing: idx % 2 === 0 ? 1 : -1,
@@ -945,10 +1001,13 @@ export function stepBandNpcs(stateList, npcs, dt, mode = '2d', minSep = 600) {
     let bestY = curState.y;
     let bestScore = -1;
 
-    for (let attempt = 0; attempt < 14; attempt++) {
+    for (let attempt = 0; attempt < 16; attempt++) {
       // Encourage end-to-end roaming across the full 2-row band
-      const rx = minX + Math.random() * (maxX - minX);
-      const ry = minY + Math.random() * (maxY - minY);
+      const rawRx = minX + Math.random() * (maxX - minX);
+      const rawRy = minY + Math.random() * (maxY - minY);
+      const safePt = resolvePlotCollision(rawRx, rawRy, mode, room);
+      const rx = Math.max(minX, Math.min(maxX, safePt.x));
+      const ry = Math.max(minY, Math.min(maxY, safePt.y));
       let minDist = Infinity;
       for (let j = 0; j < stateList.length; j++) {
         if (i === j) continue;
@@ -1036,6 +1095,11 @@ export function stepBandNpcs(stateList, npcs, dt, mode = '2d', minSep = 600) {
         if (Math.abs(dx) > 1) st.facing = dx >= 0 ? 1 : -1;
       }
     }
+
+    // Keep NPC strictly outside any tomb or niche plot footprint
+    const safePos = resolvePlotCollision(st.x, st.y, mode, room);
+    st.x = Math.max(minX, Math.min(maxX, safePos.x));
+    st.y = Math.max(minY, Math.min(maxY, safePos.y));
   }
 }
 

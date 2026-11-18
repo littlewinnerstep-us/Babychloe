@@ -274,6 +274,61 @@ export default function AdminBackendModal({
               </button>
             </div>
 
+            {/* 1b. View Mode Visibility Controls (3D / 2D / Cards) */}
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 12,
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-soft)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>Activated Park Views</div>
+                <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                  Enable or hide 3D World, 2D World, and Card view tabs for all visitors
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {[
+                  { key: 'world3d', label: '3D View' },
+                  { key: 'world2d', label: '2D View' },
+                  { key: 'grid', label: 'Cards View' },
+                ].map((item) => {
+                  const currentViews = {
+                    world3d: adminConfig?.enabledViews?.world3d !== false,
+                    world2d: adminConfig?.enabledViews?.world2d !== false,
+                    grid: adminConfig?.enabledViews?.grid !== false,
+                  };
+                  const isOn = currentViews[item.key];
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={isOn ? 'btn-primary' : 'btn-ghost'}
+                      style={{ fontSize: '0.78rem', padding: '6px 12px' }}
+                      onClick={() => {
+                        const enabledCount = Object.values(currentViews).filter(Boolean).length;
+                        if (isOn && enabledCount <= 1) {
+                          showNotice('At least one view must remain active.');
+                          return;
+                        }
+                        const nextViews = { ...currentViews, [item.key]: !isOn };
+                        publishAdminConfig({ enabledViews: nextViews });
+                        showNotice(`${item.label} is now ${!isOn ? 'ENABLED' : 'HIDDEN'}.`);
+                      }}
+                    >
+                      {isOn ? <Eye size={13} /> : <EyeOff size={13} />}
+                      {item.label}: {isOn ? 'Active' : 'Hidden'}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* 2. World Global Music Track (Admin Only) */}
             <div
               style={{

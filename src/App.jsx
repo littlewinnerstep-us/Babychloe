@@ -569,6 +569,26 @@ export default function App() {
     }
   };
 
+  const enabledViews = useMemo(
+    () => ({
+      world3d: adminConfig?.enabledViews?.world3d !== false,
+      world2d: adminConfig?.enabledViews?.world2d !== false,
+      grid: adminConfig?.enabledViews?.grid !== false,
+    }),
+    [adminConfig]
+  );
+
+  useEffect(() => {
+    if (!enabledViews[viewMode]) {
+      const fallbackView = enabledViews.world3d
+        ? 'world3d'
+        : enabledViews.world2d
+          ? 'world2d'
+          : 'grid';
+      setViewMode(fallbackView);
+    }
+  }, [enabledViews, viewMode]);
+
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_VIEWMODE_KEY, viewMode);
@@ -721,7 +741,8 @@ export default function App() {
     setActiveRoom(targetRoom);
     setActiveTab(targetRoom);
     if (viewMode === 'grid') {
-      setViewMode('world3d');
+      if (adminConfig?.enabledViews?.world3d !== false) setViewMode('world3d');
+      else if (adminConfig?.enabledViews?.world2d !== false) setViewMode('world2d');
     }
     setWalkToMemorialRequest({ memorial, ts: Date.now() });
   };
@@ -1872,36 +1893,42 @@ export default function App() {
 
           {activeTab !== 'sanctuary' && (
             <div className="view-mode-switch" role="group" aria-label="View mode">
-              <button
-                type="button"
-                className={`view-mode-btn ${viewMode === 'world3d' && !showOnlyFavorites ? 'active' : ''}`}
-                onClick={() => {
-                  setShowOnlyFavorites(false);
-                  setViewMode('world3d');
-                }}
-              >
-                <Box size={14} /> 3D World
-              </button>
-              <button
-                type="button"
-                className={`view-mode-btn ${viewMode === 'world2d' && !showOnlyFavorites ? 'active' : ''}`}
-                onClick={() => {
-                  setShowOnlyFavorites(false);
-                  setViewMode('world2d');
-                }}
-              >
-                <Footprints size={14} /> 2D World
-              </button>
-              <button
-                type="button"
-                className={`view-mode-btn ${viewMode === 'grid' && !showOnlyFavorites ? 'active' : ''}`}
-                onClick={() => {
-                  setShowOnlyFavorites(false);
-                  setViewMode('grid');
-                }}
-              >
-                <LayoutGrid size={14} /> Cards
-              </button>
+              {enabledViews.world3d && (
+                <button
+                  type="button"
+                  className={`view-mode-btn ${viewMode === 'world3d' && !showOnlyFavorites ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowOnlyFavorites(false);
+                    setViewMode('world3d');
+                  }}
+                >
+                  <Box size={14} /> 3D World
+                </button>
+              )}
+              {enabledViews.world2d && (
+                <button
+                  type="button"
+                  className={`view-mode-btn ${viewMode === 'world2d' && !showOnlyFavorites ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowOnlyFavorites(false);
+                    setViewMode('world2d');
+                  }}
+                >
+                  <Footprints size={14} /> 2D World
+                </button>
+              )}
+              {enabledViews.grid && (
+                <button
+                  type="button"
+                  className={`view-mode-btn ${viewMode === 'grid' && !showOnlyFavorites ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowOnlyFavorites(false);
+                    setViewMode('grid');
+                  }}
+                >
+                  <LayoutGrid size={14} /> Cards
+                </button>
+              )}
               {(showOnlyFavorites || viewMode === 'grid') && (
                 <button
                   type="button"

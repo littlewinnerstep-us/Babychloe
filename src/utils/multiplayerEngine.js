@@ -179,11 +179,23 @@ function persistAccountsRegistry() {
 loadAccountsRegistry();
 
 let adminConfig = (() => {
-  const fallback = { globalMusicUrl: '', showDemoLogin: false, updatedAt: 0 };
+  const fallback = {
+    globalMusicUrl: '',
+    showDemoLogin: false,
+    enabledViews: { world3d: true, world2d: true, grid: true },
+    updatedAt: 0,
+  };
   try {
     if (typeof window !== 'undefined') {
       const raw = localStorage.getItem(STORAGE_ADMIN_CONFIG_KEY);
-      if (raw) return { ...fallback, ...JSON.parse(raw) };
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          ...fallback,
+          ...parsed,
+          enabledViews: { ...fallback.enabledViews, ...(parsed?.enabledViews || {}) },
+        };
+      }
     }
   } catch {
     // ignore

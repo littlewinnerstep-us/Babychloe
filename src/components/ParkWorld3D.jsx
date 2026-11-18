@@ -20,6 +20,7 @@ import {
   GARDEN_NPCS_DATA,
   ASH_NPCS_DATA,
   stepBandNpcs,
+  resolvePlotCollision,
   getUserIdentityKey,
   isMemorialOwner,
 } from '../data/memorialData';
@@ -807,10 +808,13 @@ export default function ParkWorld3D({
         p.moving = false;
       }
 
-      // Clamp 3D world bounds (expanding dynamically as more memorials are added)
+      // Clamp 3D world bounds (expanding dynamically as more memorials are added) & avoid tomb/niche plots
       const maxZ = maxZRef.current;
       p.x = Math.max(-1500, Math.min(1500, p.x));
       p.z = Math.max(-360, Math.min(maxZ, p.z));
+      const safePlayer3D = resolvePlotCollision(p.x, p.z, '3d', roomRef.current, 44, 40);
+      p.x = Math.max(-1500, Math.min(1500, safePlayer3D.x));
+      p.z = Math.max(-360, Math.min(maxZ, safePlayer3D.y));
 
       if (p.moving || p.history.length === 0) {
         p.history.unshift({ x: p.x, z: p.z });
@@ -1580,7 +1584,7 @@ export default function ParkWorld3D({
       // 4. 3D Ambient NPCs
       const npcs = room === 'tombstone' ? GARDEN_NPCS_DATA : ASH_NPCS_DATA;
       const npcStates = npcSimRef.current[room] || (npcSimRef.current[room] = []);
-      stepBandNpcs(npcStates, npcs, dt, '3d', 675);
+      stepBandNpcs(npcStates, npcs, dt, '3d', 675, room);
       npcs.forEach((npc, idx) => {
         const st = npcStates[idx];
         const nx = st ? st.x : npc.x3d;

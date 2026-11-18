@@ -17,6 +17,7 @@ import {
   GARDEN_NPCS_DATA,
   ASH_NPCS_DATA,
   stepBandNpcs,
+  resolvePlotCollision,
   getUserIdentityKey,
   isMemorialOwner,
 } from '../data/memorialData';
@@ -800,9 +801,12 @@ export default function ParkWorld2D({
         p.moving = false;
       }
 
-      // Clamp player within room boundaries
+      // Clamp player within room boundaries & keep outside tomb/niche plots
       p.x = Math.max(46, Math.min(bounds.width - 46, p.x));
       p.y = Math.max(66, Math.min(bounds.height - 40, p.y));
+      const safePlayer2D = resolvePlotCollision(p.x, p.y, '2d', room, 44, 40);
+      p.x = Math.max(46, Math.min(bounds.width - 46, safePlayer2D.x));
+      p.y = Math.max(66, Math.min(bounds.height - 40, safePlayer2D.y));
 
       updateLocalPresence({
         name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
@@ -1392,7 +1396,7 @@ export default function ParkWorld2D({
       // ====================
       const npcs = room === 'tombstone' ? GARDEN_NPCS_DATA : ASH_NPCS_DATA;
       const npcStates = npcSimRef.current[room] || (npcSimRef.current[room] = []);
-      stepBandNpcs(npcStates, npcs, dt, '2d', 600);
+      stepBandNpcs(npcStates, npcs, dt, '2d', 600, room);
       const npcSpeechQueue2D = [];
       const curNpcPositions = [];
       npcs.forEach((npc, idx) => {
