@@ -36,47 +36,63 @@ export default function SpeciesGateModal({
 
         {confirmSpecies && (
           <div
-            className="armtip-notif"
             role="dialog"
             aria-label={`Move to ${confirmSpecies.label} Gates?`}
             style={{
-              position: 'sticky',
-              top: 0,
-              zIndex: 5,
-              marginBottom: 12,
-              padding: '10px 12px',
+              position: 'fixed',
+              inset: 0,
+              zIndex: 40,
+              background: 'rgba(10, 16, 13, 0.72)',
               display: 'flex',
-              flexWrap: 'wrap',
               alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 10,
+              justifyContent: 'center',
+              padding: 16,
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfirmSpecies(null);
             }}
           >
-            <div style={{ fontSize: '0.86rem' }}>
-              ⛩️ Move to <strong>{confirmSpecies.emoji} {confirmSpecies.label} Gates</strong>?
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                type="button"
-                className="btn-primary"
-                style={{ padding: '5px 14px', fontSize: '0.78rem' }}
-                onClick={() => {
-                  const chosenId = confirmSpecies.id;
-                  setConfirmSpecies(null);
-                  onSelectSpecies(chosenId);
-                  onClose();
-                }}
-              >
-                ✅ Yes
-              </button>
-              <button
-                type="button"
-                className="btn-ghost"
-                style={{ padding: '5px 14px', fontSize: '0.78rem' }}
-                onClick={() => setConfirmSpecies(null)}
-              >
-                ✖️ No
-              </button>
+            <div
+              className="armtip-notif"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: 360,
+                width: '100%',
+                padding: '18px 18px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                textAlign: 'center',
+                gap: 14,
+              }}
+            >
+              <div style={{ fontSize: '1rem', fontWeight: 700 }}>
+                ⛩️ Move to <strong>{confirmSpecies.emoji} {confirmSpecies.label} Gates</strong>?
+              </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  style={{ padding: '8px 20px', fontSize: '0.86rem' }}
+                  onClick={() => {
+                    const chosenId = confirmSpecies.id;
+                    setConfirmSpecies(null);
+                    onSelectSpecies(chosenId);
+                    onClose();
+                  }}
+                >
+                  ✅ Yes
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  style={{ padding: '8px 20px', fontSize: '0.86rem' }}
+                  onClick={() => setConfirmSpecies(null)}
+                >
+                  ✖️ No
+                </button>
+              </div>
             </div>
           </div>
         )}

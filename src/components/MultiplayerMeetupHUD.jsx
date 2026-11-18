@@ -114,13 +114,19 @@ export default function MultiplayerMeetupHUD({
 
   const combinedFeed = useMemo(() => {
     const outside = showOutsideChat
-      ? mpChatLog.map((m) => ({ ...m, _isGroup: false }))
+      ? mpChatLog
+          .filter(
+            (m) =>
+              (m.species || 'Dog') === activeSpecies &&
+              (m.room || 'tombstone') === (currentRoom || 'tombstone')
+          )
+          .map((m) => ({ ...m, _isGroup: false }))
       : [];
     const group = activeGroup
       ? groupChatLog.map((m) => ({ ...m, _isGroup: true }))
       : [];
     return [...outside, ...group].sort((a, b) => (a.time || 0) - (b.time || 0));
-  }, [mpChatLog, groupChatLog, activeGroup, showOutsideChat]);
+  }, [mpChatLog, groupChatLog, activeGroup, showOutsideChat, activeSpecies, currentRoom]);
 
   useEffect(() => {
     if (showDrawer && drawerTab === 'meetup' && chatEndRef.current) {
