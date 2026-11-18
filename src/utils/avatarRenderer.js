@@ -78,7 +78,43 @@ export function drawAvatarHeadAndHair(ctx, hx, hy, scale, cAv) {
   }
 }
 
-export function drawAvatar2D(ctx, cx, cy, scale, bobOff, cAv, outlineColor = 'rgba(255,255,255,0.45)') {
+export function drawMourningFlower(ctx, fx, fy, scale = 1, flowerColor = '#f7f5ef') {
+  ctx.save();
+  ctx.translate(fx, fy);
+  ctx.rotate(-0.22);
+  // Stem & small leaf (no glow / no light)
+  ctx.strokeStyle = '#4e7c58';
+  ctx.lineWidth = 1.8 * scale;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, 9 * scale);
+  ctx.stroke();
+  ctx.fillStyle = '#5a8f65';
+  ctx.beginPath();
+  ctx.ellipse(2.6 * scale, 5.2 * scale, 2.8 * scale, 1.3 * scale, -0.5, 0, Math.PI * 2);
+  ctx.fill();
+  // 5-petal mourning blossom
+  const petalCol = flowerColor || '#f7f5ef';
+  ctx.fillStyle = petalCol;
+  ctx.strokeStyle = 'rgba(28, 36, 30, 0.35)';
+  ctx.lineWidth = 0.7 * scale;
+  for (let i = 0; i < 5; i++) {
+    const a = (i * Math.PI * 2) / 5 - Math.PI / 2;
+    const px = Math.cos(a) * 3.1 * scale;
+    const py = Math.sin(a) * 3.1 * scale;
+    ctx.beginPath();
+    ctx.arc(px, py, 2.3 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#d9b563';
+  ctx.beginPath();
+  ctx.arc(0, 0, 1.8 * scale, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+export function drawAvatar2D(ctx, cx, cy, scale, bobOff, cAv, outlineColor = 'rgba(255,255,255,0.45)', atmosphere = 'night') {
   const isBoy = cAv?.gender === 'boy';
   const cloak = cAv?.cloakColor || (isBoy ? '#4a7c59' : '#b86578');
   const style = cAv?.avatarStyle || 'classic';
@@ -178,9 +214,13 @@ export function drawAvatar2D(ctx, cx, cy, scale, bobOff, cAv, outlineColor = 'rg
   drawAvatarHeadAndHair(ctx, 0, -16 * scale, scale, cAv);
 
   if (cAv?.carryingLantern) {
-    ctx.font = `${Math.round(13 * scale)}px serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText('🏮', 15 * scale, 2 * scale);
+    if (atmosphere === 'morning' || atmosphere === 'dusk') {
+      drawMourningFlower(ctx, 14 * scale, 0 * scale, scale, cAv?.flowerColor || '#f7f5ef');
+    } else {
+      ctx.font = `${Math.round(13 * scale)}px serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('🏮', 15 * scale, 2 * scale);
+    }
   }
 
   ctx.restore();

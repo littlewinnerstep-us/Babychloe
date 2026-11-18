@@ -8,6 +8,15 @@ import {
   getSpeciesEmoji,
 } from '../data/memorialData';
 
+const MOURNING_FLOWER_COLORS = [
+  { id: '#f7f5ef', label: 'White Lily' },
+  { id: '#f2e2ba', label: 'Warm Cream' },
+  { id: '#c8b6e2', label: 'Pale Lavender' },
+  { id: '#e3a8b8', label: 'Soft Rose' },
+  { id: '#9dc6e8', label: 'Forget-me-not' },
+  { id: '#c4d8b6', label: 'Sage Blossom' },
+];
+
 export default function AvatarCustomizerDrawer({
   avatar,
   userPets = [],
@@ -192,8 +201,26 @@ export default function AvatarCustomizerDrawer({
             checked={avatar.carryingLantern}
             onChange={(e) => onUpdateAvatar({ carryingLantern: e.target.checked })}
           />
-          Carry warm glowing lantern 🏮
+          Carry lantern (night) / mourning flower (morning &amp; dusk)
         </label>
+
+        {avatar.carryingLantern && (
+          <div>
+            <div className="field-label">Mourning Flower Color (Morning &amp; Dusk)</div>
+            <div className="swatch-row">
+              {MOURNING_FLOWER_COLORS.map((fc) => (
+                <button
+                  key={fc.id}
+                  type="button"
+                  className={`color-swatch ${(avatar.flowerColor || '#f7f5ef') === fc.id ? 'active' : ''}`}
+                  style={{ background: fc.id }}
+                  title={fc.label}
+                  onClick={() => onUpdateAvatar({ flowerColor: fc.id })}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

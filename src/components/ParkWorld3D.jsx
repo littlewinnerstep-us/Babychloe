@@ -32,6 +32,7 @@ import {
 } from '../utils/multiplayerEngine';
 import {
   drawAvatarHeadAndHair,
+  drawMourningFlower,
   drawWrappedSpeechBubble,
   drawCachedPetPortrait,
 } from '../utils/avatarRenderer';
@@ -1710,9 +1711,13 @@ export default function ParkWorld3D({
           drawVisitorStyle(peer.rx, 2 + pBobY, peer.rz, head, pAv);
           if (head) {
             if (pAv.carryingLantern) {
-              ctx.font = `${Math.max(11, Math.round(14 * head.scale))}px serif`;
-              ctx.textAlign = 'center';
-              ctx.fillText('🏮', head.sx + 16 * head.scale, head.sy + 14 * head.scale);
+              if (atm === 'morning' || atm === 'dusk') {
+                drawMourningFlower(ctx, head.sx + 15 * head.scale, head.sy + 14 * head.scale, Math.max(0.75, head.scale), pAv.flowerColor || '#f7f5ef');
+              } else {
+                ctx.font = `${Math.max(11, Math.round(14 * head.scale))}px serif`;
+                ctx.textAlign = 'center';
+                ctx.fillText('🏮', head.sx + 16 * head.scale, head.sy + 14 * head.scale);
+              }
             }
 
             const gEmoji = pAv.gender === 'boy' ? '👦' : '👩';
@@ -1787,9 +1792,13 @@ export default function ParkWorld3D({
         drawVisitorStyle(p.x, 2 + bobY, p.z, head, av);
         if (head) {
           if (av.carryingLantern) {
-            ctx.font = `${Math.max(11, Math.round(14 * head.scale))}px serif`;
-            ctx.textAlign = 'center';
-            ctx.fillText('🏮', head.sx + 16 * head.scale, head.sy + 14 * head.scale);
+            if (atm === 'morning' || atm === 'dusk') {
+              drawMourningFlower(ctx, head.sx + 15 * head.scale, head.sy + 14 * head.scale, Math.max(0.75, head.scale), av.flowerColor || '#f7f5ef');
+            } else {
+              ctx.font = `${Math.max(11, Math.round(14 * head.scale))}px serif`;
+              ctx.textAlign = 'center';
+              ctx.fillText('🏮', head.sx + 16 * head.scale, head.sy + 14 * head.scale);
+            }
           }
 
           const gEmoji = av.gender === 'boy' ? '👦' : '👩';

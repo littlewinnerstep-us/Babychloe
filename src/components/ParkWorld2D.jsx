@@ -1455,7 +1455,7 @@ export default function ParkWorld2D({
           ctx.fillText(em, sx, sy + 6);
         }
 
-        if (pAv.carryingLantern) {
+        if (pAv.carryingLantern && atm === 'night') {
           const plg = ctx.createRadialGradient(px, py - 6, 4, px, py - 6, 60);
           plg.addColorStop(0, 'rgba(255, 212, 128, 0.3)');
           plg.addColorStop(1, 'rgba(255, 212, 128, 0)');
@@ -1465,7 +1465,7 @@ export default function ParkWorld2D({
           ctx.fill();
         }
 
-        drawAvatar2D(ctx, px, py, 1, pBob, pAv, 'rgba(130, 245, 175, 0.8)');
+        drawAvatar2D(ctx, px, py, 1, pBob, pAv, 'rgba(130, 245, 175, 0.8)', atm);
 
         const gEmoji = pAv.gender === 'boy' ? '👦' : '👩';
         const pTag = `🟢 ${gEmoji} ${peer.name || 'Visitor'}`;
@@ -1536,7 +1536,7 @@ export default function ParkWorld2D({
       // ====================
       const bobOffset = p.moving ? Math.abs(Math.sin(p.bob)) * 4 : 0;
 
-      if (av.carryingLantern) {
+      if (av.carryingLantern && atm === 'night') {
         const lg = ctx.createRadialGradient(p.x, p.y - 6, 4, p.x, p.y - 6, 68);
         lg.addColorStop(0, 'rgba(255, 212, 128, 0.34)');
         lg.addColorStop(1, 'rgba(255, 212, 128, 0)');
@@ -1546,7 +1546,7 @@ export default function ParkWorld2D({
         ctx.fill();
       }
 
-      drawAvatar2D(ctx, p.x, p.y, 1, bobOffset, av, 'rgba(255,255,255,0.45)');
+      drawAvatar2D(ctx, p.x, p.y, 1, bobOffset, av, 'rgba(255,255,255,0.45)', atm);
 
       // Player Name Tag
       const gEmoji = av.gender === 'boy' ? '👦' : '👩';
