@@ -1936,9 +1936,19 @@ export default function ParkWorld3D({
               if (atm === 'morning' || atm === 'dusk') {
                 drawMourningFlower(ctx, head.sx + 15 * head.scale, head.sy + 14 * head.scale, Math.max(0.75, head.scale), pAv.flowerColor || '#f7f5ef');
               } else {
+                const lx = head.sx + 16 * head.scale;
+                const ly = head.sy + 12 * head.scale;
+                const plg = ctx.createRadialGradient(lx, ly, 2, lx, ly, 44 * head.scale);
+                plg.addColorStop(0, 'rgba(255, 218, 132, 0.55)');
+                plg.addColorStop(0.5, 'rgba(255, 200, 100, 0.22)');
+                plg.addColorStop(1, 'rgba(255, 212, 128, 0)');
+                ctx.fillStyle = plg;
+                ctx.beginPath();
+                ctx.arc(lx, ly, 44 * head.scale, 0, Math.PI * 2);
+                ctx.fill();
                 ctx.font = `${Math.max(11, Math.round(14 * head.scale))}px serif`;
                 ctx.textAlign = 'center';
-                ctx.fillText('🏮', head.sx + 16 * head.scale, head.sy + 14 * head.scale);
+                ctx.fillText('🏮', lx, head.sy + 14 * head.scale);
               }
             }
 
@@ -2017,9 +2027,19 @@ export default function ParkWorld3D({
             if (atm === 'morning' || atm === 'dusk') {
               drawMourningFlower(ctx, head.sx + 15 * head.scale, head.sy + 14 * head.scale, Math.max(0.75, head.scale), av.flowerColor || '#f7f5ef');
             } else {
+              const lx = head.sx + 16 * head.scale;
+              const ly = head.sy + 12 * head.scale;
+              const lg = ctx.createRadialGradient(lx, ly, 2, lx, ly, 50 * head.scale);
+              lg.addColorStop(0, 'rgba(255, 218, 132, 0.62)');
+              lg.addColorStop(0.5, 'rgba(255, 200, 100, 0.25)');
+              lg.addColorStop(1, 'rgba(255, 212, 128, 0)');
+              ctx.fillStyle = lg;
+              ctx.beginPath();
+              ctx.arc(lx, ly, 50 * head.scale, 0, Math.PI * 2);
+              ctx.fill();
               ctx.font = `${Math.max(11, Math.round(14 * head.scale))}px serif`;
               ctx.textAlign = 'center';
-              ctx.fillText('🏮', head.sx + 16 * head.scale, head.sy + 14 * head.scale);
+              ctx.fillText('🏮', lx, head.sy + 14 * head.scale);
             }
           }
 

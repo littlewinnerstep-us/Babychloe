@@ -275,7 +275,7 @@ export default function ParkWorld2D({
   const playerRef = useRef({
     x:
       savedInitPos2D && Number.isFinite(savedInitPos2D.x2d)
-        ? Math.max(46, Math.min(WORLD_WIDTH - 46, savedInitPos2D.x2d))
+        ? Math.max(46, Math.min(2800 - 46, savedInitPos2D.x2d))
         : CENTER_X + getLocalSpawnOffset(),
     y:
       savedInitPos2D && Number.isFinite(savedInitPos2D.y2d)
