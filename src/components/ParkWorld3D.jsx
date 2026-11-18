@@ -1397,12 +1397,12 @@ export default function ParkWorld3D({
           });
         });
 
-        // 3D Lantern Posts (keep existing 4, multiply around each pool, plus middle & end of each row; glow only in dusk/night)
+        // 3D Lantern Posts (moved off middle road onto road sides, multiplied around each pool, plus middle-aisle sides & row ends)
         const baseLanterns3D = [
-          { x: -55, z: -210 },
-          { x: 55, z: -210 },
-          { x: -55, z: 120 },
-          { x: 55, z: 120 },
+          { x: -90, z: -210 },
+          { x: 90, z: -210 },
+          { x: -90, z: 120 },
+          { x: 90, z: 120 },
         ];
         const lanterns3D = [...baseLanterns3D];
         [-45, 705, 1455].forEach((poolZ) => {
@@ -1418,9 +1418,10 @@ export default function ParkWorld3D({
         for (let r = 0; r < 10; r++) {
           const rz = -170 + r * 250;
           [
-            { x: -1485, z: rz },
-            { x: 0, z: rz },
-            { x: 1485, z: rz },
+            { x: -1490, z: rz },
+            { x: -90, z: rz - 48 },
+            { x: 90, z: rz - 48 },
+            { x: 1490, z: rz },
           ].forEach((pt) => {
             if (!lanterns3D.some((e) => Math.hypot(e.x - pt.x, e.z - pt.z) < 30)) lanterns3D.push(pt);
           });
@@ -1475,6 +1476,37 @@ export default function ParkWorld3D({
               ctx.textAlign = 'center';
               ctx.fillText('🪔', topPt.sx, topPt.sy);
             }
+          });
+          // Ash Room Lanterns on the side of row road (middle-aisle sides & row ends)
+          [
+            { x: -1490, z: rz },
+            { x: -90, z: rz - 48 },
+            { x: 90, z: rz - 48 },
+            { x: 1490, z: rz },
+          ].forEach((lt) => {
+            pushEntity(lt.x, lt.z, () => {
+              draw3DBox(lt.x, 0, lt.z, 6, 44, 6, {
+                top: '#5a3a28',
+                front: '#3d2518',
+                side: '#2a180f',
+              });
+              draw3DBox(lt.x, 44, lt.z, 12, 14, 12, {
+                top: '#ffd27a',
+                front: '#d9534f',
+                side: '#a83632',
+                stroke: '#ffe5ad',
+              });
+              const lPt = project3D(lt.x, 51, lt.z);
+              if (lPt) {
+                const g = ctx.createRadialGradient(lPt.sx, lPt.sy, 2, lPt.sx, lPt.sy, 32 * lPt.scale);
+                g.addColorStop(0, 'rgba(255, 198, 110, 0.72)');
+                g.addColorStop(1, 'rgba(255, 198, 110, 0)');
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(lPt.sx, lPt.sy, 32 * lPt.scale, 0, Math.PI * 2);
+                ctx.fill();
+              }
+            });
           });
         }
       }
@@ -1610,8 +1642,8 @@ export default function ParkWorld3D({
           const otherOfferings = offerings.filter((t) => t !== '🕯️');
           candleOfferings.forEach((_, ci) => {
             const cx = m.worldX + (ci - (candleOfferings.length - 1) / 2) * 14;
-            const cy = isAsh ? 4 : 14;
-            const cz = m.worldZ + (isAsh ? 22 : 16);
+            const cy = room === 'ash-room' ? 4 : 14;
+            const cz = m.worldZ + (room === 'ash-room' ? 22 : 16);
             draw3DBox(cx, cy, cz, 5, 13, 5, {
               top: '#fff4d6',
               front: '#f2e0b6',

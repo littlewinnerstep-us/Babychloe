@@ -1098,12 +1098,12 @@ export default function ParkWorld2D({
           ctx.fill();
         });
 
-        // Path Lanterns (keep existing 4, multiply around each pool, plus middle & end of each row; glow only in dusk/night)
+        // Path Lanterns (moved off middle road onto road sides, multiplied around each pool, plus middle-aisle sides & row ends; glow only in dusk/night)
         const baseLanterns = [
-          { x: 525, y: 160 },
-          { x: 675, y: 160 },
-          { x: 525, y: 540 },
-          { x: 675, y: 540 },
+          { x: CENTER_X - 88, y: 160 },
+          { x: CENTER_X + 88, y: 160 },
+          { x: CENTER_X - 88, y: 540 },
+          { x: CENTER_X + 88, y: 540 },
         ];
         const lanterns = [...baseLanterns];
         // Multiply lamps around each 3-row pool
@@ -1117,13 +1117,14 @@ export default function ParkWorld2D({
             if (!lanterns.some((e) => Math.hypot(e.x - pt.x, e.y - pt.y) < 30)) lanterns.push(pt);
           });
         });
-        // Lamps in the middle of the row and end of the row only (rows 0..9)
+        // Lamps on the side of the row road (middle-aisle sides & row ends, rows 0..9)
         for (let r = 0; r < 10; r++) {
           const ry = 220 + r * 240;
           [
-            { x: 75, y: ry },
-            { x: CENTER_X, y: ry },
-            { x: 2725, y: ry },
+            { x: 65, y: ry - 48 },
+            { x: CENTER_X - 88, y: ry - 48 },
+            { x: CENTER_X + 88, y: ry - 48 },
+            { x: 2735, y: ry - 48 },
           ].forEach((pt) => {
             if (!lanterns.some((e) => Math.hypot(e.x - pt.x, e.y - pt.y) < 30)) lanterns.push(pt);
           });
@@ -1223,6 +1224,27 @@ export default function ParkWorld2D({
           ctx.font = '18px serif';
           ctx.textAlign = 'center';
           ctx.fillText('🪔', ax, ay + 5);
+
+          // Ash Room Lanterns on the side of the row road (middle-aisle sides & row ends)
+          [
+            { x: 75, y: ry - 52 },
+            { x: CENTER_X - 96, y: ry - 52 },
+            { x: CENTER_X + 96, y: ry - 52 },
+            { x: 2725, y: ry - 52 },
+          ].forEach((lt) => {
+            const lg = ctx.createRadialGradient(lt.x, lt.y - 10, 2, lt.x, lt.y - 10, 42);
+            lg.addColorStop(0, 'rgba(255, 198, 110, 0.55)');
+            lg.addColorStop(1, 'rgba(255, 198, 110, 0)');
+            ctx.fillStyle = lg;
+            ctx.beginPath();
+            ctx.arc(lt.x, lt.y - 10, 42, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#3d2518';
+            ctx.fillRect(lt.x - 2.5, lt.y - 14, 5, 18);
+            ctx.font = '16px serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('🏮', lt.x, lt.y - 12);
+          });
         }
 
         // Meditation Cushions
