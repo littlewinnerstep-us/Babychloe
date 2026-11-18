@@ -207,6 +207,7 @@ export default function MultiplayerMeetupHUD({
         <button
           type="button"
           className={`world-outside-chat-btn ${showOutsideChat ? 'is-on' : 'is-off'}`}
+          data-tour="outside-chat"
           onClick={onToggleOutsideChat}
           title={
             showOutsideChat
@@ -229,6 +230,7 @@ export default function MultiplayerMeetupHUD({
         <button
           type="button"
           className={`world-favorites-btn ${showOnlyFavorites ? 'active' : ''}`}
+          data-tour="favorites-btn"
           onClick={onToggleShowFavorites}
           title={`Favorite Pet Memorials (${favorites.length})`}
           aria-label={`Favorite pet memorials (${favorites.length})`}
@@ -370,6 +372,7 @@ export default function MultiplayerMeetupHUD({
       {!hideBottomChatBar && (
         <form
           className="world-chat-bar"
+          data-tour="chat-bar"
           onSubmit={handleChatSubmit}
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
@@ -552,15 +555,19 @@ export default function MultiplayerMeetupHUD({
                                   onAcceptFriendRequest(pendingIn.id);
                                   showInviteFeedback(`🤝 Accepted ${peer.name} as Friend!`);
                                 } else {
-                                  onToggleFriend(peer.name, peer);
-                                  if (!isFriend && !pendingOut) {
+                                  const outcome = onToggleFriend(peer.name, peer);
+                                  if (outcome === 'confirm_remove') {
+                                    showInviteFeedback(`⚠️ Tap again within 3s to confirm removing ${peer.name}.`);
+                                  } else if (outcome === 'removed') {
+                                    showInviteFeedback(`Removed ${peer.name} from friends.`);
+                                  } else if (!isFriend && !pendingOut) {
                                     showInviteFeedback(`📨 Friend request sent to ${peer.name} (24h)`);
                                   }
                                 }
                               }}
                               title={
                                 isFriend
-                                  ? 'Friend added (tap to remove)'
+                                  ? 'Friend (double-tap to remove)'
                                   : pendingIn
                                     ? 'Accept Friend Request'
                                     : pendingOut
@@ -821,8 +828,15 @@ export default function MultiplayerMeetupHUD({
                             type="button"
                             className="btn-ghost"
                             style={{ padding: '3px 6px', fontSize: '0.68rem' }}
-                            onClick={() => onToggleFriend(fr)}
-                            title="Remove Friend"
+                            onClick={() => {
+                              const outcome = onToggleFriend(fr);
+                              if (outcome === 'confirm_remove') {
+                                showInviteFeedback(`⚠️ Tap again within 3s to confirm removing ${fr}.`);
+                              } else if (outcome === 'removed') {
+                                showInviteFeedback(`Removed ${fr} from friends.`);
+                              }
+                            }}
+                            title="Double-tap to remove Friend"
                           >
                             <X size={10} />
                           </button>
@@ -878,8 +892,12 @@ export default function MultiplayerMeetupHUD({
                                     onAcceptFriendRequest(inReq.id);
                                     showInviteFeedback(`🤝 Accepted ${label}!`);
                                   } else {
-                                    onToggleFriend(label);
-                                    if (!isFr && !outReq) {
+                                    const outcome = onToggleFriend(label);
+                                    if (outcome === 'confirm_remove') {
+                                      showInviteFeedback(`⚠️ Tap again within 3s to confirm removing ${label}.`);
+                                    } else if (outcome === 'removed') {
+                                      showInviteFeedback(`Removed ${label} from friends.`);
+                                    } else if (!isFr && !outReq) {
                                       showInviteFeedback(`📨 Sent Friend Request to ${label} (24h)`);
                                     }
                                   }

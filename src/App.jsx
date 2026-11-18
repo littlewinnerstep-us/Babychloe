@@ -43,6 +43,8 @@ import FavoritesModal from './components/FavoritesModal';
 import AdminBackendModal from './components/AdminBackendModal';
 import NotificationsModal from './components/NotificationsModal';
 import UpdateCheckModal, { APP_BUILD_VERSION } from './components/UpdateCheckModal';
+import FirstVisitGuide from './components/FirstVisitGuide';
+import { loadTipsPrefs, saveTipsPrefs } from './utils/viewPrefs';
 import { isApkEnvironment, useIsMobileHud } from './utils/platform';
 import {
   DEFAULT_SOUND_VOLUMES,
@@ -264,6 +266,13 @@ export default function App() {
   );
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundVolumes, setSoundVolumesState] = useState(loadVolumePrefs);
+  const [tipsEnabled, setTipsEnabled] = useState(() => loadTipsPrefs().tipsEnabled);
+  const [showFirstGuide, setShowFirstGuide] = useState(() => {
+    const tp = loadTipsPrefs();
+    return tp.tipsEnabled && !tp.guideCompleted;
+  });
+  const [guideKey, setGuideKey] = useState(0);
+  const [zoomGuideTipAt, setZoomGuideTipAt] = useState(0);
   const [showSpeciesGate, setShowSpeciesGate] = useState(false);
   const [showFavoritesModal, setShowFavoritesModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -438,6 +447,7 @@ export default function App() {
   const [remoteWorldEvent, setRemoteWorldEvent] = useState(null);
   const memorialsRef = useRef(memorials);
   const recentVisitAtRef = useRef({});
+  const removeFriendConfirmRef = useRef({ key: '', until: 0 });
 
   useEffect(() => {
     try {
@@ -836,6 +846,14 @@ export default function App() {
       return fl === cleanLower || fl === targetNameLower || (targetUserLower && fl === targetUserLower);
     });
     if (isAlreadyFriend) {
+      const now = Date.now();
+      const pendingConfirm = removeFriendConfirmRef.current;
+      if (pendingConfirm.key !== targetNameLower || now > pendingConfirm.until) {
+        removeFriendConfirmRef.current = { key: targetNameLower, until: now + 3500 };
+        showGlobalNotice(`⚠️ Tap again within 3s to confirm removing ${targetName} from friends.`);
+        return 'confirm_remove';
+      }
+      removeFriendConfirmRef.current = { key: '', until: 0 };
       setFriends((prev) =>
         prev.filter((f) => {
           const fl = f.toLowerCase();
@@ -843,7 +861,7 @@ export default function App() {
         })
       );
       showGlobalNotice(`Removed ${targetName} from friends.`);
-      return;
+      return 'removed';
     }
 
     const pendingIncoming = (friendRequests.incoming || []).find((r) => {
@@ -1437,6 +1455,7 @@ export default function App() {
             <button
               type="button"
               className={`top-music-btn notif-bell-btn ${(groupInvites.length > 0 || (friendRequests.incoming?.length || 0) > 0) ? 'has-invite' : ''}`}
+              data-tour="notif-bell"
               onClick={() => {
                 setShowNotificationsModal(true);
                 setReadNotifIds((prev) => Array.from(new Set([...prev, ...notifications.map((n) => n.id)])));
@@ -1463,6 +1482,7 @@ export default function App() {
             <button
               type="button"
               className={`top-music-btn ${soundEnabled ? 'is-on' : 'is-off'}`}
+              data-tour="sound-toggle"
               onClick={handleToggleSound}
               title={soundEnabled ? 'Music & Sound ON (Tap to turn off)' : 'Music & Sound OFF (Tap to turn on)'}
               aria-label={soundEnabled ? 'Music On' : 'Music Off'}
@@ -1475,6 +1495,7 @@ export default function App() {
             <button
               type="button"
               className="top-music-btn"
+              data-tour="update-btn"
               onClick={() => setShowUpdateModal(true)}
               title={`Check Update (v${APP_BUILD_VERSION})`}
               aria-label={`Check for app updates (v${APP_BUILD_VERSION})`}
@@ -1633,7 +1654,7 @@ export default function App() {
             top: 72,
             left: '50%',
             transform: 'translateX(-50%)',
-            zIndex: 90,
+            zIndex: 140,
             maxWidth: '92vw',
             boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
           }}
@@ -1681,7 +1702,7 @@ export default function App() {
 
         {/* Auto-Hidden Time of Day, Season, Weather & Volume Icon Menus */}
         <div ref={envBarRef} className={`env-weather-bar ${openEnvPanel ? 'is-expanded' : 'is-collapsed'}`}>
-          <div className="env-icon-trigger-row" role="toolbar" aria-label="Time of day, Season, Weather and Volume menus">
+          <div className="env-icon-trigger-row" data-tour="env-controls" role="toolbar" aria-label="Time of day, Season, Weather and Volume menus">
             <button
               type="button"
               className={`env-icon-trigger ${openEnvPanel === 'atmosphere' ? 'active' : ''}`}
@@ -1720,6 +1741,7 @@ export default function App() {
             <button
               type="button"
               className={`env-icon-trigger ${openEnvPanel === 'volume' ? 'active' : ''}`}
+              data-tour="volume-btn"
               onClick={() => setOpenEnvPanel((p) => (p === 'volume' ? null : 'volume'))}
               title="Sound Volume Controls"
               aria-label="Volume menu"
@@ -1899,7 +1921,7 @@ export default function App() {
             <div className="volume-mixer-row env-dropdown-panel" aria-label="Sound volume controls">
               <span className="env-label">Volumes:</span>
               {VOLUME_CHANNELS.map((ch) => {
-                const pct = Math.round((soundVolumes[ch.key] ?? 0.5) * 100);
+                const pct = Math.round((soundVolumes[ch.key] ?? 0.3) * 100);
                 return (
                   <label key={ch.key} className="volume-slider-item" title={`${ch.label} Volume (${pct}%)`}>
                     <span className="volume-slider-label">
@@ -1917,6 +1939,46 @@ export default function App() {
                   </label>
                 );
               })}
+              <button
+                type="button"
+                className="env-pill"
+                onClick={() => {
+                  const next = { ...DEFAULT_SOUND_VOLUMES };
+                  setSoundVolumesState(next);
+                  setSoundVolumes(next);
+                  showGlobalNotice('🔊 Reset volumes: Master 100%, effects 30%.');
+                }}
+                title="Reset Master to 100% and all other sounds to 30%"
+              >
+                ↺ Reset to defaults
+              </button>
+              <button
+                type="button"
+                className={`env-pill ${tipsEnabled ? 'active' : ''}`}
+                onClick={() => {
+                  const next = !tipsEnabled;
+                  setTipsEnabled(next);
+                  saveTipsPrefs({ tipsEnabled: next });
+                  showGlobalNotice(next ? '💡 Guide tips turned ON.' : '🔕 Guide tips turned OFF.');
+                }}
+                title="Turn first-visit and feature arm tips on or off"
+              >
+                💡 Tips: {tipsEnabled ? 'ON' : 'OFF'}
+              </button>
+              <button
+                type="button"
+                className="env-pill"
+                onClick={() => {
+                  setOpenEnvPanel(null);
+                  setTipsEnabled(true);
+                  saveTipsPrefs({ tipsEnabled: true, guideCompleted: false });
+                  setGuideKey((k) => k + 1);
+                  setShowFirstGuide(true);
+                }}
+                title="Replay the icon guide tour"
+              >
+                🎯 Replay Guide
+              </button>
             </div>
           )}
         </div>
@@ -1929,7 +1991,7 @@ export default function App() {
           </div>
 
           {activeTab !== 'sanctuary' && (
-            <div className="view-mode-switch" role="group" aria-label="View mode">
+            <div className="view-mode-switch" data-tour="view-mode" role="group" aria-label="View mode">
               {enabledViews.world3d && (
                 <button
                   type="button"
@@ -2045,6 +2107,8 @@ export default function App() {
             onPerformOffering={handlePerformOffering}
             onLightningStrike={playThunderSound}
             onRequireLogin={() => setShowAuthModal(true)}
+            zoomGuideTipAt={zoomGuideTipAt}
+            onClearZoomGuideTip={() => setZoomGuideTipAt(0)}
           />
         ) : viewMode === 'world2d' && activeTab !== 'sanctuary' && !showOnlyFavorites ? (
           <ParkWorld2D
@@ -2111,6 +2175,8 @@ export default function App() {
             onPerformOffering={handlePerformOffering}
             onLightningStrike={playThunderSound}
             onRequireLogin={() => setShowAuthModal(true)}
+            zoomGuideTipAt={zoomGuideTipAt}
+            onClearZoomGuideTip={() => setZoomGuideTipAt(0)}
           />
         ) : activeTab === 'sanctuary' && !currentUser && !showOnlyFavorites ? (
           <div className="empty-state">
@@ -2329,6 +2395,30 @@ export default function App() {
           onClose={() => setShowUpdateModal(false)}
         />
       )}
+
+      <FirstVisitGuide
+        key={guideKey}
+        isOpen={showFirstGuide}
+        onComplete={() => {
+          setShowFirstGuide(false);
+          const curTips = loadTipsPrefs();
+          saveTipsPrefs({ guideCompleted: true, tipsEnabled: true });
+          if (!curTips.zoomTipShown) {
+            saveTipsPrefs({ zoomTipShown: true });
+            setZoomGuideTipAt(Date.now());
+          }
+        }}
+        onSkip={() => {
+          setShowFirstGuide(false);
+          saveTipsPrefs({ guideCompleted: true });
+        }}
+        onTurnTipsOff={() => {
+          setShowFirstGuide(false);
+          setTipsEnabled(false);
+          saveTipsPrefs({ tipsEnabled: false, guideCompleted: true, zoomTipShown: true });
+          showGlobalNotice('🔕 Tips turned off. You can turn them back on anytime in Volume settings.');
+        }}
+      />
     </div>
   );
 }

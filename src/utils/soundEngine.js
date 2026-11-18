@@ -60,12 +60,12 @@ let isAppForeground = typeof document === 'undefined' ? true : !document.hidden;
 
 export const DEFAULT_SOUND_VOLUMES = {
   master: 1.0,
-  music: 0.65,
-  weather: 0.45,
-  thunder: 0.7,
-  bark: 0.55,
-  owl: 0.5,
-  bird: 0.55,
+  music: 0.3,
+  weather: 0.3,
+  thunder: 0.3,
+  bark: 0.3,
+  owl: 0.3,
+  bird: 0.3,
 };
 
 let soundVolumes = { ...DEFAULT_SOUND_VOLUMES };

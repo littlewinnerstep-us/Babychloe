@@ -10,7 +10,9 @@ import {
   DoorOpen,
   Maximize2,
   Minimize2,
+  ZoomIn,
 } from 'lucide-react';
+import { loadViewPrefs, saveViewPrefs } from '../utils/viewPrefs';
 import {
   OFFERING_TYPES,
   getSpeciesEmoji,
@@ -163,6 +165,8 @@ export default function ParkWorld2D({
   onPerformOffering,
   onLightningStrike,
   onRequireLogin,
+  zoomGuideTipAt = 0,
+  onClearZoomGuideTip,
 }) {
   const canvasRef = useRef(null);
   const [avatar, setAvatar] = useState(loadAvatarPrefs);
@@ -177,10 +181,11 @@ export default function ParkWorld2D({
   const [nearPortal, setNearPortal] = useState(false);
   const [nearSpeciesGate, setNearSpeciesGate] = useState(false);
   const [walkMessage, setWalkMessage] = useState('');
-  const [walkTipVisible, setWalkTipVisible] = useState(true);
-  const [zoomOverview, setZoomOverview] = useState(0); // 0 = current view, 100 = full 200-plot overview
-  const zoomOverviewRef = useRef(0);
+  const [zoomOverview, setZoomOverview] = useState(() => loadViewPrefs().zoom2d); // 0 = current view, 100 = full 200-plot overview
+  const zoomOverviewRef = useRef(zoomOverview);
   zoomOverviewRef.current = zoomOverview;
+  const [zoomMenuOpen, setZoomMenuOpen] = useState(false);
+  const [zoomArmTipVisible, setZoomArmTipVisible] = useState(false);
   const activeZoomRef = useRef(1);
   const nativeFsRef = useRef(false);
 
@@ -357,10 +362,18 @@ export default function ParkWorld2D({
   }, [memorials]);
 
   useEffect(() => {
-    setWalkTipVisible(true);
-    const timer = setTimeout(() => setWalkTipVisible(false), 9000);
+    saveViewPrefs({ zoom2d: zoomOverview });
+  }, [zoomOverview]);
+
+  useEffect(() => {
+    if (!zoomGuideTipAt) return undefined;
+    setZoomArmTipVisible(true);
+    const timer = setTimeout(() => {
+      setZoomArmTipVisible(false);
+      if (onClearZoomGuideTip) onClearZoomGuideTip();
+    }, 2000);
     return () => clearTimeout(timer);
-  }, [isFullScreen]);
+  }, [zoomGuideTipAt, onClearZoomGuideTip]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
@@ -1909,6 +1922,7 @@ export default function ParkWorld2D({
   }, [onChangeRoom]);
 
   const handleCanvasClick = (e) => {
+    if (zoomMenuOpen) setZoomMenuOpen(false);
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -2062,19 +2076,104 @@ export default function ParkWorld2D({
         >
           {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
         </button>
-        <button
-          type="button"
-          className="world-fs-floating-btn"
-          style={{ top: 176, right: 10, zIndex: 18, fontSize: '1rem' }}
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowPlotListModal(true);
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            top: 176,
+            right: 10,
+            zIndex: 18,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: 6,
           }}
-          aria-label={activeRoom === 'ash-room' ? 'Niche List' : 'Plot List'}
-          title={activeRoom === 'ash-room' ? 'Niche List' : 'Plot List'}
         >
-          {activeRoom === 'ash-room' ? '🏺' : '🪦'}
-        </button>
+          <button
+            type="button"
+            className="world-fs-floating-btn"
+            data-tour="plot-list-btn"
+            style={{ position: 'static', fontSize: '1rem' }}
+            onClick={() => {
+              setZoomMenuOpen(false);
+              setShowPlotListModal(true);
+            }}
+            aria-label={activeRoom === 'ash-room' ? 'Niche List' : 'Plot List'}
+            title={activeRoom === 'ash-room' ? 'Niche List' : 'Plot List'}
+          >
+            {activeRoom === 'ash-room' ? '🏺' : '🪦'}
+          </button>
+          <button
+            type="button"
+            className={`world-fs-floating-btn ${zoomMenuOpen ? 'active' : ''}`}
+            data-tour="zoom-btn"
+            style={{ position: 'static' }}
+            onClick={() => setZoomMenuOpen((v) => !v)}
+            aria-label="Zoom View"
+            title={`Zoom View (${zoomOverview === 0 ? '1×' : zoomOverview === 100 ? 'All' : `${zoomOverview}%`})`}
+          >
+            <ZoomIn size={16} />
+          </button>
+          {zoomMenuOpen && (
+            <div className="world-zoom-popover">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <strong>🔍 Zoom View</strong>
+                <span style={{ color: '#ffd57e', fontWeight: 700 }}>
+                  {zoomOverview === 0 ? '1×' : zoomOverview === 100 ? 'All' : `${zoomOverview}%`}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={zoomOverview}
+                onChange={(e) => setZoomOverview(Number(e.target.value))}
+                style={{ width: '100%', accentColor: '#ffd57e', cursor: 'pointer' }}
+                aria-label="2D Garden Overview Zoom"
+              />
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button
+                  type="button"
+                  className={zoomOverview === 0 ? 'btn-primary' : 'btn-ghost'}
+                  style={{ flex: 1, padding: '3px 6px', fontSize: '0.7rem', justifyContent: 'center' }}
+                  onClick={() => setZoomOverview(0)}
+                >
+                  1×
+                </button>
+                <button
+                  type="button"
+                  className={zoomOverview === 50 ? 'btn-primary' : 'btn-ghost'}
+                  style={{ flex: 1, padding: '3px 6px', fontSize: '0.7rem', justifyContent: 'center' }}
+                  onClick={() => setZoomOverview(50)}
+                >
+                  50%
+                </button>
+                <button
+                  type="button"
+                  className={zoomOverview === 100 ? 'btn-primary' : 'btn-ghost'}
+                  style={{ flex: 1, padding: '3px 6px', fontSize: '0.7rem', justifyContent: 'center' }}
+                  onClick={() => setZoomOverview(100)}
+                >
+                  All
+                </button>
+              </div>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ padding: '3px 6px', fontSize: '0.68rem', justifyContent: 'center' }}
+                onClick={() => setZoomMenuOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+          )}
+        </div>
+        {zoomArmTipVisible && (
+          <div className="armtip-notif world-zoom-armtip" role="status">
+            🔍 Tap the Zoom icon to switch between <strong>1×</strong> close view and <strong>All 200</strong> plots!
+          </div>
+        )}
         <canvas
           ref={canvasRef}
           className="world-canvas"
@@ -2086,65 +2185,7 @@ export default function ParkWorld2D({
           {activeRoom === 'ash-room'
             ? `🏛️ ${activeSpecies} Ash Room (Hall of Serenity)`
             : `🌿 ${activeSpecies} Tombstone Garden`}
-          <span className="world-hint-text"> • Walk with WASD / Arrow keys / Mouse click or Joystick</span>
         </div>
-
-        {/* 2D Overview Zoom Slider (0 = current view, 100 = see all 200 plots/niches) */}
-        <div
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            position: 'absolute',
-            top: isFullScreen ? 82 : 40,
-            left: 8,
-            zIndex: 16,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '4px 10px',
-            borderRadius: 999,
-            background: 'rgba(16, 22, 20, 0.82)',
-            border: '1px solid rgba(255, 255, 255, 0.16)',
-            color: '#f5efe6',
-            fontSize: '0.72rem',
-            backdropFilter: 'blur(8px)',
-          }}
-        >
-          <span>🔍 Zoom</span>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={zoomOverview}
-            onChange={(e) => setZoomOverview(Number(e.target.value))}
-            style={{ width: 92, accentColor: '#ffd57e', cursor: 'pointer' }}
-            aria-label="2D Garden Overview Zoom"
-          />
-          <span style={{ minWidth: 32, textAlign: 'right', color: '#ffd57e', fontWeight: 700 }}>
-            {zoomOverview === 0 ? '1×' : zoomOverview === 100 ? 'All' : `${zoomOverview}%`}
-          </span>
-        </div>
-
-        {walkTipVisible && (
-          <div
-            className="armtip-notif world-walk-armtip"
-            role="status"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <span>
-              💡 Walk around using <strong>WASD</strong> or <strong>Arrow</strong> keyboard, click ground with <strong>Mouse</strong>, or use the <strong>Joystick</strong>!
-            </span>
-            <button
-              type="button"
-              className="world-walk-armtip-close"
-              onClick={() => setWalkTipVisible(false)}
-              aria-label="Close walk tip"
-            >
-              ×
-            </button>
-          </div>
-        )}
 
         {/* Toast / Walk Message */}
         {walkMessage && (

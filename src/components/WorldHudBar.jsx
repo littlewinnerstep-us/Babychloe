@@ -46,6 +46,7 @@ export default function WorldHudBar({
       <button
         type="button"
         className="btn-ghost"
+        data-tour="other-gates"
         onClick={() => {
           onOpenSpeciesGate();
           if (isFullScreen) setFullMenuOpen(false);
@@ -119,6 +120,7 @@ export default function WorldHudBar({
       <button
         type="button"
         className={`btn-ghost ${showMeetupPanel ? 'active' : ''}`}
+        data-tour="meetup-btn"
         onClick={() => {
           onToggleMeetup();
           if (isFullScreen) setFullMenuOpen(false);
@@ -130,6 +132,7 @@ export default function WorldHudBar({
       <button
         type="button"
         className={`btn-ghost ${showAvatarPanel ? 'active' : ''}`}
+        data-tour="avatar-btn"
         onClick={() => {
           onToggleAvatar();
           if (isFullScreen) setFullMenuOpen(false);
@@ -155,6 +158,7 @@ export default function WorldHudBar({
       <button
         type="button"
         className="btn-ghost"
+        data-tour="fullscreen-btn"
         onClick={onToggleFullScreen}
         title={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
       >
@@ -200,12 +204,14 @@ export default function WorldHudBar({
 
   return (
     <div className="world-hud-top">
-      <WalkToSearchBar
-        allMemorials={allMemorials}
-        activeSpecies={activeSpecies}
-        nearbyMemorialId={nearbyMemorialId}
-        onSelectPet={onSelectPet}
-      />
+      <div data-tour="walk-search" style={{ display: 'contents' }}>
+        <WalkToSearchBar
+          allMemorials={allMemorials}
+          activeSpecies={activeSpecies}
+          nearbyMemorialId={nearbyMemorialId}
+          onSelectPet={onSelectPet}
+        />
+      </div>
       {actionsContent}
     </div>
   );

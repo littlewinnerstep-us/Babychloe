@@ -240,8 +240,12 @@ export default function VisitMemorialModal({
                         onAcceptFriendRequest(pendingIn.id);
                         showArmtip(`🤝 Accepted friend request from ${memorial.ownerName}!`);
                       } else {
-                        onToggleFriend(memorial.ownerName);
-                        if (!isFriend && !pendingOut) {
+                        const outcome = onToggleFriend(memorial.ownerName);
+                        if (outcome === 'confirm_remove') {
+                          showArmtip(`⚠️ Tap again within 3s to confirm removing ${memorial.ownerName} from friends.`);
+                        } else if (outcome === 'removed') {
+                          showArmtip(`Removed ${memorial.ownerName} from friends.`);
+                        } else if (!isFriend && !pendingOut) {
                           showArmtip(`📨 Friend request sent to ${memorial.ownerName} (24h countdown).`);
                         } else if (pendingOut) {
                           showArmtip(`✖️ Cancelled friend request to ${memorial.ownerName}.`);
