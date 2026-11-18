@@ -539,7 +539,7 @@ export default function ParkWorld2D({
     positionedRef.current = positionedMemorials;
     const activeList = positionedMemorials.filter((m) => m.space === roomRef.current);
     const maxY = activeList.reduce((mx, m) => Math.max(mx, m.worldY), 640);
-    roomHeightRef.current = Math.max(820, maxY + 170);
+    roomHeightRef.current = Math.max(2600, maxY + 200);
   }, [positionedMemorials, activeRoom]);
 
   useEffect(() => {
@@ -974,8 +974,8 @@ export default function ParkWorld2D({
         ctx.lineJoin = 'round';
         ctx.beginPath();
         ctx.moveTo(CENTER_X, 95);
-        ctx.lineTo(CENTER_X, Math.max(760, curH - 60));
-        for (let cy = 330; cy < curH - 80; cy += 240) {
+        ctx.lineTo(CENTER_X, Math.max(760, bounds.height - 60));
+        for (let cy = 330; cy < bounds.height - 80; cy += 240) {
           ctx.moveTo(120, cy);
           ctx.lineTo(bounds.width - 120, cy);
         }
@@ -1131,10 +1131,10 @@ export default function ParkWorld2D({
 
         // Gold-bordered Crimson Sanctuary Runner
         ctx.fillStyle = '#5c262a';
-        ctx.fillRect(CENTER_X - 80, 120, 160, Math.max(610, curH - 180));
+        ctx.fillRect(CENTER_X - 80, 120, 160, Math.max(610, bounds.height - 180));
         ctx.strokeStyle = '#d4a853';
         ctx.lineWidth = 3;
-        ctx.strokeRect(CENTER_X - 76, 124, 152, Math.max(602, curH - 188));
+        ctx.strokeRect(CENTER_X - 76, 124, 152, Math.max(602, bounds.height - 188));
         ctx.fillRect(140, 355, bounds.width - 280, 82);
         ctx.strokeRect(144, 359, bounds.width - 288, 74);
 

@@ -528,7 +528,7 @@ export default function ParkWorld3D({
     positionedRef.current = positionedMemorials;
     const activeList = positionedMemorials.filter((m) => m.space === roomRef.current);
     const maxMonZ = activeList.reduce((mx, m) => Math.max(mx, m.worldZ), 200);
-    maxZRef.current = Math.max(360, maxMonZ + 170);
+    maxZRef.current = Math.max(2200, maxMonZ + 220);
   }, [positionedMemorials, activeRoom]);
 
   useEffect(() => {
