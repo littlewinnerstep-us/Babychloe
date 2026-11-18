@@ -1831,9 +1831,10 @@ select {
 
 .world-nearby-note {
   position: absolute;
-  bottom: 46px;
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: 148px;
+  left: 12px;
+  right: auto;
+  transform: none;
   z-index: 14;
   border: 1.5px solid #ffd57e;
   background: rgba(18, 26, 24, 0.92);
@@ -1848,17 +1849,17 @@ select {
   font-weight: 700;
   cursor: pointer;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  max-width: calc(100% - 170px);
+  max-width: calc(100% - 24px);
   animation: notePulse 2.2s ease-in-out infinite;
 }
 
 @media (max-width: 640px) {
   .world-nearby-note {
-    left: auto;
-    right: 10px;
-    bottom: 46px;
+    left: 12px;
+    right: auto;
+    bottom: 118px;
     transform: none;
-    max-width: calc(100% - 150px);
+    max-width: calc(100% - 24px);
   }
 }
 
@@ -2863,7 +2864,14 @@ body.is-mobile-hud .world-container .world-chat-preview-3rows {
   bottom: 44px;
 }
 
-body.is-mobile-hud .world-container .world-nearby-note,
+body.is-mobile-hud .world-container .world-nearby-note {
+  left: 12px;
+  right: auto;
+  bottom: 118px;
+  transform: none;
+  max-width: calc(100% - 24px);
+}
+
 body.is-mobile-hud .world-container .world-portal-prompt {
   bottom: 46px;
 }
