@@ -1943,29 +1943,48 @@ export default function ParkWorld2D({
           onClick={handleCanvasClick}
         />
 
-        {/* Room Indicator & 2D Overview Zoom Slider */}
-        <div className="world-room-pill" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span>
-            {activeRoom === 'ash-room'
-              ? `🏛️ ${activeSpecies} Ash Room (Hall of Serenity)`
-              : `🌿 ${activeSpecies} Tombstone Garden`}
+        {/* Room Indicator */}
+        <div className="world-room-pill">
+          {activeRoom === 'ash-room'
+            ? `🏛️ ${activeSpecies} Ash Room (Hall of Serenity)`
+            : `🌿 ${activeSpecies} Tombstone Garden`}
+          <span className="world-hint-text"> • Walk with WASD / Arrow keys / Mouse click or Joystick</span>
+        </div>
+
+        {/* 2D Overview Zoom Slider (0 = current view, 100 = see all 200 plots/niches) */}
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            top: isFullScreen ? 82 : 40,
+            left: 8,
+            zIndex: 16,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '4px 10px',
+            borderRadius: 999,
+            background: 'rgba(16, 22, 20, 0.82)',
+            border: '1px solid rgba(255, 255, 255, 0.16)',
+            color: '#f5efe6',
+            fontSize: '0.72rem',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          <span>🔍 Zoom</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={zoomOverview}
+            onChange={(e) => setZoomOverview(Number(e.target.value))}
+            style={{ width: 92, accentColor: '#ffd57e', cursor: 'pointer' }}
+            aria-label="2D Garden Overview Zoom"
+          />
+          <span style={{ minWidth: 32, textAlign: 'right', color: '#ffd57e', fontWeight: 700 }}>
+            {zoomOverview === 0 ? '1×' : zoomOverview === 100 ? 'All' : `${zoomOverview}%`}
           </span>
-          <label
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', cursor: 'pointer' }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <span>🔍 Zoom</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={zoomOverview}
-              onChange={(e) => setZoomOverview(Number(e.target.value))}
-              style={{ width: 84, accentColor: '#ffd57e' }}
-              aria-label="2D Garden Overview Zoom"
-            />
-          </label>
         </div>
 
         {walkTipVisible && (

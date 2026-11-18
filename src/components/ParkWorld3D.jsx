@@ -10,6 +10,9 @@ import {
   DoorOpen,
   Maximize2,
   Minimize2,
+  Video,
+  RotateCcw,
+  RotateCw,
 } from 'lucide-react';
 import {
   OFFERING_TYPES,
@@ -158,6 +161,10 @@ export default function ParkWorld3D({
   const [nearSpeciesGate, setNearSpeciesGate] = useState(false);
   const [walkMessage, setWalkMessage] = useState('');
   const [walkTipVisible, setWalkTipVisible] = useState(true);
+  const [zoomOverview, setZoomOverview] = useState(0); // 0 = current view, 100 = full 200-plot overview
+  const zoomOverviewRef = useRef(0);
+  zoomOverviewRef.current = zoomOverview;
+  const [cameraMenuOpen, setCameraMenuOpen] = useState(false);
   const nativeFsRef = useRef(false);
 
   const handleToggleFullScreen = () => {
@@ -925,8 +932,14 @@ export default function ParkWorld3D({
         }
       }
 
-      // 3D Camera Setup
-      const cfg = CAMERA_PRESETS[camRef.current.preset] || CAMERA_PRESETS.follow;
+      // 3D Camera Setup (with zoom slider: 0 = current view, 100 = full 200-plot overview)
+      const baseCfg = CAMERA_PRESETS[camRef.current.preset] || CAMERA_PRESETS.follow;
+      const zt = Math.max(0, Math.min(1, zoomOverviewRef.current / 100));
+      const cfg = {
+        dist: baseCfg.dist + (1950 - baseCfg.dist) * zt,
+        height: baseCfg.height + (2250 - baseCfg.height) * zt,
+        pitch: baseCfg.pitch + (0.92 - baseCfg.pitch) * zt,
+      };
       const camX = p.x - dirX * cfg.dist;
       const camZ = p.z - dirZ * cfg.dist;
       const camY = cfg.height;
@@ -2145,7 +2158,13 @@ export default function ParkWorld3D({
     const viewW = rect.width;
     const viewH = rect.height;
     const fov = Math.min(viewW, viewH) * 1.18;
-    const cfg = CAMERA_PRESETS[camRef.current.preset] || CAMERA_PRESETS.follow;
+    const baseCfg = CAMERA_PRESETS[camRef.current.preset] || CAMERA_PRESETS.follow;
+    const zt = Math.max(0, Math.min(1, zoomOverviewRef.current / 100));
+    const cfg = {
+      dist: baseCfg.dist + (1950 - baseCfg.dist) * zt,
+      height: baseCfg.height + (2250 - baseCfg.height) * zt,
+      pitch: baseCfg.pitch + (0.92 - baseCfg.pitch) * zt,
+    };
     const yaw = camRef.current.yaw;
     const dirX = Math.sin(yaw);
     const dirZ = -Math.cos(yaw);
@@ -2173,7 +2192,7 @@ export default function ParkWorld3D({
       const t = -camY / rayY;
       const gx = camX + t * rayX;
       const gz = camZ + t * rayZ;
-      p.targetX = Math.max(-500, Math.min(500, gx));
+      p.targetX = Math.max(-1500, Math.min(1500, gx));
       p.targetZ = Math.max(-360, Math.min(maxZRef.current, gz));
     }
   };
@@ -2220,12 +2239,6 @@ export default function ParkWorld3D({
         setShowAvatarPanel((v) => !v);
       }}
       onOpenUpdateModal={onOpenUpdateModal}
-      cameraControls={{
-        onRotateLeft: () => (camRef.current.yaw -= 0.45),
-        onRotateRight: () => (camRef.current.yaw += 0.45),
-        onCycleCamera: cycleCameraPreset,
-        cameraLabel: (CAMERA_PRESETS[cameraMode] || CAMERA_PRESETS.follow).label,
-      }}
     />
   );
 
@@ -2248,6 +2261,112 @@ export default function ParkWorld3D({
         >
           {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
         </button>
+
+        {/* 3D Camera Icon Button on Right Side (below Dog/Species gate & Full Screen) */}
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            top: isFullScreen ? 88 : 52,
+            right: 10,
+            zIndex: 18,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: 6,
+          }}
+        >
+          <button
+            type="button"
+            className="world-fs-floating-btn"
+            style={{ position: 'static' }}
+            onClick={() => setCameraMenuOpen((v) => !v)}
+            aria-label="Camera View Options"
+            title="Camera View Options"
+          >
+            <Video size={16} />
+          </button>
+          {cameraMenuOpen && (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+                padding: 8,
+                borderRadius: 12,
+                background: 'rgba(16, 22, 20, 0.9)',
+                border: '1px solid rgba(255, 255, 255, 0.16)',
+                backdropFilter: 'blur(8px)',
+              }}
+            >
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  style={{ padding: '5px 9px', fontSize: '0.75rem' }}
+                  onClick={() => (camRef.current.yaw -= 0.45)}
+                  title="Rotate camera left (Q)"
+                >
+                  <RotateCcw size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  style={{ padding: '5px 9px', fontSize: '0.75rem' }}
+                  onClick={() => (camRef.current.yaw += 0.45)}
+                  title="Rotate camera right (R)"
+                >
+                  <RotateCw size={14} />
+                </button>
+              </div>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ padding: '5px 10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
+                onClick={cycleCameraPreset}
+              >
+                <Video size={13} /> {(CAMERA_PRESETS[cameraMode] || CAMERA_PRESETS.follow).label}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 3D Overview Zoom Slider (0 = current view, 100 = see all 200 plots/niches) */}
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            top: isFullScreen ? 82 : 40,
+            left: 8,
+            zIndex: 16,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '4px 10px',
+            borderRadius: 999,
+            background: 'rgba(16, 22, 20, 0.82)',
+            border: '1px solid rgba(255, 255, 255, 0.16)',
+            color: '#f5efe6',
+            fontSize: '0.72rem',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          <span>🔍 Zoom</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={zoomOverview}
+            onChange={(e) => setZoomOverview(Number(e.target.value))}
+            style={{ width: 92, accentColor: '#ffd57e', cursor: 'pointer' }}
+            aria-label="3D Garden Overview Zoom"
+          />
+          <span style={{ minWidth: 32, textAlign: 'right', color: '#ffd57e', fontWeight: 700 }}>
+            {zoomOverview === 0 ? '1×' : zoomOverview === 100 ? 'All' : `${zoomOverview}%`}
+          </span>
+        </div>
         <canvas
           ref={canvasRef}
           className="world-canvas"
