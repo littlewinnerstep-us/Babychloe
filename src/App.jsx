@@ -273,12 +273,33 @@ export default function App() {
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
-  const [activeTab, setActiveTab] = useState('tombstone'); // 'tombstone' | 'ash-room' | 'sanctuary'
-  const [activeRoom, setActiveRoom] = useState('tombstone'); // 'tombstone' | 'ash-room'
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const savedRoom = typeof window !== 'undefined' ? localStorage.getItem('evergreen_paws_active_room_v1') : null;
+      return savedRoom === 'ash-room' ? 'ash-room' : 'tombstone';
+    } catch {
+      return 'tombstone';
+    }
+  }); // 'tombstone' | 'ash-room' | 'sanctuary'
+  const [activeRoom, setActiveRoom] = useState(() => {
+    try {
+      const savedRoom = typeof window !== 'undefined' ? localStorage.getItem('evergreen_paws_active_room_v1') : null;
+      return savedRoom === 'ash-room' ? 'ash-room' : 'tombstone';
+    } catch {
+      return 'tombstone';
+    }
+  }); // 'tombstone' | 'ash-room'
   const [walkToRoomRequest, setWalkToRoomRequest] = useState(null);
   const [walkToSpeciesRequest, setWalkToSpeciesRequest] = useState(null);
   const [walkToMemorialRequest, setWalkToMemorialRequest] = useState(null);
-  const [activeSpecies, setActiveSpecies] = useState('Dog');
+  const [activeSpecies, setActiveSpecies] = useState(() => {
+    try {
+      const savedSp = typeof window !== 'undefined' ? localStorage.getItem('evergreen_paws_active_species_v1') : null;
+      return savedSp || 'Dog';
+    } catch {
+      return 'Dog';
+    }
+  });
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
   const [viewMode, setViewMode] = useState(loadSavedViewMode); // 'world3d' | 'world2d' | 'grid'
   const [favorites, setFavorites] = useState(() => loadArrayPref(STORAGE_FAVORITES_KEY));
@@ -596,6 +617,22 @@ export default function App() {
       // ignore storage errors
     }
   }, [viewMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('evergreen_paws_active_room_v1', activeRoom);
+    } catch {
+      // ignore
+    }
+  }, [activeRoom]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('evergreen_paws_active_species_v1', activeSpecies);
+    } catch {
+      // ignore
+    }
+  }, [activeSpecies]);
 
   useEffect(() => {
     try {

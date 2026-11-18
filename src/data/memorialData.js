@@ -906,6 +906,48 @@ export const GARDEN_NPCS_DATA = buildBandNpcs(true);
 
 export const ASH_NPCS_DATA = buildBandNpcs(false);
 
+const PLAYER_POS_STORAGE_KEY = 'evergreen_paws_player_pos_v1';
+
+export function loadSavedPlayerPosition() {
+  try {
+    if (typeof window === 'undefined') return null;
+    const raw = localStorage.getItem(PLAYER_POS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function savePlayerPosition({ mode, x, y, facingX = 0, facingZ = 1 }) {
+  try {
+    if (typeof window === 'undefined' || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    let x2d;
+    let y2d;
+    let x3d;
+    let z3d;
+    if (mode === '2d') {
+      x2d = x;
+      y2d = y;
+      x3d = (x - 1400) * (1400 / 1260);
+      z3d = (y - 220) * (250 / 240) - 170;
+    } else {
+      x3d = x;
+      z3d = y;
+      x2d = 1400 + x * (1260 / 1400);
+      y2d = 220 + (y + 170) * (240 / 250);
+    }
+    localStorage.setItem(
+      PLAYER_POS_STORAGE_KEY,
+      JSON.stringify({ x2d, y2d, x3d, z3d, facingX, facingZ, updatedAt: Date.now() })
+    );
+  } catch {
+    // ignore storage errors
+  }
+}
+
 const PLOT_COLS_2D = [
   140, 260, 380, 500, 620, 740, 860, 980, 1100, 1220,
   1580, 1700, 1820, 1940, 2060, 2180, 2300, 2420, 2540, 2660,

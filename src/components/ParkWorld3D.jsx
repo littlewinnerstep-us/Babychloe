@@ -21,6 +21,8 @@ import {
   ASH_NPCS_DATA,
   stepBandNpcs,
   resolvePlotCollision,
+  loadSavedPlayerPosition,
+  savePlayerPosition,
   getUserIdentityKey,
   isMemorialOwner,
 } from '../data/memorialData';
@@ -254,11 +256,20 @@ export default function ParkWorld3D({
     }
   }, [inspectedId, onRecordVisit]);
 
+  const savedInitPos3D = useMemo(() => loadSavedPlayerPosition(), []);
   const playerRef = useRef({
-    x: getLocalSpawnOffset(),
-    z: activeRoom === 'ash-room' ? 235 : 190,
-    facingX: 0,
-    facingZ: -1,
+    x:
+      savedInitPos3D && Number.isFinite(savedInitPos3D.x3d)
+        ? Math.max(-1500, Math.min(1500, savedInitPos3D.x3d))
+        : getLocalSpawnOffset(),
+    z:
+      savedInitPos3D && Number.isFinite(savedInitPos3D.z3d)
+        ? Math.max(-360, Math.min(2200, savedInitPos3D.z3d))
+        : activeRoom === 'ash-room'
+          ? 235
+          : 190,
+    facingX: savedInitPos3D && Number.isFinite(savedInitPos3D.facingX) ? savedInitPos3D.facingX : 0,
+    facingZ: savedInitPos3D && Number.isFinite(savedInitPos3D.facingZ) ? savedInitPos3D.facingZ : -1,
     bob: 0,
     moving: false,
     targetX: null,
@@ -266,6 +277,13 @@ export default function ParkWorld3D({
     history: [],
     portalCooldownUntil: 0,
   });
+  const lastPosSaveRef = useRef(0);
+  useEffect(() => {
+    return () => {
+      const p = playerRef.current;
+      savePlayerPosition({ mode: '3d', x: p.x, y: p.z, facingX: p.facingX, facingZ: p.facingZ });
+    };
+  }, []);
 
   const camRef = useRef({
     yaw: 0,
@@ -818,6 +836,16 @@ export default function ParkWorld3D({
       const safePlayer3D = resolvePlotCollision(p.x, p.z, '3d', roomRef.current, 44, 40);
       p.x = Math.max(-1500, Math.min(1500, safePlayer3D.x));
       p.z = Math.max(-360, Math.min(maxZ, safePlayer3D.y));
+      if (now - lastPosSaveRef.current > 240) {
+        lastPosSaveRef.current = now;
+        savePlayerPosition({
+          mode: '3d',
+          x: p.x,
+          y: p.z,
+          facingX: p.facingX,
+          facingZ: p.facingZ,
+        });
+      }
 
       if (p.moving || p.history.length === 0) {
         p.history.unshift({ x: p.x, z: p.z });

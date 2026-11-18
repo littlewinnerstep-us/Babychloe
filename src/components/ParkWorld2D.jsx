@@ -18,6 +18,8 @@ import {
   ASH_NPCS_DATA,
   stepBandNpcs,
   resolvePlotCollision,
+  loadSavedPlayerPosition,
+  savePlayerPosition,
   getUserIdentityKey,
   isMemorialOwner,
 } from '../data/memorialData';
@@ -267,11 +269,20 @@ export default function ParkWorld2D({
     }
   }, [inspectedId, onRecordVisit]);
 
+  const savedInitPos2D = useMemo(() => loadSavedPlayerPosition(), []);
   const playerRef = useRef({
-    x: CENTER_X + getLocalSpawnOffset(),
-    y: activeRoom === 'ash-room' ? 165 : 540,
-    facingX: 0,
-    facingY: 1,
+    x:
+      savedInitPos2D && Number.isFinite(savedInitPos2D.x2d)
+        ? Math.max(46, Math.min(WORLD_WIDTH - 46, savedInitPos2D.x2d))
+        : CENTER_X + getLocalSpawnOffset(),
+    y:
+      savedInitPos2D && Number.isFinite(savedInitPos2D.y2d)
+        ? Math.max(66, Math.min(2560, savedInitPos2D.y2d))
+        : activeRoom === 'ash-room'
+          ? 165
+          : 540,
+    facingX: savedInitPos2D && Number.isFinite(savedInitPos2D.facingX) ? savedInitPos2D.facingX : 0,
+    facingY: savedInitPos2D && Number.isFinite(savedInitPos2D.facingZ) ? savedInitPos2D.facingZ : 1,
     bob: 0,
     moving: false,
     targetX: null,
@@ -280,6 +291,13 @@ export default function ParkWorld2D({
     history: [],
     portalCooldownUntil: 0,
   });
+  const lastPosSaveRef = useRef(0);
+  useEffect(() => {
+    return () => {
+      const p = playerRef.current;
+      savePlayerPosition({ mode: '2d', x: p.x, y: p.y, facingX: p.facingX, facingZ: p.facingY });
+    };
+  }, []);
 
   const keysRef = useRef({
     up: false,
@@ -810,6 +828,16 @@ export default function ParkWorld2D({
       const safePlayer2D = resolvePlotCollision(p.x, p.y, '2d', room, 44, 40);
       p.x = Math.max(46, Math.min(bounds.width - 46, safePlayer2D.x));
       p.y = Math.max(66, Math.min(bounds.height - 40, safePlayer2D.y));
+      if (now - lastPosSaveRef.current > 240) {
+        lastPosSaveRef.current = now;
+        savePlayerPosition({
+          mode: '2d',
+          x: p.x,
+          y: p.y,
+          facingX: p.facingX,
+          facingZ: p.facingY,
+        });
+      }
 
       updateLocalPresence({
         name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
@@ -1390,6 +1418,20 @@ export default function ParkWorld2D({
             getSpeciesEmoji(m.species),
             isNear ? '#ffd57e' : '#e6c278'
           );
+
+          // Niche code (e.g., A-21) at the top of the pet picture
+          const nicheCode = m.locationCode || 'A-21';
+          ctx.font = '800 8.5px "Plus Jakarta Sans", sans-serif';
+          const codeW = Math.max(32, ctx.measureText(nicheCode).width + 10);
+          ctx.fillStyle = 'rgba(26, 17, 13, 0.92)';
+          drawRoundedRect(ctx, mx - codeW / 2, my - 52, codeW, 13, 5);
+          ctx.fill();
+          ctx.strokeStyle = isNear ? '#ffd57e' : '#c9a056';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.fillStyle = '#ffe5ad';
+          ctx.textAlign = 'center';
+          ctx.fillText(nicheCode, mx, my - 42.5);
 
           // Urn silhouette inside alcove
           const urnColor = {
