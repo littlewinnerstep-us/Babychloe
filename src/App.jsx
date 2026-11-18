@@ -21,6 +21,7 @@ import {
   Shuffle,
   Bell,
   ShieldCheck,
+  RefreshCw,
   X,
 } from 'lucide-react';
 import {
@@ -39,6 +40,7 @@ import SpeciesGateModal from './components/SpeciesGateModal';
 import FavoritesModal from './components/FavoritesModal';
 import AdminBackendModal from './components/AdminBackendModal';
 import NotificationsModal from './components/NotificationsModal';
+import UpdateCheckModal, { APP_BUILD_VERSION } from './components/UpdateCheckModal';
 import { isApkEnvironment } from './utils/platform';
 import {
   DEFAULT_SOUND_VOLUMES,
@@ -256,6 +258,7 @@ export default function App() {
   const [soundVolumes, setSoundVolumesState] = useState(loadVolumePrefs);
   const [showSpeciesGate, setShowSpeciesGate] = useState(false);
   const [showFavoritesModal, setShowFavoritesModal] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [adminConfig, setAdminConfig] = useState(getAdminConfig);
   const [notifications, setNotifications] = useState(getAdminNotifications);
   const [readNotifIds, setReadNotifIds] = useState(() => loadArrayPref(STORAGE_READ_NOTIFS_KEY));
@@ -1208,8 +1211,21 @@ export default function App() {
                 {!soundEnabled && <span className="music-slash" aria-hidden="true" />}
               </span>
             </button>
-            <button type="button" className="btn-primary" onClick={handleOpenCreate}>
-              <Plus size={15} /> Enshrine Pet
+            <button
+              type="button"
+              className="top-music-btn"
+              onClick={() => setShowUpdateModal(true)}
+              title={`Check Update (v${APP_BUILD_VERSION})`}
+              aria-label={`Check for app updates (v${APP_BUILD_VERSION})`}
+            >
+              <RefreshCw size={15} />
+            </button>
+            <button
+              type="button"
+              className="btn-primary top-enshrine-btn"
+              onClick={handleOpenCreate}
+            >
+              <Plus size={15} /> {isApk ? 'Enshrine' : 'Enshrine Pet'}
             </button>
 
             {currentUser ? (
@@ -1616,6 +1632,7 @@ export default function App() {
         {viewMode === 'world3d' && activeTab !== 'sanctuary' && !showOnlyFavorites ? (
           <ParkWorld3D
             isApk={isApk}
+            onOpenUpdateModal={() => setShowUpdateModal(true)}
             memorials={speciesMemorials}
             allMemorials={visibleMemorials}
             activeSpecies={activeSpecies}
@@ -1674,6 +1691,7 @@ export default function App() {
         ) : viewMode === 'world2d' && activeTab !== 'sanctuary' && !showOnlyFavorites ? (
           <ParkWorld2D
             isApk={isApk}
+            onOpenUpdateModal={() => setShowUpdateModal(true)}
             memorials={speciesMemorials}
             allMemorials={visibleMemorials}
             activeSpecies={activeSpecies}
@@ -1929,6 +1947,13 @@ export default function App() {
           onWalkAndVisit={handleWalkAndVisitFavorite}
           onToggleFavorite={handleToggleFavorite}
           onClose={() => setShowFavoritesModal(false)}
+        />
+      )}
+
+      {showUpdateModal && (
+        <UpdateCheckModal
+          isApk={isApk}
+          onClose={() => setShowUpdateModal(false)}
         />
       )}
     </div>

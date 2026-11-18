@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Sparkles,
-  UserCheck,
   X,
   ArrowUp,
   ArrowDown,
@@ -11,7 +10,6 @@ import {
   DoorOpen,
   Maximize2,
   Minimize2,
-  Users,
 } from 'lucide-react';
 import {
   OFFERING_TYPES,
@@ -37,10 +35,10 @@ import {
   drawCachedPetPortrait,
 } from '../utils/avatarRenderer';
 import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
-import WalkToSearchBar from './WalkToSearchBar';
 import AvatarCustomizerDrawer from './AvatarCustomizerDrawer';
 import SpeciesGateModal from './SpeciesGateModal';
 import WorldJoystick from './WorldJoystick';
+import WorldHudBar from './WorldHudBar';
 
 const AVATAR_STORAGE_KEY = 'evergreen_paws_avatar_v1';
 
@@ -91,6 +89,7 @@ function drawRoundedRect(ctx, x, y, w, h, r) {
 
 export default function ParkWorld2D({
   isApk = false,
+  onOpenUpdateModal,
   memorials,
   allMemorials = [],
   activeSpecies = 'Dog',
@@ -1674,82 +1673,39 @@ export default function ParkWorld2D({
     [positionedMemorials, inspectedId]
   );
 
+  const worldHudNode = (
+    <WorldHudBar
+      isFullScreen={isFullScreen}
+      onToggleFullScreen={() => setIsFullScreen((fs) => !fs)}
+      allMemorials={allMemorials}
+      activeSpecies={activeSpecies}
+      nearbyMemorialId={nearbyMemorialId}
+      onSelectPet={handleWalkToPet}
+      onOpenSpeciesGate={openSpeciesGate}
+      onTriggerEmote={triggerEmote}
+      showMeetupPanel={showMeetupPanel}
+      onToggleMeetup={() => {
+        setShowAvatarPanel(false);
+        setShowMeetupPanel((v) => !v);
+      }}
+      mpPeersCount={mpPeers.length}
+      showAvatarPanel={showAvatarPanel}
+      onToggleAvatar={() => {
+        setShowMeetupPanel(false);
+        setShowAvatarPanel((v) => !v);
+      }}
+      onOpenUpdateModal={onOpenUpdateModal}
+    />
+  );
+
   return (
     <div className={`world-container ${isFullScreen ? 'is-fullscreen' : ''}`}>
-      {/* Top Walk-To Search Bar, Species Gate & Avatar Bar */}
-      <div className="world-hud-top">
-        <WalkToSearchBar
-          allMemorials={allMemorials}
-          activeSpecies={activeSpecies}
-          nearbyMemorialId={nearbyMemorialId}
-          onSelectPet={handleWalkToPet}
-        />
-
-        <div className="world-hud-actions">
-          <button
-            type="button"
-            className="btn-ghost"
-            onClick={openSpeciesGate}
-            title="Open another species sanctuary gate"
-          >
-            ⛩️ Other Gates
-          </button>
-          <button
-            type="button"
-            className="btn-ghost"
-            onClick={() => triggerEmote('👋', 'Waved hello to visitors')}
-          >
-            👋 Wave
-          </button>
-          <button
-            type="button"
-            className="btn-ghost"
-            onClick={() => triggerEmote('🙏', 'Shared a quiet moment of remembrance')}
-          >
-            🙏 Pray
-          </button>
-          <button
-            type="button"
-            className="btn-ghost"
-            onClick={() => triggerEmote('🌸', 'Scattered gentle cherry petals')}
-          >
-            🌸 Petals
-          </button>
-          <button
-            type="button"
-            className={`btn-ghost ${showMeetupPanel ? 'active' : ''}`}
-            onClick={() => {
-              setShowAvatarPanel(false);
-              setShowMeetupPanel((v) => !v);
-            }}
-            title="Live multiplayer meetup, room code & chat"
-          >
-            <Users size={14} /> 🟢 Meetup ({mpPeers.length + 1})
-          </button>
-          <button
-            type="button"
-            className="btn-ghost"
-            onClick={() => {
-              setShowMeetupPanel(false);
-              setShowAvatarPanel((v) => !v);
-            }}
-          >
-            <UserCheck size={14} /> Avatar
-          </button>
-          <button
-            type="button"
-            className="btn-ghost"
-            onClick={() => setIsFullScreen((fs) => !fs)}
-            title={isFullScreen ? 'Exit Full Screen' : 'Full Screen 2D'}
-          >
-            {isFullScreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            {isFullScreen ? 'Exit' : 'Full'}
-          </button>
-        </div>
-      </div>
+      {/* Non-fullscreen HUD bar sits above scene; Full Scene wraps menu cleanly inside scene */}
+      {!isFullScreen && worldHudNode}
 
       {/* Interactive Canvas Viewport */}
       <div className="world-canvas-wrap">
+        {isFullScreen && worldHudNode}
         <button
           type="button"
           className="world-fs-floating-btn"

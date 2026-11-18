@@ -2477,10 +2477,11 @@ body.is-apk-app .world-canvas-wrap {
   -webkit-touch-callout: none;
 }
 
-/* Compact APK outer header so icons never wrap or block each other */
+/* Compact APK outer header so icons never wrap clumsily or block each other */
 body.is-apk-app .top-bar-inner {
   padding: 6px 10px;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 body.is-apk-app .brand-group {
@@ -2488,16 +2489,14 @@ body.is-apk-app .brand-group {
 }
 
 body.is-apk-app .brand-crest {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
 }
 
 body.is-apk-app .brand-title {
   font-size: 0.94rem;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 body.is-apk-app .brand-sub {
@@ -2505,9 +2504,11 @@ body.is-apk-app .brand-sub {
 }
 
 body.is-apk-app .top-actions {
-  gap: 4px;
-  flex-wrap: nowrap;
-  flex-shrink: 0;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
+  margin-left: auto;
 }
 
 body.is-apk-app .top-actions .top-music-btn {
@@ -2520,16 +2521,16 @@ body.is-apk-app .top-actions .top-music-btn {
 body.is-apk-app .top-actions .btn-primary,
 body.is-apk-app .top-actions .btn-ghost,
 body.is-apk-app .top-actions .user-chip {
-  padding: 5px 8px;
-  font-size: 0.72rem;
+  padding: 5px 9px;
+  font-size: 0.73rem;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-/* Compact slim in-world HUD top bar (single scrollable action strip instead of tall wrapped rows) */
+/* Compact wrapped in-world HUD top bar (never overflows horizontally outside the scene) */
 body.is-apk-app .world-hud-top {
-  padding: 5px 8px;
-  gap: 5px;
+  padding: 6px 8px;
+  gap: 6px;
   flex-direction: column;
   align-items: stretch;
 }
@@ -2544,17 +2545,9 @@ body.is-apk-app .walk-search-box input {
 }
 
 body.is-apk-app .world-hud-actions {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
+  flex-wrap: wrap;
+  overflow: visible;
   gap: 5px;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 1px;
-}
-
-body.is-apk-app .world-hud-actions::-webkit-scrollbar {
-  display: none;
 }
 
 body.is-apk-app .world-hud-actions .btn-ghost {
@@ -2562,6 +2555,94 @@ body.is-apk-app .world-hud-actions .btn-ghost {
   font-size: 0.72rem;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* Full Scene wrapped overlay menu inside canvas (instead of taking space outside the scene) */
+.world-fullscene-menu-overlay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 112px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+body.is-apk-app .world-fullscene-menu-overlay {
+  right: 56px;
+}
+
+.world-fullscene-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+  max-width: 560px;
+}
+
+.world-fullscene-bar-row .walk-search-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.world-fullscene-bar-row .walk-search-box {
+  background: rgba(16, 22, 20, 0.86);
+  border-color: rgba(255, 226, 170, 0.34);
+  color: #f6efe2;
+}
+
+.world-fullscene-bar-row .walk-search-box input {
+  color: #f6efe2;
+}
+
+.world-fullmenu-toggle-btn {
+  border: 1px solid rgba(255, 226, 170, 0.42);
+  background: rgba(16, 22, 20, 0.86);
+  backdrop-filter: blur(8px);
+  color: #ffe8ba;
+  border-radius: 999px;
+  padding: 6px 11px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.world-fullmenu-toggle-btn.active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+
+.world-fullscene-drawer {
+  pointer-events: auto;
+  background: rgba(14, 20, 18, 0.92);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 226, 170, 0.3);
+  border-radius: 14px;
+  padding: 8px;
+  max-width: 540px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.48);
+}
+
+.world-fullscene-drawer .world-hud-actions {
+  flex-wrap: wrap !important;
+  overflow: visible !important;
+  gap: 5px;
+}
+
+.world-fullscene-drawer .btn-ghost {
+  background: rgba(255, 255, 255, 0.09);
+  color: #f6efe2;
+  border-color: rgba(255, 255, 255, 0.2);
+  padding: 5px 9px;
+  font-size: 0.73rem;
 }
 
 /* Auto-adjust canvas and fullscreen container to APK viewport dimensions */
@@ -2583,15 +2664,30 @@ body.is-apk-app .world-container.is-fullscreen {
   box-sizing: border-box;
 }
 
-body.is-apk-app .world-container.is-fullscreen .world-hud-top {
-  padding: 4px 8px;
-  gap: 4px;
-}
-
 body.is-apk-app .world-container.is-fullscreen .world-canvas-wrap {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
+}
+
+/* Position room pill cleanly below fullscene bar without overlapping search or right icons */
+.world-container.is-fullscreen .world-room-pill {
+  top: 48px;
+  left: 8px;
+  max-width: calc(100% - 120px);
+}
+
+body.is-apk-app .world-container.is-fullscreen .world-room-pill {
+  top: 48px;
+  max-width: calc(100% - 60px);
+}
+
+body.is-apk-app .world-container.is-fullscreen .world-toast {
+  top: 78px;
+}
+
+body.is-apk-app .world-container.is-fullscreen .world-group-invite-banner {
+  top: 82px;
 }
 
 /* Keep top-left room badge and toast strictly clear of right-side 36px icon stack */
