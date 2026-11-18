@@ -2179,16 +2179,18 @@ select {
   .top-bar-inner {
     padding: 8px 12px;
     gap: 8px;
+    flex-wrap: wrap;
   }
 
   .brand-crest {
-    width: 32px;
-    height: 32px;
-    border-radius: 10px;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
   }
 
   .brand-title {
-    font-size: 1.08rem;
+    font-size: 0.98rem;
+    white-space: nowrap;
   }
 
   .brand-sub {
@@ -2196,14 +2198,17 @@ select {
   }
 
   .top-actions {
-    gap: 6px;
-    flex-shrink: 0;
+    gap: 5px;
+    flex-wrap: wrap;
+    flex-shrink: 1;
+    justify-content: flex-end;
+    margin-left: auto;
   }
 
   .top-actions .btn-primary,
   .top-actions .btn-ghost {
-    padding: 6px 10px;
-    font-size: 0.78rem;
+    padding: 5px 9px;
+    font-size: 0.74rem;
   }
 }
 
@@ -2462,12 +2467,16 @@ body.world-is-fullscreen .top-bar {
   display: none !important;
 }
 
+body.is-mobile-hud,
+body.is-mobile-hud *,
 body.is-apk-app,
 body.is-apk-app * {
   -webkit-tap-highlight-color: transparent !important;
   tap-highlight-color: transparent !important;
 }
 
+body.is-mobile-hud .world-canvas,
+body.is-mobile-hud .world-canvas-wrap,
 body.is-apk-app .world-canvas,
 body.is-apk-app .world-canvas-wrap {
   cursor: default !important;
@@ -2477,80 +2486,89 @@ body.is-apk-app .world-canvas-wrap {
   -webkit-touch-callout: none;
 }
 
-/* Compact APK outer header so icons never wrap clumsily or block each other */
-body.is-apk-app .top-bar-inner {
+/* Compact Mobile Web & APK outer header so icons never wrap clumsily or block Evergreen title */
+body.is-mobile-hud .top-bar-inner {
   padding: 6px 10px;
   gap: 6px;
   flex-wrap: wrap;
 }
 
-body.is-apk-app .brand-group {
+body.is-mobile-hud .brand-group {
   gap: 6px;
+  flex: 1 1 auto;
+  min-width: 120px;
 }
 
-body.is-apk-app .brand-crest {
+body.is-mobile-hud .brand-crest {
   width: 28px;
   height: 28px;
   border-radius: 8px;
 }
 
-body.is-apk-app .brand-title {
+body.is-mobile-hud .brand-title {
   font-size: 0.94rem;
   white-space: nowrap;
 }
 
-body.is-apk-app .brand-sub {
+body.is-mobile-hud .brand-sub {
   display: none;
 }
 
-body.is-apk-app .top-actions {
+body.is-mobile-hud .top-actions {
   gap: 5px;
   flex-wrap: wrap;
+  flex-shrink: 1;
   justify-content: flex-end;
   max-width: 100%;
   margin-left: auto;
 }
 
-body.is-apk-app .top-actions .top-music-btn {
+body.is-mobile-hud .top-actions .top-music-btn {
   width: 30px;
   height: 30px;
   padding: 0;
   flex-shrink: 0;
 }
 
-body.is-apk-app .top-actions .btn-primary,
-body.is-apk-app .top-actions .btn-ghost,
-body.is-apk-app .top-actions .user-chip {
+body.is-mobile-hud .top-actions .btn-primary,
+body.is-mobile-hud .top-actions .btn-ghost,
+body.is-mobile-hud .top-actions .user-chip {
   padding: 5px 9px;
   font-size: 0.73rem;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-/* Compact wrapped in-world HUD top bar (never overflows horizontally outside the scene) */
-body.is-apk-app .world-hud-top {
+/* Compact wrapped in-world HUD top bar (fixes 240px column height gap below Search bar) */
+body.is-mobile-hud .world-hud-top {
   padding: 6px 8px;
-  gap: 6px;
+  gap: 5px;
   flex-direction: column;
   align-items: stretch;
 }
 
-body.is-apk-app .walk-search-box {
+body.is-mobile-hud .world-hud-top .walk-search-wrap {
+  flex: 0 0 auto !important;
+  width: 100%;
+  max-width: 100%;
+}
+
+body.is-mobile-hud .walk-search-box {
   padding: 4px 9px;
   min-height: 30px;
 }
 
-body.is-apk-app .walk-search-box input {
+body.is-mobile-hud .walk-search-box input {
   font-size: 0.76rem;
 }
 
-body.is-apk-app .world-hud-actions {
+body.is-mobile-hud .world-hud-actions {
   flex-wrap: wrap;
   overflow: visible;
   gap: 5px;
 }
 
-body.is-apk-app .world-hud-actions .btn-ghost {
+body.is-mobile-hud .world-hud-actions .btn-ghost {
   padding: 4px 8px;
   font-size: 0.72rem;
   white-space: nowrap;
@@ -2570,7 +2588,7 @@ body.is-apk-app .world-hud-actions .btn-ghost {
   pointer-events: none;
 }
 
-body.is-apk-app .world-fullscene-menu-overlay {
+body.is-mobile-hud .world-fullscene-menu-overlay {
   right: 56px;
 }
 
@@ -2583,8 +2601,9 @@ body.is-apk-app .world-fullscene-menu-overlay {
 }
 
 .world-fullscene-bar-row .walk-search-wrap {
-  flex: 1;
+  flex: 1 1 auto !important;
   min-width: 0;
+  max-width: none;
 }
 
 .world-fullscene-bar-row .walk-search-box {
@@ -2645,16 +2664,16 @@ body.is-apk-app .world-fullscene-menu-overlay {
   font-size: 0.73rem;
 }
 
-/* Auto-adjust canvas and fullscreen container to APK viewport dimensions */
-body.is-apk-app .park-shell {
+/* Auto-adjust canvas and fullscreen container to Mobile Web & APK viewport dimensions */
+body.is-mobile-hud .park-shell {
   padding-bottom: calc(74px + env(safe-area-inset-bottom));
 }
 
-body.is-apk-app .world-container:not(.is-fullscreen) .world-canvas {
+body.is-mobile-hud .world-container:not(.is-fullscreen) .world-canvas {
   height: clamp(360px, calc(100dvh - 185px), 780px);
 }
 
-body.is-apk-app .world-container.is-fullscreen {
+body.is-mobile-hud .world-container.is-fullscreen {
   width: 100vw;
   height: 100dvh;
   padding-top: env(safe-area-inset-top);
@@ -2664,7 +2683,7 @@ body.is-apk-app .world-container.is-fullscreen {
   box-sizing: border-box;
 }
 
-body.is-apk-app .world-container.is-fullscreen .world-canvas-wrap {
+body.is-mobile-hud .world-container.is-fullscreen .world-canvas-wrap {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
@@ -2677,21 +2696,21 @@ body.is-apk-app .world-container.is-fullscreen .world-canvas-wrap {
   max-width: calc(100% - 120px);
 }
 
-body.is-apk-app .world-container.is-fullscreen .world-room-pill {
+body.is-mobile-hud .world-container.is-fullscreen .world-room-pill {
   top: 48px;
   max-width: calc(100% - 60px);
 }
 
-body.is-apk-app .world-container.is-fullscreen .world-toast {
+body.is-mobile-hud .world-container.is-fullscreen .world-toast {
   top: 78px;
 }
 
-body.is-apk-app .world-container.is-fullscreen .world-group-invite-banner {
+body.is-mobile-hud .world-container.is-fullscreen .world-group-invite-banner {
   top: 82px;
 }
 
 /* Keep top-left room badge and toast strictly clear of right-side 36px icon stack */
-body.is-apk-app .world-room-pill {
+body.is-mobile-hud .world-room-pill {
   top: 8px;
   left: 8px;
   right: auto;
@@ -2703,24 +2722,24 @@ body.is-apk-app .world-room-pill {
   text-overflow: ellipsis;
 }
 
-body.is-apk-app .world-toast {
+body.is-mobile-hud .world-toast {
   top: 38px;
   max-width: calc(100% - 108px);
   padding: 4px 10px;
   font-size: 0.72rem;
 }
 
-body.is-apk-app .world-group-invite-banner {
+body.is-mobile-hud .world-group-invite-banner {
   top: 42px;
   left: 8px;
   width: min(230px, calc(100% - 64px));
 }
 
-/* APK On-Screen Menu Icon-Only Stack (Full Screen, Outside ON/OFF, Favorites, Gates) */
-body.is-apk-app .world-fs-floating-btn,
-body.is-apk-app .world-outside-chat-btn,
-body.is-apk-app .world-favorites-btn,
-body.is-apk-app .world-gate-readonly-pill {
+/* Mobile Web & APK On-Screen Menu Icon-Only Stack (Full Screen, Outside ON/OFF, Favorites, Gates) */
+body.is-mobile-hud .world-fs-floating-btn,
+body.is-mobile-hud .world-outside-chat-btn,
+body.is-mobile-hud .world-favorites-btn,
+body.is-mobile-hud .world-gate-readonly-pill {
   width: 36px;
   height: 36px;
   padding: 0;
@@ -2729,20 +2748,20 @@ body.is-apk-app .world-gate-readonly-pill {
   right: 10px;
 }
 
-body.is-apk-app .world-fs-floating-btn {
+body.is-mobile-hud .world-fs-floating-btn {
   top: 8px;
 }
 
-body.is-apk-app .world-outside-chat-btn {
+body.is-mobile-hud .world-outside-chat-btn {
   top: 50px;
 }
 
-body.is-apk-app .world-favorites-btn {
+body.is-mobile-hud .world-favorites-btn {
   top: 92px;
   font-size: 1rem;
 }
 
-body.is-apk-app .world-gate-readonly-pill {
+body.is-mobile-hud .world-gate-readonly-pill {
   top: 134px;
   font-size: 1.05rem;
 }
@@ -2761,44 +2780,44 @@ body.is-apk-app .world-gate-readonly-pill {
   touch-action: none;
 }
 
-/* When not fullscreen in APK, raise joystick & bottom overlays clear of .mobile-bottom-nav */
-body.is-apk-app .world-container:not(.is-fullscreen) .world-joystick-wrap {
+/* When not fullscreen on mobile, raise joystick & bottom overlays clear of .mobile-bottom-nav */
+body.is-mobile-hud .world-container:not(.is-fullscreen) .world-joystick-wrap {
   bottom: calc(70px + env(safe-area-inset-bottom));
 }
 
-body.is-apk-app .world-container:not(.is-fullscreen) .world-chat-bar {
+body.is-mobile-hud .world-container:not(.is-fullscreen) .world-chat-bar {
   left: 146px;
   bottom: calc(70px + env(safe-area-inset-bottom));
 }
 
-body.is-apk-app .world-container:not(.is-fullscreen) .world-chat-preview-3rows {
+body.is-mobile-hud .world-container:not(.is-fullscreen) .world-chat-preview-3rows {
   left: 146px;
   bottom: calc(114px + env(safe-area-inset-bottom));
 }
 
-body.is-apk-app .world-container:not(.is-fullscreen) .world-nearby-note,
-body.is-apk-app .world-container:not(.is-fullscreen) .world-portal-prompt {
+body.is-mobile-hud .world-container:not(.is-fullscreen) .world-nearby-note,
+body.is-mobile-hud .world-container:not(.is-fullscreen) .world-portal-prompt {
   bottom: calc(116px + env(safe-area-inset-bottom));
 }
 
-body.is-apk-app .world-container:not(.is-fullscreen) .world-proximity-card {
+body.is-mobile-hud .world-container:not(.is-fullscreen) .world-proximity-card {
   bottom: calc(168px + env(safe-area-inset-bottom));
 }
 
 /* In Full Scene mode, bottom bar is hidden so joystick & chat sit cleanly at bottom edge */
-body.is-apk-app .world-container.is-fullscreen .world-joystick-wrap,
-body.is-apk-app .world-container.is-fullscreen .world-chat-bar {
+body.is-mobile-hud .world-container.is-fullscreen .world-joystick-wrap,
+body.is-mobile-hud .world-container.is-fullscreen .world-chat-bar {
   bottom: calc(16px + env(safe-area-inset-bottom));
 }
 
-body.is-apk-app .world-container.is-fullscreen .world-chat-bar,
-body.is-apk-app .world-container.is-fullscreen .world-chat-preview-3rows {
+body.is-mobile-hud .world-container.is-fullscreen .world-chat-bar,
+body.is-mobile-hud .world-container.is-fullscreen .world-chat-preview-3rows {
   left: 146px;
 }
 
-body.is-apk-app .world-container.is-fullscreen .world-chat-preview-3rows,
-body.is-apk-app .world-container.is-fullscreen .world-nearby-note,
-body.is-apk-app .world-container.is-fullscreen .world-portal-prompt {
+body.is-mobile-hud .world-container.is-fullscreen .world-chat-preview-3rows,
+body.is-mobile-hud .world-container.is-fullscreen .world-nearby-note,
+body.is-mobile-hud .world-container.is-fullscreen .world-portal-prompt {
   bottom: calc(62px + env(safe-area-inset-bottom));
 }
 

@@ -89,6 +89,7 @@ function drawRoundedRect(ctx, x, y, w, h, r) {
 
 export default function ParkWorld2D({
   isApk = false,
+  isMobileHud = false,
   onOpenUpdateModal,
   memorials,
   allMemorials = [],
@@ -1698,6 +1699,8 @@ export default function ParkWorld2D({
     />
   );
 
+  const mobileHud = Boolean(isMobileHud || isApk);
+
   return (
     <div className={`world-container ${isFullScreen ? 'is-fullscreen' : ''}`}>
       {/* Non-fullscreen HUD bar sits above scene; Full Scene wraps menu cleanly inside scene */}
@@ -1713,8 +1716,8 @@ export default function ParkWorld2D({
           aria-label={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
           title={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
         >
-          {isFullScreen ? <Minimize2 size={isApk ? 16 : 13} /> : <Maximize2 size={isApk ? 16 : 13} />}
-          {!isApk && (isFullScreen ? 'Exit Full' : 'Full Screen')}
+          {isFullScreen ? <Minimize2 size={mobileHud ? 16 : 13} /> : <Maximize2 size={mobileHud ? 16 : 13} />}
+          {!mobileHud && (isFullScreen ? 'Exit Full' : 'Full Screen')}
         </button>
         <canvas
           ref={canvasRef}
@@ -1768,8 +1771,8 @@ export default function ParkWorld2D({
           </div>
         )}
 
-        {/* Walk Controls: Touch Joystick in APK, D-Pad on Web */}
-        {isApk ? (
+        {/* Walk Controls: Touch Joystick in APK / Mobile Web, D-Pad on Desktop */}
+        {mobileHud ? (
           <WorldJoystick
             onMove={(x, y) => {
               joystickRef.current = { x, y };
@@ -1959,6 +1962,7 @@ export default function ParkWorld2D({
 
         <MultiplayerMeetupHUD
           isApk={isApk}
+          isMobileHud={mobileHud}
           showDrawer={showMeetupPanel}
           onCloseDrawer={() => setShowMeetupPanel(false)}
           mpPeers={mpPeers}

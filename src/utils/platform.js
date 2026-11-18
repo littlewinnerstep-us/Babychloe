@@ -1,3 +1,7 @@
+import { useState, useEffect } from 'react';
+
+export const MOBILE_HUD_BREAKPOINT = 860;
+
 /**
  * Detects whether the app is running inside the Evergreen Paws Android APK WebView.
  * Never returns true on regular mobile or desktop web browsers.
@@ -16,4 +20,28 @@ export function isApkEnvironment() {
     return false;
   }
   return false;
+}
+
+/**
+ * Returns true when running in Android APK or mobile web viewport (<= 860px width),
+ * updating automatically on viewport resize / orientation change.
+ */
+export function useIsMobileHud(isApk = false) {
+  const [isMobileWidth, setIsMobileWidth] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth <= MOBILE_HUD_BREAKPOINT : false
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const update = () => setIsMobileWidth(window.innerWidth <= MOBILE_HUD_BREAKPOINT);
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+    };
+  }, []);
+
+  return Boolean(isApk || isMobileWidth);
 }

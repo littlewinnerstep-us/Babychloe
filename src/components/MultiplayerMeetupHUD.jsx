@@ -18,6 +18,7 @@ import {
 
 export default function MultiplayerMeetupHUD({
   isApk = false,
+  isMobileHud = false,
   showDrawer,
   onCloseDrawer,
   mpPeers = [],
@@ -154,6 +155,8 @@ export default function MultiplayerMeetupHUD({
     return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const compactIcons = Boolean(isMobileHud || isApk);
+
   return (
     <>
       {/* On-screen Outside Group Chat Toggle Icon Button */}
@@ -170,11 +173,11 @@ export default function MultiplayerMeetupHUD({
           aria-label={showOutsideChat ? 'Outside chat ON' : 'Outside chat OFF'}
         >
           {showOutsideChat ? (
-            <MessageSquare size={isApk ? 16 : 14} />
+            <MessageSquare size={compactIcons ? 16 : 14} />
           ) : (
-            <MessageSquareOff size={isApk ? 16 : 14} />
+            <MessageSquareOff size={compactIcons ? 16 : 14} />
           )}
-          {!isApk && <span>{showOutsideChat ? 'Outside: ON' : 'Outside: OFF'}</span>}
+          {!compactIcons && <span>{showOutsideChat ? 'Outside: ON' : 'Outside: OFF'}</span>}
         </button>
       )}
 
@@ -188,7 +191,7 @@ export default function MultiplayerMeetupHUD({
           aria-label={`Favorite pet memorials (${favorites.length})`}
         >
           <span>💖</span>
-          {!isApk && <span>Favorites ({favorites.length})</span>}
+          {!compactIcons && <span>Favorites ({favorites.length})</span>}
         </button>
       )}
 
@@ -207,7 +210,7 @@ export default function MultiplayerMeetupHUD({
         }}
       >
         <span>{speciesEmoji}</span>
-        {!isApk && <span>{activeSpecies} Gates</span>}
+        {!compactIcons && <span>{activeSpecies} Gates</span>}
       </div>
 
       {/* Left-Screen Blinking Group Chat Invite Banner (Accept / Ignore, 30m auto-cancel) */}
