@@ -1599,30 +1599,6 @@ export default function App() {
                   : 'Sign in to visit your pet’s tombstone or columbarium niche, light vigil candles, lay flowers, and share tributes across the community park.'}
               </p>
             </div>
-
-            <div className="atmosphere-picker" role="group" aria-label="Park atmosphere">
-              <button
-                type="button"
-                className={`atm-btn ${atmosphere === 'morning' ? 'active' : ''}`}
-                onClick={() => setAtmosphere('morning')}
-              >
-                <Sun size={13} /> Morning
-              </button>
-              <button
-                type="button"
-                className={`atm-btn ${atmosphere === 'dusk' ? 'active' : ''}`}
-                onClick={() => setAtmosphere('dusk')}
-              >
-                <Sunset size={13} /> Dusk
-              </button>
-              <button
-                type="button"
-                className={`atm-btn ${atmosphere === 'night' ? 'active' : ''}`}
-                onClick={() => setAtmosphere('night')}
-              >
-                <Moon size={13} /> Night
-              </button>
-            </div>
           </div>
 
           <div className="hero-stats">
@@ -1645,9 +1621,20 @@ export default function App() {
           </div>
         </section>
 
-        {/* Auto-Hidden Season, Weather & Volume Icon Menus */}
+        {/* Auto-Hidden Time of Day, Season, Weather & Volume Icon Menus */}
         <div ref={envBarRef} className={`env-weather-bar ${openEnvPanel ? 'is-expanded' : 'is-collapsed'}`}>
-          <div className="env-icon-trigger-row" role="toolbar" aria-label="Season, Weather and Volume menus">
+          <div className="env-icon-trigger-row" role="toolbar" aria-label="Time of day, Season, Weather and Volume menus">
+            <button
+              type="button"
+              className={`env-icon-trigger ${openEnvPanel === 'atmosphere' ? 'active' : ''}`}
+              onClick={() => setOpenEnvPanel((p) => (p === 'atmosphere' ? null : 'atmosphere'))}
+              title={`Time of day: ${atmosphere}`}
+              aria-label="Time of day menu (Morning, Dusk, Night)"
+              aria-expanded={openEnvPanel === 'atmosphere'}
+            >
+              {atmosphere === 'morning' ? <Sun size={14} /> : atmosphere === 'dusk' ? <Sunset size={14} /> : <Moon size={14} />}
+            </button>
+
             <button
               type="button"
               className={`env-icon-trigger ${openEnvPanel === 'season' ? 'active' : ''}`}
@@ -1695,6 +1682,42 @@ export default function App() {
               </button>
             )}
           </div>
+
+          {openEnvPanel === 'atmosphere' && (
+            <div className="env-group env-dropdown-panel" role="group" aria-label="Park atmosphere">
+              <span className="env-label">Sky:</span>
+              <button
+                type="button"
+                className={`env-pill ${atmosphere === 'morning' ? 'active' : ''}`}
+                onClick={() => {
+                  setAtmosphere('morning');
+                  setOpenEnvPanel(null);
+                }}
+              >
+                <Sun size={12} /> Morning
+              </button>
+              <button
+                type="button"
+                className={`env-pill ${atmosphere === 'dusk' ? 'active' : ''}`}
+                onClick={() => {
+                  setAtmosphere('dusk');
+                  setOpenEnvPanel(null);
+                }}
+              >
+                <Sunset size={12} /> Dusk
+              </button>
+              <button
+                type="button"
+                className={`env-pill ${atmosphere === 'night' ? 'active' : ''}`}
+                onClick={() => {
+                  setAtmosphere('night');
+                  setOpenEnvPanel(null);
+                }}
+              >
+                <Moon size={12} /> Night
+              </button>
+            </div>
+          )}
 
           {openEnvPanel === 'season' && (
             <div className="env-group env-dropdown-panel">

@@ -7,7 +7,8 @@ const DEADZONE = 0.12;
  * Analog 360-degree touch joystick for mobile APK walk controls,
  * paired with a compact lantern emote button beside it.
  */
-export default function WorldJoystick({ onMove, onEmote }) {
+export default function WorldJoystick({ onMove, onEmote, atmosphere = 'night' }) {
+  const isFlowerTime = atmosphere === 'morning' || atmosphere === 'dusk';
   const baseRef = useRef(null);
   const pointerIdRef = useRef(null);
   const [knobOffset, setKnobOffset] = useState({ x: 0, y: 0 });
@@ -101,10 +102,10 @@ export default function WorldJoystick({ onMove, onEmote }) {
             e.stopPropagation();
             onEmote();
           }}
-          aria-label="Hold lantern light"
-          title="Hold lantern light"
+          aria-label={isFlowerTime ? 'Hold mourning flower' : 'Hold lantern light'}
+          title={isFlowerTime ? 'Hold mourning flower' : 'Hold lantern light'}
         >
-          🏮
+          {isFlowerTime ? '🌸' : '🏮'}
         </button>
       )}
     </div>

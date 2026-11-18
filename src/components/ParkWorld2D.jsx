@@ -1976,10 +1976,15 @@ export default function ParkWorld2D({
         {/* Walk Controls: Touch Joystick in APK / Mobile Web, D-Pad on Desktop */}
         {mobileHud ? (
           <WorldJoystick
+            atmosphere={atmosphere}
             onMove={(x, y) => {
               joystickRef.current = { x, y };
             }}
-            onEmote={() => triggerEmote('🕯️', 'Holding lantern light')}
+            onEmote={() =>
+              atmosphere === 'morning' || atmosphere === 'dusk'
+                ? triggerEmote('🌸', 'Holding mourning flower')
+                : triggerEmote('🕯️', 'Holding lantern light')
+            }
           />
         ) : (
           <div className="world-dpad" aria-label="Walk controls">
@@ -2010,10 +2015,14 @@ export default function ParkWorld2D({
             <button
               type="button"
               className="dpad-btn center"
-              onClick={() => triggerEmote('🕯️', 'Holding lantern light')}
-              aria-label="Lantern emote"
+              onClick={() =>
+                atmosphere === 'morning' || atmosphere === 'dusk'
+                  ? triggerEmote('🌸', 'Holding mourning flower')
+                  : triggerEmote('🕯️', 'Holding lantern light')
+              }
+              aria-label={atmosphere === 'morning' || atmosphere === 'dusk' ? 'Mourning flower emote' : 'Lantern emote'}
             >
-              🏮
+              {atmosphere === 'morning' || atmosphere === 'dusk' ? '🌸' : '🏮'}
             </button>
             <button
               type="button"
