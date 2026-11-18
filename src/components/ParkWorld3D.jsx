@@ -1397,28 +1397,58 @@ export default function ParkWorld3D({
           });
         });
 
-        // 3D Lantern Posts
-        [
+        // 3D Lantern Posts (keep existing 4, multiply around each pool, plus middle & end of each row; glow only in dusk/night)
+        const baseLanterns3D = [
           { x: -55, z: -210 },
           { x: 55, z: -210 },
           { x: -55, z: 120 },
           { x: 55, z: 120 },
-        ].forEach((l) => {
+        ];
+        const lanterns3D = [...baseLanterns3D];
+        [-45, 705, 1455].forEach((poolZ) => {
+          [
+            { x: -110, z: poolZ - 55 },
+            { x: 110, z: poolZ - 55 },
+            { x: -110, z: poolZ + 55 },
+            { x: 110, z: poolZ + 55 },
+          ].forEach((pt) => {
+            if (!lanterns3D.some((e) => Math.hypot(e.x - pt.x, e.z - pt.z) < 30)) lanterns3D.push(pt);
+          });
+        });
+        for (let r = 0; r < 10; r++) {
+          const rz = -170 + r * 250;
+          [
+            { x: -1485, z: rz },
+            { x: 0, z: rz },
+            { x: 1485, z: rz },
+          ].forEach((pt) => {
+            if (!lanterns3D.some((e) => Math.hypot(e.x - pt.x, e.z - pt.z) < 30)) lanterns3D.push(pt);
+          });
+        }
+        const isGardenLampLit3D = atm === 'dusk' || atm === 'night';
+        lanterns3D.forEach((l) => {
           pushEntity(l.x, l.z, () => {
             draw3DBox(l.x, 0, l.z, 6, 46, 6, {
               top: '#48545e',
               front: '#313a42',
               side: '#232a30',
             });
-            const lamp = project3D(l.x, 52, l.z);
-            if (lamp) {
-              const g = ctx.createRadialGradient(lamp.sx, lamp.sy, 2, lamp.sx, lamp.sy, 32 * lamp.scale);
-              g.addColorStop(0, 'rgba(255, 218, 128, 0.85)');
-              g.addColorStop(1, 'rgba(255, 218, 128, 0)');
-              ctx.fillStyle = g;
-              ctx.beginPath();
-              ctx.arc(lamp.sx, lamp.sy, 32 * lamp.scale, 0, Math.PI * 2);
-              ctx.fill();
+            draw3DBox(l.x, 46, l.z, 10, 8, 10, {
+              top: isGardenLampLit3D ? '#ffe29c' : '#8f99a3',
+              front: isGardenLampLit3D ? '#ffd166' : '#737d87',
+              side: isGardenLampLit3D ? '#e6b84c' : '#5c656e',
+            });
+            if (isGardenLampLit3D) {
+              const lamp = project3D(l.x, 52, l.z);
+              if (lamp) {
+                const g = ctx.createRadialGradient(lamp.sx, lamp.sy, 2, lamp.sx, lamp.sy, 34 * lamp.scale);
+                g.addColorStop(0, 'rgba(255, 218, 128, 0.85)');
+                g.addColorStop(1, 'rgba(255, 218, 128, 0)');
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(lamp.sx, lamp.sy, 34 * lamp.scale, 0, Math.PI * 2);
+                ctx.fill();
+              }
             }
           });
         });
@@ -1574,10 +1604,38 @@ export default function ParkWorld3D({
             });
           }
 
-          // Active offerings in front of plinth
+          // Active offerings on & in front of tomb/plinth (render real 3D candles on tomb)
+          const offerings = (m.activeOfferings || []).slice(0, 4);
+          const candleOfferings = offerings.filter((t) => t === '🕯️');
+          const otherOfferings = offerings.filter((t) => t !== '🕯️');
+          candleOfferings.forEach((_, ci) => {
+            const cx = m.worldX + (ci - (candleOfferings.length - 1) / 2) * 14;
+            const cy = isAsh ? 4 : 14;
+            const cz = m.worldZ + (isAsh ? 22 : 16);
+            draw3DBox(cx, cy, cz, 5, 13, 5, {
+              top: '#fff4d6',
+              front: '#f2e0b6',
+              side: '#d9c394',
+            });
+            const flamePt = project3D(cx, cy + 16, cz);
+            if (flamePt) {
+              const flicker = (14 + Math.sin(now * 0.014 + ci + m.worldX) * 2.5) * flamePt.scale;
+              const cg = ctx.createRadialGradient(flamePt.sx, flamePt.sy, 1, flamePt.sx, flamePt.sy, flicker);
+              cg.addColorStop(0, 'rgba(255, 224, 120, 0.92)');
+              cg.addColorStop(1, 'rgba(255, 190, 70, 0)');
+              ctx.fillStyle = cg;
+              ctx.beginPath();
+              ctx.arc(flamePt.sx, flamePt.sy, flicker, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = '#ffd666';
+              ctx.beginPath();
+              ctx.ellipse(flamePt.sx, flamePt.sy, 2.2 * flamePt.scale, 4 * flamePt.scale, 0, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          });
           const baseFront = project3D(m.worldX, 6, m.worldZ + 26);
-          if (baseFront) {
-            const toks = (m.activeOfferings || []).slice(0, 4).join(' ');
+          if (baseFront && otherOfferings.length > 0) {
+            const toks = otherOfferings.join(' ');
             ctx.font = `${Math.max(11, Math.round(14 * baseFront.scale))}px serif`;
             ctx.textAlign = 'center';
             ctx.fillText(toks, baseFront.sx, baseFront.sy);

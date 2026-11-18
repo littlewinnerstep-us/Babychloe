@@ -1098,25 +1098,51 @@ export default function ParkWorld2D({
           ctx.fill();
         });
 
-        // Path Lanterns
-        const lanterns = [
+        // Path Lanterns (keep existing 4, multiply around each pool, plus middle & end of each row; glow only in dusk/night)
+        const baseLanterns = [
           { x: 525, y: 160 },
           { x: 675, y: 160 },
           { x: 525, y: 540 },
           { x: 675, y: 540 },
         ];
+        const lanterns = [...baseLanterns];
+        // Multiply lamps around each 3-row pool
+        poolIntervals.forEach((py) => {
+          [
+            { x: CENTER_X - 115, y: py - 52 },
+            { x: CENTER_X + 115, y: py - 52 },
+            { x: CENTER_X - 115, y: py + 52 },
+            { x: CENTER_X + 115, y: py + 52 },
+          ].forEach((pt) => {
+            if (!lanterns.some((e) => Math.hypot(e.x - pt.x, e.y - pt.y) < 30)) lanterns.push(pt);
+          });
+        });
+        // Lamps in the middle of the row and end of the row only (rows 0..9)
+        for (let r = 0; r < 10; r++) {
+          const ry = 220 + r * 240;
+          [
+            { x: 75, y: ry },
+            { x: CENTER_X, y: ry },
+            { x: 2725, y: ry },
+          ].forEach((pt) => {
+            if (!lanterns.some((e) => Math.hypot(e.x - pt.x, e.y - pt.y) < 30)) lanterns.push(pt);
+          });
+        }
+        const isGardenLampLit = atm === 'dusk' || atm === 'night';
         lanterns.forEach((l) => {
-          const glow = ctx.createRadialGradient(l.x, l.y - 12, 2, l.x, l.y - 12, 46);
-          glow.addColorStop(0, 'rgba(255, 214, 130, 0.55)');
-          glow.addColorStop(1, 'rgba(255, 214, 130, 0)');
-          ctx.fillStyle = glow;
-          ctx.beginPath();
-          ctx.arc(l.x, l.y - 12, 46, 0, Math.PI * 2);
-          ctx.fill();
+          if (isGardenLampLit) {
+            const glow = ctx.createRadialGradient(l.x, l.y - 12, 2, l.x, l.y - 12, 46);
+            glow.addColorStop(0, 'rgba(255, 214, 130, 0.58)');
+            glow.addColorStop(1, 'rgba(255, 214, 130, 0)');
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(l.x, l.y - 12, 46, 0, Math.PI * 2);
+            ctx.fill();
+          }
 
           ctx.fillStyle = '#333b42';
           ctx.fillRect(l.x - 3, l.y - 16, 6, 20);
-          ctx.fillStyle = '#ffe29c';
+          ctx.fillStyle = isGardenLampLit ? '#ffe29c' : '#8f99a3';
           ctx.fillRect(l.x - 5, l.y - 22, 10, 8);
         });
 
