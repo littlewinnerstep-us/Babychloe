@@ -40,6 +40,9 @@ export default function SpeciesGateModal({
             role="dialog"
             aria-label={`Move to ${confirmSpecies.label} Gates?`}
             style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 5,
               marginBottom: 12,
               padding: '10px 12px',
               display: 'flex',

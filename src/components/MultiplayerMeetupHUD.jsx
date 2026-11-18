@@ -103,8 +103,13 @@ export default function MultiplayerMeetupHUD({
   const incomingFriendReqs = friendRequests?.incoming || [];
   const outgoingFriendReqs = friendRequests?.outgoing || [];
   const sameGatePeers = useMemo(
-    () => mpPeers.filter((p) => (p.species || 'Dog') === activeSpecies),
-    [mpPeers, activeSpecies]
+    () =>
+      mpPeers.filter(
+        (p) =>
+          (p.species || 'Dog') === activeSpecies &&
+          (p.room || 'tombstone') === (currentRoom || 'tombstone')
+      ),
+    [mpPeers, activeSpecies, currentRoom]
   );
 
   const combinedFeed = useMemo(() => {

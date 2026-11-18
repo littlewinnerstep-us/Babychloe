@@ -2147,7 +2147,13 @@ export default function ParkWorld3D({
         setShowAvatarPanel(false);
         setShowMeetupPanel((v) => !v);
       }}
-      mpPeersCount={mpPeers.length}
+      mpPeersCount={
+        mpPeers.filter(
+          (p) =>
+            (p.room || 'tombstone') === activeRoom &&
+            (p.species || 'Dog') === activeSpecies
+        ).length
+      }
       showAvatarPanel={showAvatarPanel}
       onToggleAvatar={() => {
         setShowMeetupPanel(false);
