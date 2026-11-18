@@ -412,12 +412,12 @@ export default function ParkWorld2D({
     }
   }, [remoteWorldEvent]);
 
-  // Synchronize player spawn when species gate changes externally
+  // Synchronize player spawn & broadcast presence when species gate changes
   useEffect(() => {
+    const p = playerRef.current;
     if (speciesRef.current !== activeSpecies) {
       speciesRef.current = activeSpecies;
       pendingTargetSpeciesRef.current = null;
-      const p = playerRef.current;
       p.targetX = null;
       p.targetY = null;
       p.targetMemorialId = null;
@@ -428,19 +428,19 @@ export default function ParkWorld2D({
       setInspectedId(null);
       setNearbyMemorialId(null);
       nearbyIdRef.current = null;
-      updateLocalPresence({
-        name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
-        room: roomRef.current,
-        species: activeSpecies,
-        nx: p.x - 600,
-        nz: p.y - 410,
-        facingX: p.facingX,
-        facingZ: p.facingY,
-        moving: false,
-        avatar: avatarRef.current,
-        force: true,
-      });
     }
+    updateLocalPresence({
+      name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
+      room: roomRef.current,
+      species: activeSpecies,
+      nx: p.x - 600,
+      nz: p.y - 410,
+      facingX: p.facingX,
+      facingZ: p.facingY,
+      moving: false,
+      avatar: avatarRef.current,
+      force: true,
+    });
   }, [activeSpecies]);
 
   useEffect(() => {
@@ -826,12 +826,24 @@ export default function ParkWorld2D({
         pendingOpenGateRef.current = false;
         p.portalCooldownUntil = now + 1100;
         speciesRef.current = nextSpecies;
-        if (onSelectSpeciesRef.current) onSelectSpeciesRef.current(nextSpecies);
         p.targetX = null;
         p.targetY = null;
         p.x = 1030;
         p.y = 410;
         p.history = [];
+        updateLocalPresence({
+          name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
+          room,
+          species: nextSpecies,
+          nx: p.x - 600,
+          nz: p.y - 410,
+          facingX: p.facingX,
+          facingZ: p.facingY,
+          moving: false,
+          avatar: avatarRef.current,
+          force: true,
+        });
+        if (onSelectSpeciesRef.current) onSelectSpeciesRef.current(nextSpecies);
         spawnFloatingParticles(p.x, p.y - 18, getSpeciesEmoji(nextSpecies), 7);
         setWalkMessage(`⛩️ Entered ${getSpeciesEmoji(nextSpecies)} ${nextSpecies} Gates`);
         setTimeout(() => setWalkMessage(''), 2400);
@@ -861,6 +873,18 @@ export default function ParkWorld2D({
           p.y = 165;
         }
         p.history = [];
+        updateLocalPresence({
+          name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
+          room: nextRoom,
+          species: speciesRef.current,
+          nx: p.x - 600,
+          nz: p.y - 410,
+          facingX: p.facingX,
+          facingZ: p.facingY,
+          moving: false,
+          avatar: avatarRef.current,
+          force: true,
+        });
         animId = requestAnimationFrame(renderFrame);
         return;
       }

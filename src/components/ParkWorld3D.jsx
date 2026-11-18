@@ -372,10 +372,10 @@ export default function ParkWorld3D({
   }, [remoteWorldEvent]);
 
   useEffect(() => {
+    const p = playerRef.current;
     if (speciesRef.current !== activeSpecies) {
       speciesRef.current = activeSpecies;
       pendingTargetSpeciesRef.current = null;
-      const p = playerRef.current;
       p.targetX = null;
       p.targetZ = null;
       p.portalCooldownUntil = performance.now() + 900;
@@ -385,19 +385,19 @@ export default function ParkWorld3D({
       setInspectedId(null);
       setNearbyMemorialId(null);
       nearbyIdRef.current = null;
-      updateLocalPresence({
-        name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
-        room: roomRef.current,
-        species: activeSpecies,
-        nx: p.x,
-        nz: p.z,
-        facingX: p.facingX,
-        facingZ: p.facingZ,
-        moving: false,
-        avatar: avatarRef.current,
-        force: true,
-      });
     }
+    updateLocalPresence({
+      name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
+      room: roomRef.current,
+      species: activeSpecies,
+      nx: p.x,
+      nz: p.z,
+      facingX: p.facingX,
+      facingZ: p.facingZ,
+      moving: false,
+      avatar: avatarRef.current,
+      force: true,
+    });
   }, [activeSpecies]);
 
   useEffect(() => {
@@ -826,12 +826,24 @@ export default function ParkWorld3D({
         pendingOpenGateRef.current = false;
         p.portalCooldownUntil = now + 1100;
         speciesRef.current = nextSpecies;
-        if (onSelectSpeciesRef.current) onSelectSpeciesRef.current(nextSpecies);
         p.targetX = null;
         p.targetZ = null;
         p.x = 365;
         p.z = 0;
         p.history = [];
+        updateLocalPresence({
+          name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
+          room,
+          species: nextSpecies,
+          nx: p.x,
+          nz: p.z,
+          facingX: p.facingX,
+          facingZ: p.facingZ,
+          moving: false,
+          avatar: avatarRef.current,
+          force: true,
+        });
+        if (onSelectSpeciesRef.current) onSelectSpeciesRef.current(nextSpecies);
         spawnFloatingParticles(p.x, 38, p.z, getSpeciesEmoji(nextSpecies), 7);
         setWalkMessage(`⛩️ Entered ${getSpeciesEmoji(nextSpecies)} ${nextSpecies} Gates`);
         setTimeout(() => setWalkMessage(''), 2400);
@@ -856,6 +868,18 @@ export default function ParkWorld3D({
         p.x = 0;
         p.z = nextRoom === 'ash-room' ? 245 : -225;
         p.history = [];
+        updateLocalPresence({
+          name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
+          room: nextRoom,
+          species: speciesRef.current,
+          nx: p.x,
+          nz: p.z,
+          facingX: p.facingX,
+          facingZ: p.facingZ,
+          moving: false,
+          avatar: avatarRef.current,
+          force: true,
+        });
         animId = requestAnimationFrame(frame);
         return;
       }

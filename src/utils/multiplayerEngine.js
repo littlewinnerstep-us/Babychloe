@@ -58,6 +58,27 @@ function sanitizeRoomCode(raw) {
   return clean || 'PUBLIC';
 }
 
+function encodeWireRoom(room, species) {
+  const r = room || 'tombstone';
+  const sp = species || 'Dog';
+  return sp === 'Dog' ? r : `${r}:${sp}`;
+}
+
+function decodeWireRoom(rawRoom, rawSpecies) {
+  const str = String(rawRoom || 'tombstone');
+  if (str.includes(':')) {
+    const [r, sp] = str.split(':');
+    return {
+      room: r || 'tombstone',
+      species: rawSpecies || sp || 'Dog',
+    };
+  }
+  return {
+    room: str || 'tombstone',
+    species: rawSpecies || 'Dog',
+  };
+}
+
 let currentRoomCode = readInitialRoom();
 let customNickname = readInitialNickname();
 let isOnlineMode = (() => {
@@ -735,20 +756,23 @@ function handleIncomingPayload(msg) {
     const existing = peersMap.get(msg.peerId);
     const nx = Number.isFinite(msg.nx) ? msg.nx : 0;
     const nz = Number.isFinite(msg.nz) ? msg.nz : 0;
+    const { room: cleanRoom, species: cleanSpecies } = decodeWireRoom(msg.room, msg.species);
 
     if (existing) {
-      const roomChanged = existing.room !== msg.room;
-      const speciesChanged = (existing.species || 'Dog') !== (msg.species || 'Dog');
+      const roomChanged = existing.room !== cleanRoom;
+      const speciesChanged = (existing.species || 'Dog') !== cleanSpecies;
       const groupChanged = (existing.groupId || '') !== (msg.groupId || '');
       existing.name = msg.name || existing.name || 'Visitor';
-      existing.room = msg.room || 'tombstone';
-      existing.species = msg.species || existing.species || 'Dog';
+      existing.room = cleanRoom;
+      existing.species = cleanSpecies;
       existing.groupId = msg.groupId || '';
       existing.nx = nx;
       existing.nz = nz;
       if (roomChanged || speciesChanged) {
         existing.rx = nx;
         existing.rz = nz;
+        existing.chatText = '';
+        existing.chatExpiresAt = 0;
       }
       existing.facingX = Number.isFinite(msg.facingX) ? msg.facingX : existing.facingX;
       existing.facingZ = Number.isFinite(msg.facingZ) ? msg.facingZ : existing.facingZ;
@@ -762,8 +786,8 @@ function handleIncomingPayload(msg) {
       peersMap.set(msg.peerId, {
         peerId: msg.peerId,
         name: msg.name || 'Visitor',
-        room: msg.room || 'tombstone',
-        species: msg.species || 'Dog',
+        room: cleanRoom,
+        species: cleanSpecies,
         groupId: msg.groupId || '',
         nx,
         nz,
@@ -1874,10 +1898,16 @@ export function updateLocalPresence({
 }) {
   const effectiveName = (name || 'Visitor').trim() || 'Visitor';
   const curGroupId = activeGroup?.id || '';
+  const prevRoom = localState.room || 'tombstone';
+  const prevSpecies = localState.species || 'Dog';
+  const nextRoom = room || 'tombstone';
+  const nextSpecies = species || prevSpecies || 'Dog';
+  const placeChanged = prevRoom !== nextRoom || prevSpecies !== nextSpecies;
+
   localState = {
     name: effectiveName,
-    room: room || 'tombstone',
-    species: species || localState.species || 'Dog',
+    room: nextRoom,
+    species: nextSpecies,
     groupId: curGroupId,
     nx: Math.round(nx || 0),
     nz: Math.round(nz || 0),
@@ -1901,14 +1931,14 @@ export function updateLocalPresence({
   const changed = snapshot !== lastPresenceSnapshot;
   const elapsed = now - lastPresenceSentAt;
 
-  // Send at ~11Hz while moving/changing, or heartbeat every 3.5s when standing still
-  if (force || (changed && elapsed >= 90) || elapsed >= 3500) {
+  // Send immediately on room/gate transitions, ~11Hz while moving, or heartbeat every 3.5s
+  if (force || placeChanged || (changed && elapsed >= 90) || elapsed >= 3500) {
     lastPresenceSentAt = now;
     lastPresenceSnapshot = snapshot;
     publishPacket({
       type: 'presence',
       name: localState.name,
-      room: localState.room,
+      room: encodeWireRoom(localState.room, localState.species),
       species: localState.species,
       groupId: localState.groupId,
       nx: localState.nx,
