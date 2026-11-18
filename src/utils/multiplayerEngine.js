@@ -33,6 +33,18 @@ export const FRIEND_REQ_TTL_MS = 24 * 60 * 60 * 1000;
 const STARTER_IDS = new Set(['mem-barnaby', 'mem-mochi', 'mem-koda', 'mem-clover', 'mem-luna', 'mem-yuzu', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6']);
 
 const myPeerId = `mp_${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`;
+const mySpawnOffset = (() => {
+  let hash = 0;
+  for (let i = 0; i < myPeerId.length; i += 1) {
+    hash = (hash * 31 + myPeerId.charCodeAt(i)) | 0;
+  }
+  const slots = [-28, -14, 0, 14, 28];
+  return slots[Math.abs(hash) % slots.length];
+})();
+
+export function getLocalSpawnOffset() {
+  return mySpawnOffset;
+}
 let seqCounter = 0;
 
 function readInitialRoom() {
@@ -824,12 +836,17 @@ function handleIncomingPayload(msg) {
       peer.lastSeen = now;
     }
     if (typeof callbacks.onChatMessage === 'function') {
+      const { room: chatRoom, species: chatSpecies } = decodeWireRoom(
+        msg.room || peer?.room || 'tombstone',
+        msg.species || peer?.species || 'Dog'
+      );
       callbacks.onChatMessage({
         id: msg.msgId || `${msg.peerId}_${now}`,
         peerId: msg.peerId,
         senderName: msg.senderName || peer?.name || 'Visitor',
         text,
-        room: msg.room || peer?.room || 'tombstone',
+        room: chatRoom,
+        species: chatSpecies,
         time: now,
       });
     }
@@ -1898,10 +1915,11 @@ export function updateLocalPresence({
 }) {
   const effectiveName = (name || 'Visitor').trim() || 'Visitor';
   const curGroupId = activeGroup?.id || '';
-  const prevRoom = localState.room || 'tombstone';
-  const prevSpecies = localState.species || 'Dog';
-  const nextRoom = room || 'tombstone';
-  const nextSpecies = species || prevSpecies || 'Dog';
+  const { room: prevRoom, species: prevSpecies } = decodeWireRoom(localState.room, localState.species);
+  const { room: nextRoom, species: nextSpecies } = decodeWireRoom(
+    room || prevRoom || 'tombstone',
+    species || prevSpecies || 'Dog'
+  );
   const placeChanged = prevRoom !== nextRoom || prevSpecies !== nextSpecies;
 
   localState = {
@@ -1948,6 +1966,9 @@ export function updateLocalPresence({
       moving: localState.moving,
       avatar: localState.avatar,
     });
+    if (placeChanged) {
+      publishPacket({ type: 'request_presence' });
+    }
   }
 }
 

@@ -28,6 +28,7 @@ import {
   updateLocalPresence,
   getPeersMap,
   getLocalChatBubble,
+  getLocalSpawnOffset,
 } from '../utils/multiplayerEngine';
 import {
   drawAvatar2D,
@@ -250,7 +251,7 @@ export default function ParkWorld2D({
   }, [inspectedId, onRecordVisit]);
 
   const playerRef = useRef({
-    x: 600,
+    x: 600 + getLocalSpawnOffset(),
     y: activeRoom === 'ash-room' ? 660 : 540,
     facingX: 0,
     facingY: 1,
@@ -422,8 +423,10 @@ export default function ParkWorld2D({
       p.targetY = null;
       p.targetMemorialId = null;
       p.portalCooldownUntil = performance.now() + 900;
-      p.x = 1030;
-      p.y = 410;
+      p.x = 600 + getLocalSpawnOffset();
+      p.y = roomRef.current === 'ash-room' ? 665 : 165;
+      p.facingX = 0;
+      p.facingY = roomRef.current === 'ash-room' ? -1 : 1;
       p.history = [];
       setInspectedId(null);
       setNearbyMemorialId(null);
@@ -462,10 +465,10 @@ export default function ParkWorld2D({
       p.targetMemorialId = null;
       p.portalCooldownUntil = performance.now() + 900;
       if (activeRoom === 'ash-room') {
-        p.x = 600;
+        p.x = 600 + getLocalSpawnOffset();
         p.y = 665;
       } else {
-        p.x = 600;
+        p.x = 600 + getLocalSpawnOffset();
         p.y = 165;
       }
       p.history = [];
@@ -828,8 +831,10 @@ export default function ParkWorld2D({
         speciesRef.current = nextSpecies;
         p.targetX = null;
         p.targetY = null;
-        p.x = 1030;
-        p.y = 410;
+        p.x = 600 + getLocalSpawnOffset();
+        p.y = room === 'ash-room' ? 665 : 165;
+        p.facingX = 0;
+        p.facingY = room === 'ash-room' ? -1 : 1;
         p.history = [];
         updateLocalPresence({
           name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
@@ -866,10 +871,10 @@ export default function ParkWorld2D({
         p.targetX = null;
         p.targetY = null;
         if (nextRoom === 'ash-room') {
-          p.x = 600;
+          p.x = 600 + getLocalSpawnOffset();
           p.y = 665;
         } else {
-          p.x = 600;
+          p.x = 600 + getLocalSpawnOffset();
           p.y = 165;
         }
         p.history = [];

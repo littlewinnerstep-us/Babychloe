@@ -328,6 +328,47 @@ export default function App() {
     }
   }, [isApk, isMobileHud]);
 
+  // Auto-sync Web Desktop / Mobile Web when a newer build version is deployed on GitHub Pages
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.location.protocol.startsWith('http')) {
+      return undefined;
+    }
+    let cancelled = false;
+    const checkLatestVersion = async () => {
+      try {
+        const res = await fetch(`./version.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const remoteVer = data && data.version ? String(data.version) : '';
+        if (!remoteVer || remoteVer === APP_BUILD_VERSION) return;
+        let alreadyReloaded = '';
+        try {
+          alreadyReloaded = sessionStorage.getItem('evergreen_auto_reloaded_ver') || '';
+        } catch {
+          // ignore
+        }
+        if (alreadyReloaded === remoteVer) return;
+        try {
+          sessionStorage.setItem('evergreen_auto_reloaded_ver', remoteVer);
+        } catch {
+          // ignore
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.set('v', remoteVer);
+        url.searchParams.set('t', String(Date.now()));
+        window.location.replace(url.toString());
+      } catch {
+        // ignore transient fetch errors
+      }
+    };
+    checkLatestVersion();
+    const timer = setInterval(checkLatestVersion, 25000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
   const showGlobalNotice = (msg) => {
     setGlobalNotice(msg);
     setTimeout(() => setGlobalNotice(''), 4200);

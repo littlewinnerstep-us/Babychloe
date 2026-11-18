@@ -28,6 +28,7 @@ import {
   updateLocalPresence,
   getPeersMap,
   getLocalChatBubble,
+  getLocalSpawnOffset,
 } from '../utils/multiplayerEngine';
 import {
   drawAvatarHeadAndHair,
@@ -236,7 +237,7 @@ export default function ParkWorld3D({
   }, [inspectedId, onRecordVisit]);
 
   const playerRef = useRef({
-    x: 0,
+    x: getLocalSpawnOffset(),
     z: activeRoom === 'ash-room' ? 235 : 190,
     facingX: 0,
     facingZ: -1,
@@ -379,8 +380,11 @@ export default function ParkWorld3D({
       p.targetX = null;
       p.targetZ = null;
       p.portalCooldownUntil = performance.now() + 900;
-      p.x = 365;
-      p.z = 0;
+      p.x = getLocalSpawnOffset();
+      p.z = roomRef.current === 'ash-room' ? 245 : -225;
+      p.facingX = 0;
+      p.facingZ = roomRef.current === 'ash-room' ? -1 : 1;
+      camRef.current.yaw = 0;
       p.history = [];
       setInspectedId(null);
       setNearbyMemorialId(null);
@@ -458,7 +462,7 @@ export default function ParkWorld3D({
       p.targetX = null;
       p.targetZ = null;
       p.portalCooldownUntil = performance.now() + 900;
-      p.x = 0;
+      p.x = getLocalSpawnOffset();
       p.z = activeRoom === 'ash-room' ? 245 : -225;
       camRef.current.yaw = 0;
       p.history = [];
@@ -828,8 +832,11 @@ export default function ParkWorld3D({
         speciesRef.current = nextSpecies;
         p.targetX = null;
         p.targetZ = null;
-        p.x = 365;
-        p.z = 0;
+        p.x = getLocalSpawnOffset();
+        p.z = room === 'ash-room' ? 245 : -225;
+        p.facingX = 0;
+        p.facingZ = room === 'ash-room' ? -1 : 1;
+        camRef.current.yaw = 0;
         p.history = [];
         updateLocalPresence({
           name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
@@ -865,8 +872,9 @@ export default function ParkWorld3D({
         onChangeRoom(nextRoom);
         p.targetX = null;
         p.targetZ = null;
-        p.x = 0;
+        p.x = getLocalSpawnOffset();
         p.z = nextRoom === 'ash-room' ? 245 : -225;
+        camRef.current.yaw = 0;
         p.history = [];
         updateLocalPresence({
           name: mpNicknameRef.current || userRef.current?.name?.split(' ')[0] || 'Visitor',
