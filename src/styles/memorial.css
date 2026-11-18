@@ -1482,8 +1482,8 @@ select {
 
 .world-dpad {
   position: absolute;
-  bottom: 6px;
-  left: 8px;
+  bottom: 20px;
+  left: 12px;
   display: grid;
   grid-template-columns: repeat(3, 38px);
   grid-template-rows: repeat(3, 38px);
@@ -1541,7 +1541,7 @@ select {
   .world-proximity-card {
     left: 10px;
     right: 10px;
-    bottom: 96px;
+    bottom: 114px;
   }
 }
 
@@ -2835,8 +2835,8 @@ body.is-mobile-hud .world-gate-readonly-pill {
 /* Analog Touch Joystick & Bottom Chat Bar positioned low at bottom edge of 2D/3D screen */
 .world-joystick-wrap {
   position: absolute;
-  bottom: 6px;
-  left: 8px;
+  bottom: 24px;
+  left: 12px;
   z-index: 16;
   display: inline-flex;
   align-items: flex-end;
@@ -2847,8 +2847,8 @@ body.is-mobile-hud .world-gate-readonly-pill {
 }
 
 body.is-mobile-hud .world-container .world-joystick-wrap {
-  bottom: 6px;
-  left: 8px;
+  bottom: 24px;
+  left: 12px;
 }
 
 body.is-mobile-hud .world-container .world-chat-bar {
@@ -2869,7 +2869,7 @@ body.is-mobile-hud .world-container .world-portal-prompt {
 }
 
 body.is-mobile-hud .world-container .world-proximity-card {
-  bottom: 96px;
+  bottom: 114px;
 }
 
 .world-joystick-base {
