@@ -271,11 +271,11 @@ export default function ParkWorld3D({
   const playerRef = useRef({
     x:
       savedInitPos3D && Number.isFinite(savedInitPos3D.x3d)
-        ? Math.max(-1500, Math.min(1500, savedInitPos3D.x3d))
+        ? Math.max(-1680, Math.min(1680, savedInitPos3D.x3d))
         : getLocalSpawnOffset(),
     z:
       savedInitPos3D && Number.isFinite(savedInitPos3D.z3d)
-        ? Math.max(-360, Math.min(2200, savedInitPos3D.z3d))
+        ? Math.max(-490, Math.min(2360, savedInitPos3D.z3d))
         : activeRoom === 'ash-room'
           ? 235
           : 190,
@@ -608,7 +608,7 @@ export default function ParkWorld3D({
     positionedRef.current = positionedMemorials;
     const activeList = positionedMemorials.filter((m) => m.space === roomRef.current);
     const maxMonZ = activeList.reduce((mx, m) => Math.max(mx, m.worldZ), 200);
-    maxZRef.current = Math.max(2200, maxMonZ + 220);
+    maxZRef.current = Math.max(2360, maxMonZ + 320);
   }, [positionedMemorials, activeRoom]);
 
   useEffect(() => {
@@ -880,10 +880,10 @@ export default function ParkWorld3D({
 
       // Clamp 3D world bounds (expanding dynamically as more memorials are added) & avoid tomb/niche plots
       const maxZ = maxZRef.current;
-      p.x = Math.max(-1500, Math.min(1500, p.x));
+      p.x = Math.max(-1680, Math.min(1680, p.x));
       p.z = Math.max(-490, Math.min(maxZ, p.z));
       const safePlayer3D = resolvePlotCollision(p.x, p.z, '3d', roomRef.current, 44, 40);
-      p.x = Math.max(-1500, Math.min(1500, safePlayer3D.x));
+      p.x = Math.max(-1680, Math.min(1680, safePlayer3D.x));
       p.z = Math.max(-490, Math.min(maxZ, safePlayer3D.y));
       if (now - lastPosSaveRef.current > 240) {
         lastPosSaveRef.current = now;
@@ -1189,12 +1189,12 @@ export default function ParkWorld3D({
 
       // Draw 3D Ground Grid & Paths
       if (room === 'tombstone') {
-        // Subtle meadow grid lines (extended to -540 behind Ash Room gate)
+        // Subtle meadow grid lines (extended on all 4 sides: top, bottom, left, right)
         ctx.strokeStyle = 'rgba(255,255,255,0.06)';
         ctx.lineWidth = 1;
-        for (let gx = -1600; gx <= 1600; gx += 160) {
+        for (let gx = -1760; gx <= 1760; gx += 160) {
           const a = project3D(gx, 0, -540);
-          const b = project3D(gx, 0, maxZ);
+          const b = project3D(gx, 0, maxZ + 80);
           if (a && b) {
             ctx.beginPath();
             ctx.moveTo(a.sx, a.sy);

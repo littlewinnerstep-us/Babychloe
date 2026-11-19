@@ -77,6 +77,8 @@ function loadAvatarPrefs() {
 const CENTER_X = 1400;
 const GATE_X = 2720; // End of right side of middle row road
 const TOP_PAD_2D = 125; // Extra breathing space behind Ash Room gate at top of map
+const BOTTOM_PAD_2D = 125; // Extra breathing space at bottom of map
+const SIDE_PAD_2D = 125; // Extra breathing space on left and right of map
 
 const WORLD_BOUNDS = {
   tombstone: { width: 2800, height: 820, portalX: CENTER_X, portalY: 90 },
@@ -281,11 +283,11 @@ export default function ParkWorld2D({
   const playerRef = useRef({
     x:
       savedInitPos2D && Number.isFinite(savedInitPos2D.x2d)
-        ? Math.max(46, Math.min(2800 - 46, savedInitPos2D.x2d))
+        ? Math.max(-SIDE_PAD_2D + 46, Math.min(2800 + SIDE_PAD_2D - 46, savedInitPos2D.x2d))
         : CENTER_X + getLocalSpawnOffset(),
     y:
       savedInitPos2D && Number.isFinite(savedInitPos2D.y2d)
-        ? Math.max(66, Math.min(2560, savedInitPos2D.y2d))
+        ? Math.max(-TOP_PAD_2D + 75, Math.min(2600 + BOTTOM_PAD_2D - 40, savedInitPos2D.y2d))
         : activeRoom === 'ash-room'
           ? 165
           : 540,
@@ -839,11 +841,11 @@ export default function ParkWorld2D({
       }
 
       // Clamp player within room boundaries & keep outside tomb/niche plots
-      p.x = Math.max(46, Math.min(bounds.width - 46, p.x));
-      p.y = Math.max(-45, Math.min(bounds.height - 40, p.y));
+      p.x = Math.max(-SIDE_PAD_2D + 46, Math.min(bounds.width + SIDE_PAD_2D - 46, p.x));
+      p.y = Math.max(-TOP_PAD_2D + 75, Math.min(bounds.height + BOTTOM_PAD_2D - 40, p.y));
       const safePlayer2D = resolvePlotCollision(p.x, p.y, '2d', room, 44, 40);
-      p.x = Math.max(46, Math.min(bounds.width - 46, safePlayer2D.x));
-      p.y = Math.max(-45, Math.min(bounds.height - 40, safePlayer2D.y));
+      p.x = Math.max(-SIDE_PAD_2D + 46, Math.min(bounds.width + SIDE_PAD_2D - 46, safePlayer2D.x));
+      p.y = Math.max(-TOP_PAD_2D + 75, Math.min(bounds.height + BOTTOM_PAD_2D - 40, safePlayer2D.y));
       if (now - lastPosSaveRef.current > 240) {
         lastPosSaveRef.current = now;
         savePlayerPosition({
@@ -978,22 +980,23 @@ export default function ParkWorld2D({
       }
 
       // Camera zoom (slider: 0 = current close view, 100 = full 200-plot overview)
-      const totalMapH = bounds.height + TOP_PAD_2D;
-      const currentZoom = Math.max(1, viewW / bounds.width, viewH / totalMapH);
-      const fitAllZoom = Math.min(viewW / bounds.width, viewH / totalMapH);
+      const totalMapW = bounds.width + SIDE_PAD_2D * 2;
+      const totalMapH = bounds.height + TOP_PAD_2D + BOTTOM_PAD_2D;
+      const currentZoom = Math.max(1, viewW / totalMapW, viewH / totalMapH);
+      const fitAllZoom = Math.min(viewW / totalMapW, viewH / totalMapH);
       const tZoom = Math.max(0, Math.min(1, zoomOverviewRef.current / 100));
       const zoom = currentZoom + (fitAllZoom - currentZoom) * tZoom;
       activeZoomRef.current = zoom;
       const effW = viewW / zoom;
       const effH = viewH / zoom;
       const camX =
-        bounds.width <= effW
-          ? -(effW - bounds.width) / 2
-          : Math.max(0, Math.min(bounds.width - effW, p.x - effW / 2));
+        totalMapW <= effW
+          ? -SIDE_PAD_2D - (effW - totalMapW) / 2
+          : Math.max(-SIDE_PAD_2D, Math.min(bounds.width + SIDE_PAD_2D - effW, p.x - effW / 2));
       const camY =
         totalMapH <= effH
           ? -TOP_PAD_2D - (effH - totalMapH) / 2
-          : Math.max(-TOP_PAD_2D, Math.min(bounds.height - effH, p.y - effH / 2));
+          : Math.max(-TOP_PAD_2D, Math.min(bounds.height + BOTTOM_PAD_2D - effH, p.y - effH / 2));
 
       ctx.save();
       ctx.scale(zoom, zoom);
@@ -1007,7 +1010,7 @@ export default function ParkWorld2D({
       // DRAW MAP BACKGROUND
       // ====================
       if (room === 'tombstone') {
-        const grassGrad = ctx.createLinearGradient(0, -TOP_PAD_2D, 0, bounds.height);
+        const grassGrad = ctx.createLinearGradient(0, -TOP_PAD_2D, 0, bounds.height + BOTTOM_PAD_2D);
         const seasonGrass2D = {
           spring: { morning: ['#79a878', '#588659'], dusk: ['#4f634b', '#344734'], night: ['#1e3128', '#12201a'] },
           summer: { morning: ['#5fa15b', '#417842'], dusk: ['#425a3e', '#283b27'], night: ['#172c20', '#0d1a13'] },
@@ -1018,7 +1021,7 @@ export default function ParkWorld2D({
         grassGrad.addColorStop(0, gTop);
         grassGrad.addColorStop(1, gBot);
         ctx.fillStyle = grassGrad;
-        ctx.fillRect(0, -TOP_PAD_2D, bounds.width, bounds.height + TOP_PAD_2D);
+        ctx.fillRect(-SIDE_PAD_2D, -TOP_PAD_2D, totalMapW, totalMapH);
 
         // Expanded stone roads & cross paths
         ctx.strokeStyle = atm === 'night' ? '#36434c' : '#b7b09c';
@@ -1298,17 +1301,17 @@ export default function ParkWorld2D({
       } else {
         // ASH ROOM FLOOR & ARCHITECTURE
         ctx.fillStyle = '#1b1310';
-        ctx.fillRect(0, -TOP_PAD_2D, bounds.width, bounds.height + TOP_PAD_2D);
+        ctx.fillRect(-SIDE_PAD_2D, -TOP_PAD_2D, totalMapW, totalMapH);
 
         // Cedarwood floor planks
         ctx.fillStyle = '#33221a';
-        ctx.fillRect(50, -TOP_PAD_2D + 30, bounds.width - 100, bounds.height + TOP_PAD_2D - 70);
+        ctx.fillRect(-SIDE_PAD_2D + 50, -TOP_PAD_2D + 30, totalMapW - 100, totalMapH - 70);
         ctx.strokeStyle = 'rgba(0,0,0,0.22)';
         ctx.lineWidth = 1;
-        for (let y = -TOP_PAD_2D + 46; y < bounds.height - 50; y += 26) {
+        for (let y = -TOP_PAD_2D + 46; y < bounds.height + BOTTOM_PAD_2D - 50; y += 26) {
           ctx.beginPath();
-          ctx.moveTo(50, y);
-          ctx.lineTo(bounds.width - 50, y);
+          ctx.moveTo(-SIDE_PAD_2D + 50, y);
+          ctx.lineTo(bounds.width + SIDE_PAD_2D - 50, y);
           ctx.stroke();
         }
 
@@ -2026,18 +2029,19 @@ export default function ParkWorld2D({
     const bounds = { ...WORLD_BOUNDS[room], height: roomHeightRef.current };
     const p = playerRef.current;
 
-    const totalMapH = bounds.height + TOP_PAD_2D;
-    const zoom = activeZoomRef.current || Math.max(1, viewW / bounds.width, viewH / totalMapH);
+    const totalMapW = bounds.width + SIDE_PAD_2D * 2;
+    const totalMapH = bounds.height + TOP_PAD_2D + BOTTOM_PAD_2D;
+    const zoom = activeZoomRef.current || Math.max(1, viewW / totalMapW, viewH / totalMapH);
     const effW = viewW / zoom;
     const effH = viewH / zoom;
     const camX =
-      bounds.width <= effW
-        ? -(effW - bounds.width) / 2
-        : Math.max(0, Math.min(bounds.width - effW, p.x - effW / 2));
+      totalMapW <= effW
+        ? -SIDE_PAD_2D - (effW - totalMapW) / 2
+        : Math.max(-SIDE_PAD_2D, Math.min(bounds.width + SIDE_PAD_2D - effW, p.x - effW / 2));
     const camY =
       totalMapH <= effH
         ? -TOP_PAD_2D - (effH - totalMapH) / 2
-        : Math.max(-TOP_PAD_2D, Math.min(bounds.height - effH, p.y - effH / 2));
+        : Math.max(-TOP_PAD_2D, Math.min(bounds.height + BOTTOM_PAD_2D - effH, p.y - effH / 2));
 
     const worldX = clickX / zoom + camX;
     const worldY = clickY / zoom + camY;
