@@ -52,7 +52,6 @@ import {
   getCachedAssetImage,
   makeOfferingToken,
 } from '../utils/customAssets';
-import CustomerFlowerPopover from './CustomerFlowerPopover';
 import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
 import AvatarCustomizerDrawer from './AvatarCustomizerDrawer';
 import SpeciesGateModal from './SpeciesGateModal';
@@ -3065,17 +3064,6 @@ export default function ParkWorld3D({
           </div>
         )}
 
-        {/* Customer Flower & Hex Color Floating Hold Menu (Regular Visitors) */}
-        <CustomerFlowerPopover
-          mobileHud={mobileHud}
-          customerHold={customerHold}
-          holdFlowerActive={holdFlowerActive}
-          onSetHoldFlowerActive={setHoldFlowerActive}
-          onUpdateCustomerHold={onUpdateCustomerHold}
-          onTriggerEmote={triggerEmote}
-          onHoldFlowerEmote={onHoldFlowerEmote}
-        />
-
         {/* Nearby Popup Note (Tap to Open Vigil Card) */}
         {nearbyMemorial && !inspectedMemorial && (
           <button
@@ -3192,6 +3180,12 @@ export default function ParkWorld3D({
             avatar={avatar}
             userPets={userPets}
             onUpdateAvatar={(patch) => setAvatar((a) => ({ ...a, ...patch }))}
+            customerHold={customerHold}
+            holdFlowerActive={holdFlowerActive}
+            onSetHoldFlowerActive={setHoldFlowerActive}
+            onUpdateCustomerHold={onUpdateCustomerHold}
+            onTriggerEmote={triggerEmote}
+            onHoldFlowerEmote={onHoldFlowerEmote}
             onClose={() => setShowAvatarPanel(false)}
           />
         )}

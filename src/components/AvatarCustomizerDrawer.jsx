@@ -7,6 +7,11 @@ import {
   HAIR_OPTIONS,
   getSpeciesEmoji,
 } from '../data/memorialData';
+import {
+  CUSTOMER_FLOWER_PRESETS,
+  makeOfferingToken,
+  normalizeHex,
+} from '../utils/customAssets';
 
 const MOURNING_FLOWER_COLORS = [
   { id: '#f7f5ef', label: 'White Lily' },
@@ -21,9 +26,17 @@ export default function AvatarCustomizerDrawer({
   avatar,
   userPets = [],
   onUpdateAvatar,
+  customerHold = { flowerEmoji: '🌸', flowerColor: '#ff7eb6', glowOn: true },
+  holdFlowerActive = false,
+  onSetHoldFlowerActive,
+  onUpdateCustomerHold,
+  onTriggerEmote,
+  onHoldFlowerEmote,
   onClose,
 }) {
   const [genderArmTip, setGenderArmTip] = useState('');
+  const flowerEmoji = customerHold?.flowerEmoji || '🌸';
+  const flowerColor = normalizeHex(customerHold?.flowerColor || avatar?.flowerColor, '#ff7eb6');
 
   const handleLockedGenderClick = () => {
     setGenderArmTip('Character gender cannot be changed after account creation.');
@@ -204,23 +217,109 @@ export default function AvatarCustomizerDrawer({
           Carry lantern (night) / mourning flower (morning &amp; dusk)
         </label>
 
-        {avatar.carryingLantern && (
-          <div>
-            <div className="field-label">Mourning Flower Color (Morning &amp; Dusk)</div>
-            <div className="swatch-row">
-              {MOURNING_FLOWER_COLORS.map((fc) => (
-                <button
-                  key={fc.id}
-                  type="button"
-                  className={`color-swatch ${(avatar.flowerColor || '#f7f5ef') === fc.id ? 'active' : ''}`}
-                  style={{ background: fc.id }}
-                  title={fc.label}
-                  onClick={() => onUpdateAvatar({ flowerColor: fc.id })}
-                />
-              ))}
-            </div>
+        <div
+          style={{
+            borderTop: '1px solid rgba(154, 184, 159, 0.2)',
+            paddingTop: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}
+        >
+          <div className="field-label">🎨 Color Flower &amp; Hex Menu</div>
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+            {CUSTOMER_FLOWER_PRESETS.map((cf) => (
+              <button
+                key={cf.emoji}
+                type="button"
+                className={`chip ${flowerEmoji === cf.emoji ? 'active' : ''}`}
+                style={{ padding: '3px 8px' }}
+                title={cf.label}
+                onClick={() => onUpdateCustomerHold?.({ flowerEmoji: cf.emoji })}
+              >
+                {cf.emoji}
+              </button>
+            ))}
           </div>
-        )}
+
+          <div className="swatch-row">
+            {MOURNING_FLOWER_COLORS.map((fc) => (
+              <button
+                key={fc.id}
+                type="button"
+                className={`color-swatch ${flowerColor === fc.id ? 'active' : ''}`}
+                style={{ background: fc.id }}
+                title={fc.label}
+                onClick={() => {
+                  onUpdateAvatar?.({ flowerColor: fc.id });
+                  onUpdateCustomerHold?.({ flowerColor: fc.id });
+                }}
+              />
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              type="color"
+              value={flowerColor}
+              onChange={(e) => {
+                onUpdateAvatar?.({ flowerColor: e.target.value });
+                onUpdateCustomerHold?.({ flowerColor: e.target.value });
+              }}
+              style={{ width: 30, height: 26, borderRadius: 6, cursor: 'pointer' }}
+              title="Pick custom flower hex color"
+            />
+            <input
+              type="text"
+              maxLength={7}
+              value={customerHold?.flowerColor || flowerColor}
+              onChange={(e) => onUpdateCustomerHold?.({ flowerColor: e.target.value })}
+              onBlur={() => {
+                const normalized = normalizeHex(customerHold?.flowerColor, '#ff7eb6');
+                onUpdateAvatar?.({ flowerColor: normalized });
+                onUpdateCustomerHold?.({ flowerColor: normalized });
+              }}
+              className="input-control"
+              style={{ flex: 1, fontFamily: 'monospace', padding: '4px 8px', fontSize: '0.78rem' }}
+            />
+          </div>
+
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: '0.78rem',
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={customerHold?.glowOn !== false}
+              onChange={(e) => onUpdateCustomerHold?.({ glowOn: e.target.checked })}
+            />
+            ✨ Soft glow on held flower
+          </label>
+
+          <button
+            type="button"
+            className="btn-primary"
+            style={{ fontSize: '0.78rem', padding: '7px 10px', justifyContent: 'center' }}
+            onClick={() => {
+              const nextHold = !holdFlowerActive;
+              onSetHoldFlowerActive?.(nextHold);
+              if (nextHold) {
+                onTriggerEmote?.(
+                  makeOfferingToken({ emoji: flowerEmoji, color: flowerColor }),
+                  `Holding ${flowerEmoji} (${flowerColor})`
+                );
+                onHoldFlowerEmote?.();
+              }
+            }}
+          >
+            {holdFlowerActive ? `✓ Holding ${flowerEmoji} in Hand` : `✋ Hold ${flowerEmoji} in Hand`}
+          </button>
+        </div>
       </div>
     </div>
   );
