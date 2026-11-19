@@ -881,10 +881,10 @@ export default function ParkWorld3D({
       // Clamp 3D world bounds (expanding dynamically as more memorials are added) & avoid tomb/niche plots
       const maxZ = maxZRef.current;
       p.x = Math.max(-1500, Math.min(1500, p.x));
-      p.z = Math.max(-360, Math.min(maxZ, p.z));
+      p.z = Math.max(-490, Math.min(maxZ, p.z));
       const safePlayer3D = resolvePlotCollision(p.x, p.z, '3d', roomRef.current, 44, 40);
       p.x = Math.max(-1500, Math.min(1500, safePlayer3D.x));
-      p.z = Math.max(-360, Math.min(maxZ, safePlayer3D.y));
+      p.z = Math.max(-490, Math.min(maxZ, safePlayer3D.y));
       if (now - lastPosSaveRef.current > 240) {
         lastPosSaveRef.current = now;
         savePlayerPosition({
@@ -1189,11 +1189,11 @@ export default function ParkWorld3D({
 
       // Draw 3D Ground Grid & Paths
       if (room === 'tombstone') {
-        // Subtle meadow grid lines
+        // Subtle meadow grid lines (extended to -540 behind Ash Room gate)
         ctx.strokeStyle = 'rgba(255,255,255,0.06)';
         ctx.lineWidth = 1;
         for (let gx = -1600; gx <= 1600; gx += 160) {
-          const a = project3D(gx, 0, -360);
+          const a = project3D(gx, 0, -540);
           const b = project3D(gx, 0, maxZ);
           if (a && b) {
             ctx.beginPath();
@@ -1202,9 +1202,9 @@ export default function ParkWorld3D({
             ctx.stroke();
           }
         }
-        // Expanded Main Stone Walkway along Z
+        // Expanded Main Stone Walkway along Z (extended behind Ash Room gate)
         const pathColor = atm === 'night' ? '#3d4952' : '#c6bea9';
-        for (let pz = -330; pz < maxZ - 20; pz += 66) {
+        for (let pz = -462; pz < maxZ - 20; pz += 66) {
           drawGroundPoly(
             [
               [-72, 0, pz],
@@ -1258,7 +1258,7 @@ export default function ParkWorld3D({
         });
       } else {
         // Ash Room Crimson & Gold Sanctuary Runners (10 rows: 10 left + 10 right niches = 200)
-        for (let pz = -300; pz < maxZ - 20; pz += 62) {
+        for (let pz = -424; pz < maxZ - 20; pz += 62) {
           drawGroundPoly(
             [
               [-64, 0.5, pz],
