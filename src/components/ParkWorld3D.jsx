@@ -1363,11 +1363,20 @@ export default function ParkWorld3D({
               portalZ,
             };
           }
-          if (labelPt) {
-            ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
+          const ashTopPt = labelPt || project3D(0, 112, portalZ);
+          if (ashTopPt) {
+            const aTxt = '🏛️ Hall of Serenity (Ash Room)';
+            ctx.font = `700 ${Math.max(10, Math.round(12 * ashTopPt.scale))}px "Plus Jakarta Sans", sans-serif`;
+            const aw = ctx.measureText(aTxt).width + 16;
+            const ay = ashTopPt.sy - 20;
+            ctx.fillStyle = 'rgba(20, 16, 18, 0.88)';
+            ctx.fillRect(ashTopPt.sx - aw / 2, ay, aw, 19);
+            ctx.strokeStyle = '#ffd57e';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(ashTopPt.sx - aw / 2, ay, aw, 19);
             ctx.fillStyle = '#ffe5ad';
             ctx.textAlign = 'center';
-            ctx.fillText('🏛️ Hall of Serenity (Ash Room)', labelPt.sx, labelPt.sy - 6);
+            ctx.fillText(aTxt, ashTopPt.sx, ay + 13);
           }
         } else {
           draw3DBox(-42, 0, portalZ, 18, 76, 18, {
@@ -1394,11 +1403,20 @@ export default function ParkWorld3D({
               portalZ,
             };
           }
-          if (labelPt) {
-            ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
-            ctx.fillStyle = '#d7f4db';
+          const exitTopPt = labelPt || project3D(0, 98, portalZ);
+          if (exitTopPt) {
+            const eTxt = '🌿 Exit to Tombstone Garden';
+            ctx.font = `700 ${Math.max(10, Math.round(12 * exitTopPt.scale))}px "Plus Jakarta Sans", sans-serif`;
+            const ew = ctx.measureText(eTxt).width + 16;
+            const ey = exitTopPt.sy - 20;
+            ctx.fillStyle = 'rgba(20, 28, 22, 0.88)';
+            ctx.fillRect(exitTopPt.sx - ew / 2, ey, ew, 19);
+            ctx.strokeStyle = '#97c19e';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(exitTopPt.sx - ew / 2, ey, ew, 19);
+            ctx.fillStyle = '#e7f5e8';
             ctx.textAlign = 'center';
-            ctx.fillText('🌿 Exit to Tombstone Garden', labelPt.sx, labelPt.sy - 6);
+            ctx.fillText(eTxt, exitTopPt.sx, ey + 13);
           }
         }
       });
@@ -1922,20 +1940,24 @@ export default function ParkWorld3D({
           stroke: '#ffd57e',
         });
         const gateCenter = project3D(0, 42, gateZ);
-        if (topGate) {
-          ctx.font = `700 ${Math.max(10, Math.round(12 * topGate.scale))}px "Plus Jakarta Sans", sans-serif`;
+        const gateTopPt = topGate || project3D(0, 96, gateZ);
+        if (gateTopPt) {
+          ctx.font = `700 ${Math.max(10, Math.round(12 * gateTopPt.scale))}px "Plus Jakarta Sans", sans-serif`;
           const gTxt = '⛩️ Other Species Gate';
-          const gw = ctx.measureText(gTxt).width + 14;
-          const labelX = topGate.sx - gw / 2;
-          const labelY = topGate.sy - 24;
+          const gw = ctx.measureText(gTxt).width + 16;
+          const labelX = gateTopPt.sx - gw / 2;
+          const labelY = gateTopPt.sy - 20;
           ctx.fillStyle = 'rgba(20, 16, 18, 0.88)';
-          ctx.fillRect(labelX, labelY, gw, 18);
+          ctx.fillRect(labelX, labelY, gw, 19);
+          ctx.strokeStyle = '#ffd57e';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(labelX, labelY, gw, 19);
           ctx.fillStyle = '#ffe5ad';
           ctx.textAlign = 'center';
-          ctx.fillText(gTxt, topGate.sx, topGate.sy - 11);
+          ctx.fillText(gTxt, gateTopPt.sx, labelY + 13);
 
-          const baseCenter = gateCenter || topGate;
-          const xs = [labelX, labelX + gw, topGate.sx - 38 * topGate.scale, topGate.sx + 38 * topGate.scale];
+          const baseCenter = gateCenter || gateTopPt;
+          const xs = [labelX, labelX + gw, gateTopPt.sx - 38 * gateTopPt.scale, gateTopPt.sx + 38 * gateTopPt.scale];
           const ys = [labelY - 6, baseCenter.sy + 48 * baseCenter.scale];
           if (leftPost) {
             xs.push(leftPost.sx);

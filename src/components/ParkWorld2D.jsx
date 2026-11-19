@@ -1292,10 +1292,18 @@ export default function ParkWorld2D({
         ctx.fillStyle = '#241914';
         drawRoundedRect(ctx, px - 42, py - 42, 84, 52, 40);
         ctx.fill();
-        ctx.fillStyle = '#f3cf94';
+        const ashGateLabel = '🏛️ Hall of Serenity (Ash Room)';
         ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
+        const ashGw = ctx.measureText(ashGateLabel).width + 16;
+        ctx.fillStyle = 'rgba(20, 16, 18, 0.88)';
+        drawRoundedRect(ctx, px - ashGw / 2, py - 84, ashGw, 20, 6);
+        ctx.fill();
+        ctx.strokeStyle = '#ffd57e';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.fillStyle = '#ffe5ad';
         ctx.textAlign = 'center';
-        ctx.fillText('🏛️ Hall of Serenity (Ash Room)', px, py - 68);
+        ctx.fillText(ashGateLabel, px, py - 70);
         ctx.font = '600 10px "Plus Jakarta Sans", sans-serif';
         ctx.fillStyle = '#ffe7ba';
         ctx.fillText('Walk in to Enter', px, py - 10);
@@ -1405,7 +1413,7 @@ export default function ParkWorld2D({
           ctx.fillText('🌸', pot.x, pot.y + 6);
         });
 
-        // Garden Exit Doorway at Bottom Center (600, 735)
+        // Garden Exit Doorway at Top Center
         const px = bounds.portalX;
         const py = bounds.portalY;
         ctx.fillStyle = '#2d4736';
@@ -1414,10 +1422,21 @@ export default function ParkWorld2D({
         ctx.strokeStyle = '#97c19e';
         ctx.lineWidth = 2;
         ctx.stroke();
-        ctx.fillStyle = '#e7f5e8';
+        const exitLabel = '🌿 Exit to Tombstone Garden';
         ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
+        const exitGw = ctx.measureText(exitLabel).width + 16;
+        ctx.fillStyle = 'rgba(20, 28, 22, 0.9)';
+        drawRoundedRect(ctx, px - exitGw / 2, py - 46, exitGw, 19, 6);
+        ctx.fill();
+        ctx.strokeStyle = '#97c19e';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.fillStyle = '#e7f5e8';
         ctx.textAlign = 'center';
-        ctx.fillText('🌿 Exit to Tombstone Garden', px, py - 2);
+        ctx.fillText(exitLabel, px, py - 33);
+        ctx.font = '600 10px "Plus Jakarta Sans", sans-serif';
+        ctx.fillStyle = '#cbead0';
+        ctx.fillText('Walk in to Exit', px, py - 1);
       }
 
       // ====================
@@ -1659,21 +1678,26 @@ export default function ParkWorld2D({
       // Species Sanctuary Gate (End of map middle road at x=CENTER_X, y=gateY)
       ctx.save();
       ctx.fillStyle = '#943030';
-      ctx.fillRect(GATE_X - 21, gateY - 28, 10, 56);
-      ctx.fillRect(GATE_X + 13, gateY - 28, 10, 56);
+      ctx.fillRect(GATE_X - 22, gateY - 28, 10, 56);
+      ctx.fillRect(GATE_X + 12, gateY - 28, 10, 56);
       ctx.fillStyle = '#b84242';
-      drawRoundedRect(ctx, GATE_X - 31, gateY - 36, 64, 12, 5);
+      drawRoundedRect(ctx, GATE_X - 32, gateY - 36, 64, 12, 5);
       ctx.fill();
       ctx.strokeStyle = '#ffd57e';
       ctx.lineWidth = 1.4;
       ctx.stroke();
+      const spGateLabel = '⛩️ Other Species Gate';
       ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
+      const spGw = ctx.measureText(spGateLabel).width + 16;
       ctx.fillStyle = 'rgba(20, 16, 18, 0.88)';
-      drawRoundedRect(ctx, GATE_X - 53, gateY - 62, 108, 19, 6);
+      drawRoundedRect(ctx, GATE_X - spGw / 2, gateY - 60, spGw, 19, 6);
       ctx.fill();
+      ctx.strokeStyle = '#ffd57e';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
       ctx.fillStyle = '#ffe5ad';
       ctx.textAlign = 'center';
-      ctx.fillText('⛩️ Other Species', GATE_X + 1, gateY - 49);
+      ctx.fillText(spGateLabel, GATE_X, gateY - 47);
       ctx.restore();
 
       // ====================
