@@ -196,7 +196,7 @@ export default function AdminPlotManager({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, color: 'var(--text-primary)' }}>
       {/* Gate & Space selector */}
       <div
         style={{
@@ -205,22 +205,23 @@ export default function AdminPlotManager({
           gap: 10,
           alignItems: 'center',
           justifyContent: 'space-between',
-          background: 'rgba(18, 28, 23, 0.72)',
-          border: '1px solid rgba(154, 184, 159, 0.22)',
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border-soft)',
           borderRadius: 12,
           padding: 12,
         }}
       >
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <label style={{ fontSize: '0.8rem', color: '#cfe0d4' }}>
+          <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             Species Gate:
             <select
+              className="input-control"
               value={species}
               onChange={(e) => {
                 setSpecies(e.target.value);
                 setEditing(null);
               }}
-              style={{ marginLeft: 6 }}
+              style={{ width: 'auto', padding: '5px 10px' }}
             >
               {SPECIES_LIST.map((sp) => (
                 <option key={sp.name} value={sp.name}>
@@ -239,7 +240,7 @@ export default function AdminPlotManager({
                 setEditing(null);
               }}
             >
-              🪦 Tombstone Plots
+              {space === 'tombstone' ? '✓ ' : ''}🪦 Tombstone Plots
             </button>
             <button
               type="button"
@@ -249,7 +250,7 @@ export default function AdminPlotManager({
                 setEditing(null);
               }}
             >
-              ⚱️ Ash Room Niches
+              {space === 'ash-room' ? '✓ ' : ''}⚱️ Ash Room Niches
             </button>
           </div>
         </div>
@@ -276,34 +277,43 @@ export default function AdminPlotManager({
             className={`chip-btn ${showTrash ? 'active' : ''}`}
             onClick={() => setShowTrash((v) => !v)}
           >
-            🗑️ Trash ({trashList.length})
+            {showTrash ? '✓ ' : ''}🗑️ Trash ({trashList.length})
           </button>
         </div>
       </div>
 
-      <p className="muted-note" style={{ margin: 0 }}>
+      <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
         Slots 1–20 are scoped strictly per species gate. Creating or filling 1–20 in <strong>{species}</strong> leaves other species gates empty until you add them manually.
       </p>
 
-      {statusMsg && <p style={{ margin: 0, color: '#86efac', fontSize: '0.82rem' }}>✅ {statusMsg}</p>}
-      {errorMsg && <p style={{ margin: 0, color: '#fca5a5', fontSize: '0.82rem' }}>⚠️ {errorMsg}</p>}
+      {statusMsg && (
+        <p style={{ margin: 0, color: '#166534', background: '#dcfce7', padding: '6px 10px', borderRadius: 8, fontSize: '0.82rem', fontWeight: 600 }}>
+          ✅ {statusMsg}
+        </p>
+      )}
+      {errorMsg && (
+        <p style={{ margin: 0, color: '#991b1b', background: '#fee2e2', padding: '6px 10px', borderRadius: 8, fontSize: '0.82rem', fontWeight: 600 }}>
+          ⚠️ {errorMsg}
+        </p>
+      )}
 
       {/* Inline Editor */}
       {editing && (
         <form
           onSubmit={handleSave}
           style={{
-            background: 'rgba(15, 25, 20, 0.9)',
-            border: '1px solid rgba(243, 217, 139, 0.4)',
+            background: 'var(--bg-elevated)',
+            border: '2px solid var(--accent)',
             borderRadius: 12,
             padding: 14,
             display: 'flex',
             flexDirection: 'column',
             gap: 10,
+            color: 'var(--text-primary)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            <strong style={{ color: '#f3d98b', fontSize: '0.92rem' }}>
+            <strong style={{ color: 'var(--accent)', fontSize: '0.96rem' }}>
               {editing.id ? '✏️ Editing' : '➕ Creating'} {getAdminSlotCode(space, editing.slotNumber)} ({species} Gate)
             </strong>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -311,7 +321,7 @@ export default function AdminPlotManager({
                 <button
                   type="button"
                   className="btn-ghost"
-                  style={{ color: '#fca5a5', fontSize: '0.78rem' }}
+                  style={{ color: '#b91c1c', borderColor: 'rgba(185, 28, 28, 0.35)', fontSize: '0.78rem' }}
                   onClick={() => {
                     onDeleteMemorial?.(editing.id);
                     setEditing(null);
@@ -332,7 +342,7 @@ export default function AdminPlotManager({
           </div>
 
           <div className="form-row">
-            <div className="field-group" style={{ maxWidth: 120 }}>
+            <div className="field-group" style={{ maxWidth: 130, minWidth: 100 }}>
               <label>Slot # (1–200)</label>
               <input
                 type="number"
@@ -356,7 +366,7 @@ export default function AdminPlotManager({
                 onChange={(e) => setEditing((p) => ({ ...p, name: e.target.value }))}
               />
             </div>
-            <div className="field-group" style={{ flex: 1 }}>
+            <div className="field-group">
               <label>Breed / Tag</label>
               <input
                 type="text"
@@ -412,10 +422,11 @@ export default function AdminPlotManager({
             </label>
             <input
               type="url"
+              className="input-control"
               placeholder="or https:// photo link"
               value={photoLinkDraft}
               onChange={(e) => setPhotoLinkDraft(e.target.value)}
-              style={{ flex: 1, minWidth: 160 }}
+              style={{ flex: 1, minWidth: 160, padding: '7px 10px' }}
             />
             <button type="button" className="btn-secondary" onClick={handleApplyPhotoLink}>
               <Link2 size={13} /> Use Link
@@ -423,17 +434,19 @@ export default function AdminPlotManager({
             <input
               type="text"
               maxLength={8}
+              className="input-control"
               value={editing.photo?.startsWith('data:') || editing.photo?.startsWith('https://') ? '' : editing.photo}
               onChange={(e) => setEditing((p) => ({ ...p, photo: e.target.value || '🕊️' }))}
               placeholder="Emoji"
-              style={{ width: 64, textAlign: 'center' }}
+              style={{ width: 64, textAlign: 'center', padding: '7px 6px' }}
             />
           </div>
 
           {/* Hex override, Glow & Effects */}
           <div
             style={{
-              background: 'rgba(255,255,255,0.03)',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-soft)',
               borderRadius: 10,
               padding: 10,
               display: 'flex',
@@ -442,25 +455,26 @@ export default function AdminPlotManager({
             }}
           >
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem' }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
                 Custom Stone/Urn Hex:
                 <input
                   type="color"
                   value={normalizeHex(editing.customHex, '#d8dfcf')}
                   onChange={(e) => setEditing((p) => ({ ...p, customHex: e.target.value }))}
-                  style={{ width: 30, height: 26, borderRadius: 6 }}
+                  style={{ width: 30, height: 26, borderRadius: 6, cursor: 'pointer' }}
                 />
                 <input
                   type="text"
                   maxLength={7}
+                  className="input-control"
                   value={editing.customHex}
                   onChange={(e) => setEditing((p) => ({ ...p, customHex: e.target.value }))}
                   placeholder="(optional)"
-                  style={{ width: 92, fontFamily: 'monospace' }}
+                  style={{ width: 100, fontFamily: 'monospace', padding: '4px 8px' }}
                 />
               </label>
 
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', cursor: 'pointer' }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', cursor: 'pointer' }}>
                 <input
                   type="checkbox"
                   checked={editing.glowOn}
@@ -470,13 +484,13 @@ export default function AdminPlotManager({
               </label>
 
               {editing.glowOn && (
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.78rem' }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
                   Glow Hex:
                   <input
                     type="color"
                     value={normalizeHex(editing.glowColor, '#f5d076')}
                     onChange={(e) => setEditing((p) => ({ ...p, glowColor: e.target.value }))}
-                    style={{ width: 28, height: 24, borderRadius: 6 }}
+                    style={{ width: 28, height: 24, borderRadius: 6, cursor: 'pointer' }}
                   />
                   <input
                     type="range"
@@ -491,16 +505,20 @@ export default function AdminPlotManager({
             </div>
 
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {ASSET_EFFECTS.map((eff) => (
-                <button
-                  key={eff.id}
-                  type="button"
-                  className={`chip-btn ${editing.effects.includes(eff.id) ? 'active' : ''}`}
-                  onClick={() => toggleEditorEffect(eff.id)}
-                >
-                  {eff.icon} {eff.label}
-                </button>
-              ))}
+              {ASSET_EFFECTS.map((eff) => {
+                const selected = editing.effects.includes(eff.id);
+                return (
+                  <button
+                    key={eff.id}
+                    type="button"
+                    aria-pressed={selected}
+                    className={`chip-btn ${selected ? 'active' : ''}`}
+                    onClick={() => toggleEditorEffect(eff.id)}
+                  >
+                    {selected ? '✓ ' : ''}{eff.icon} {eff.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -515,7 +533,7 @@ export default function AdminPlotManager({
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', cursor: 'pointer' }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}>
               <input
                 type="checkbox"
                 checked={editing.isBlankPlaceholder}
@@ -534,17 +552,18 @@ export default function AdminPlotManager({
       {showTrash && (
         <div
           style={{
-            background: 'rgba(42, 22, 22, 0.55)',
-            border: '1px solid rgba(252, 165, 165, 0.3)',
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
             borderRadius: 12,
             padding: 12,
+            color: '#7f1d1d',
           }}
         >
-          <strong style={{ fontSize: '0.86rem', color: '#fecaca', display: 'block', marginBottom: 8 }}>
+          <strong style={{ fontSize: '0.86rem', display: 'block', marginBottom: 8 }}>
             🗑️ Soft-Deleted Plots & Niches ({trashList.length})
           </strong>
           {trashList.length === 0 ? (
-            <p className="muted-note">Trash is empty.</p>
+            <p style={{ margin: 0, fontSize: '0.8rem' }}>Trash is empty.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {trashList.map((m) => (
@@ -555,10 +574,12 @@ export default function AdminPlotManager({
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     gap: 8,
-                    background: 'rgba(15, 22, 18, 0.7)',
+                    background: '#fff',
+                    border: '1px solid #fecaca',
                     padding: '6px 10px',
                     borderRadius: 8,
                     fontSize: '0.8rem',
+                    color: 'var(--text-primary)',
                   }}
                 >
                   <span>
@@ -581,19 +602,20 @@ export default function AdminPlotManager({
 
       {/* Visual 1-20 Grid */}
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: '0.84rem', color: '#f3d98b', fontWeight: 600 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: '0.86rem', color: 'var(--accent)', fontWeight: 700 }}>
           <Grid size={14} /> Front Row Slots 1–20 — {species} ({space === 'ash-room' ? 'Ash Room' : 'Tombstones'})
         </div>
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(118px, 1fr))',
             gap: 6,
           }}
         >
           {Array.from({ length: 20 }, (_, i) => i + 1).map((num) => {
             const occupant = slotMap.get(num);
             const code = getAdminSlotCode(space, num);
+            const isSelected = editing && Number(editing.slotNumber) === num;
             return (
               <button
                 key={num}
@@ -604,22 +626,28 @@ export default function AdminPlotManager({
                   padding: '8px 9px',
                   borderRadius: 9,
                   cursor: 'pointer',
-                  background: occupant
-                    ? occupant.isBlankPlaceholder
-                      ? 'rgba(56, 82, 66, 0.45)'
-                      : 'rgba(30, 48, 37, 0.85)'
-                    : 'rgba(14, 22, 18, 0.45)',
-                  border: occupant
-                    ? '1px solid rgba(243, 217, 139, 0.45)'
-                    : '1px dashed rgba(154, 184, 159, 0.25)',
-                  color: '#edf6ef',
+                  background: isSelected
+                    ? 'var(--accent)'
+                    : occupant
+                      ? occupant.isBlankPlaceholder
+                        ? 'var(--accent-soft)'
+                        : 'var(--bg-elevated)'
+                      : 'var(--bg-surface)',
+                  border: isSelected
+                    ? '2px solid var(--accent)'
+                    : occupant
+                      ? '1.5px solid var(--accent)'
+                      : '1px dashed var(--border-soft)',
+                  color: isSelected ? '#fff' : 'var(--text-primary)',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 2,
                 }}
               >
-                <span style={{ fontSize: '0.72rem', color: '#f3d98b', fontWeight: 700 }}>{code}</span>
-                <span style={{ fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: occupant ? '#edf6ef' : '#85a18d' }}>
+                <span style={{ fontSize: '0.72rem', color: isSelected ? '#fef3c7' : 'var(--accent)', fontWeight: 700 }}>
+                  {isSelected ? '✓ ' : ''}{code}
+                </span>
+                <span style={{ fontSize: '0.76rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: isSelected ? '#fff' : occupant ? 'var(--text-primary)' : 'var(--text-muted)' }}>
                   {occupant ? occupant.name : 'Empty Space (+)'}
                 </span>
               </button>
@@ -630,57 +658,62 @@ export default function AdminPlotManager({
 
       {/* Slots 21-200 list */}
       <div>
-        <strong style={{ fontSize: '0.84rem', color: '#cfe0d4', display: 'block', marginBottom: 6 }}>
+        <strong style={{ fontSize: '0.86rem', color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>
           Plots & Niches 21–200 in {species} ({laterList.length})
         </strong>
         {laterList.length === 0 ? (
-          <p className="muted-note">No memorials in slots 21–200 for this gate/room yet.</p>
+          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            No memorials in slots 21–200 for this gate/room yet.
+          </p>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 6 }}>
-            {laterList.map(({ memorial: m }) => (
-              <div
-                key={m.id}
-                style={{
-                  background: 'rgba(18, 28, 23, 0.72)',
-                  border: '1px solid rgba(154, 184, 159, 0.2)',
-                  borderRadius: 9,
-                  padding: '8px 10px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#edf6ef', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {m.locationCode} — {m.name}
+            {laterList.map(({ memorial: m }) => {
+              const isSelected = editing && editing.id === m.id;
+              return (
+                <div
+                  key={m.id}
+                  style={{
+                    background: isSelected ? 'var(--accent-soft)' : 'var(--bg-elevated)',
+                    border: isSelected ? '2px solid var(--accent)' : '1px solid var(--border-soft)',
+                    borderRadius: 9,
+                    padding: '8px 10px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {isSelected ? '✓ ' : ''}{m.locationCode} — {m.name}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                      {m.breed} {m.glowOn ? '• ✨' : ''}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.7rem', color: '#9ab89f' }}>
-                    {m.breed} {m.glowOn ? '• ✨' : ''}
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      style={{ padding: '4px 6px' }}
+                      onClick={() => openEditorForSlot(parsePlotNumber(m.locationCode) || 21, m)}
+                      title="Edit"
+                    >
+                      <Edit3 size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      style={{ padding: '4px 6px', color: '#b91c1c' }}
+                      onClick={() => onDeleteMemorial?.(m.id)}
+                      title="Delete"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    style={{ padding: '4px 6px' }}
-                    onClick={() => openEditorForSlot(parsePlotNumber(m.locationCode) || 21, m)}
-                    title="Edit"
-                  >
-                    <Edit3 size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    style={{ padding: '4px 6px', color: '#fca5a5' }}
-                    onClick={() => onDeleteMemorial?.(m.id)}
-                    title="Delete"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
