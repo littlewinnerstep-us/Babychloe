@@ -1158,18 +1158,6 @@ export default function ParkWorld2D({
           ctx.font = '15px serif';
           ctx.textAlign = 'center';
           ctx.fillText(spEmoji, CENTER_X, pedBaseY - pedH + 1);
-          // Pedestal Label Plate ("Dog Pedestal", "Cat Pedestal", etc.)
-          const pedLabel = `${curSp} Pedestal`;
-          ctx.font = '700 8.5px "Plus Jakarta Sans", sans-serif';
-          const lblW = Math.max(66, ctx.measureText(pedLabel).width + 12);
-          ctx.fillStyle = 'rgba(20, 26, 23, 0.86)';
-          drawRoundedRect(ctx, CENTER_X - lblW / 2, pedBaseY + 6, lblW, 14, 5);
-          ctx.fill();
-          ctx.strokeStyle = '#ffd57e';
-          ctx.lineWidth = 1;
-          ctx.stroke();
-          ctx.fillStyle = '#ffe8b3';
-          ctx.fillText(pedLabel, CENTER_X, pedBaseY + 16);
 
           ctx.restore();
         });
@@ -1292,20 +1280,18 @@ export default function ParkWorld2D({
         ctx.fillStyle = '#241914';
         drawRoundedRect(ctx, px - 42, py - 42, 84, 52, 40);
         ctx.fill();
-        const ashGateLabel = '🏛️ Hall of Serenity (Ash Room)';
+        ctx.save();
         ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
-        const ashGw = ctx.measureText(ashGateLabel).width + 16;
-        ctx.fillStyle = 'rgba(20, 16, 18, 0.88)';
-        drawRoundedRect(ctx, px - ashGw / 2, py - 84, ashGw, 20, 6);
-        ctx.fill();
-        ctx.strokeStyle = '#ffd57e';
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-        ctx.fillStyle = '#ffe5ad';
         ctx.textAlign = 'center';
-        ctx.fillText(ashGateLabel, px, py - 70);
+        ctx.textBaseline = 'bottom';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = '#ffe5ad';
+        ctx.fillText('🏛️ Hall of Serenity (Ash Room)', px, py - 67);
+        ctx.restore();
         ctx.font = '600 10px "Plus Jakarta Sans", sans-serif';
         ctx.fillStyle = '#ffe7ba';
+        ctx.textAlign = 'center';
         ctx.fillText('Walk in to Enter', px, py - 10);
       } else {
         // ASH ROOM FLOOR & ARCHITECTURE
@@ -1422,20 +1408,18 @@ export default function ParkWorld2D({
         ctx.strokeStyle = '#97c19e';
         ctx.lineWidth = 2;
         ctx.stroke();
-        const exitLabel = '🌿 Exit to Tombstone Garden';
+        ctx.save();
         ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
-        const exitGw = ctx.measureText(exitLabel).width + 16;
-        ctx.fillStyle = 'rgba(20, 28, 22, 0.9)';
-        drawRoundedRect(ctx, px - exitGw / 2, py - 46, exitGw, 19, 6);
-        ctx.fill();
-        ctx.strokeStyle = '#97c19e';
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-        ctx.fillStyle = '#e7f5e8';
         ctx.textAlign = 'center';
-        ctx.fillText(exitLabel, px, py - 33);
+        ctx.textBaseline = 'bottom';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = '#e7f5e8';
+        ctx.fillText('🌿 Exit to Tombstone Garden', px, py - 28);
+        ctx.restore();
         ctx.font = '600 10px "Plus Jakarta Sans", sans-serif';
         ctx.fillStyle = '#cbead0';
+        ctx.textAlign = 'center';
         ctx.fillText('Walk in to Exit', px, py - 1);
       }
 
@@ -1686,18 +1670,13 @@ export default function ParkWorld2D({
       ctx.strokeStyle = '#ffd57e';
       ctx.lineWidth = 1.4;
       ctx.stroke();
-      const spGateLabel = '⛩️ Other Species Gate';
       ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
-      const spGw = ctx.measureText(spGateLabel).width + 16;
-      ctx.fillStyle = 'rgba(20, 16, 18, 0.88)';
-      drawRoundedRect(ctx, GATE_X - spGw / 2, gateY - 60, spGw, 19, 6);
-      ctx.fill();
-      ctx.strokeStyle = '#ffd57e';
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-      ctx.fillStyle = '#ffe5ad';
       ctx.textAlign = 'center';
-      ctx.fillText(spGateLabel, GATE_X, gateY - 47);
+      ctx.textBaseline = 'bottom';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+      ctx.shadowBlur = 4;
+      ctx.fillStyle = '#ffe5ad';
+      ctx.fillText('⛩️ Other Species Gate', GATE_X, gateY - 41);
       ctx.restore();
 
       // ====================

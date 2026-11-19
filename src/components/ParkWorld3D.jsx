@@ -1363,20 +1363,17 @@ export default function ParkWorld3D({
               portalZ,
             };
           }
-          const ashTopPt = labelPt || project3D(0, 112, portalZ);
+          const ashTopPt = project3D(0, 107, portalZ) || labelPt;
           if (ashTopPt) {
-            const aTxt = '🏛️ Hall of Serenity (Ash Room)';
+            ctx.save();
             ctx.font = `700 ${Math.max(10, Math.round(12 * ashTopPt.scale))}px "Plus Jakarta Sans", sans-serif`;
-            const aw = ctx.measureText(aTxt).width + 16;
-            const ay = ashTopPt.sy - 20;
-            ctx.fillStyle = 'rgba(20, 16, 18, 0.88)';
-            ctx.fillRect(ashTopPt.sx - aw / 2, ay, aw, 19);
-            ctx.strokeStyle = '#ffd57e';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(ashTopPt.sx - aw / 2, ay, aw, 19);
-            ctx.fillStyle = '#ffe5ad';
             ctx.textAlign = 'center';
-            ctx.fillText(aTxt, ashTopPt.sx, ay + 13);
+            ctx.textBaseline = 'bottom';
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.92)';
+            ctx.shadowBlur = 5;
+            ctx.fillStyle = '#ffe5ad';
+            ctx.fillText('🏛️ Hall of Serenity (Ash Room)', ashTopPt.sx, ashTopPt.sy - 4);
+            ctx.restore();
           }
         } else {
           draw3DBox(-42, 0, portalZ, 18, 76, 18, {
@@ -1403,20 +1400,17 @@ export default function ParkWorld3D({
               portalZ,
             };
           }
-          const exitTopPt = labelPt || project3D(0, 98, portalZ);
+          const exitTopPt = project3D(0, 93, portalZ) || labelPt;
           if (exitTopPt) {
-            const eTxt = '🌿 Exit to Tombstone Garden';
+            ctx.save();
             ctx.font = `700 ${Math.max(10, Math.round(12 * exitTopPt.scale))}px "Plus Jakarta Sans", sans-serif`;
-            const ew = ctx.measureText(eTxt).width + 16;
-            const ey = exitTopPt.sy - 20;
-            ctx.fillStyle = 'rgba(20, 28, 22, 0.88)';
-            ctx.fillRect(exitTopPt.sx - ew / 2, ey, ew, 19);
-            ctx.strokeStyle = '#97c19e';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(exitTopPt.sx - ew / 2, ey, ew, 19);
-            ctx.fillStyle = '#e7f5e8';
             ctx.textAlign = 'center';
-            ctx.fillText(eTxt, exitTopPt.sx, ey + 13);
+            ctx.textBaseline = 'bottom';
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.92)';
+            ctx.shadowBlur = 5;
+            ctx.fillStyle = '#e7f5e8';
+            ctx.fillText('🌿 Exit to Tombstone Garden', exitTopPt.sx, exitTopPt.sy - 4);
+            ctx.restore();
           }
         }
       });
@@ -1469,33 +1463,18 @@ export default function ParkWorld3D({
               stroke: 'rgba(255, 213, 126, 0.5)',
             });
             // Golden pedestal crown cap (y: 54 -> 60, total pedestal height = 60)
-            const capTop = draw3DBox(0, 54, poolZ, 28, 6, 28, {
+            draw3DBox(0, 54, poolZ, 28, 6, 28, {
               top: '#f4ce74',
               front: '#d4a853',
               side: '#9e7830',
               stroke: '#ffe7ad',
             });
-            // Species emblem & floating nameplate above pedestal
+            // Species emblem atop pedestal
             const emblemPt = project3D(0, 68, poolZ);
             if (emblemPt) {
               ctx.font = `${Math.max(13, Math.round(20 * emblemPt.scale))}px serif`;
               ctx.textAlign = 'center';
               ctx.fillText(spEmoji, emblemPt.sx, emblemPt.sy);
-            }
-            if (capTop) {
-              const label = `${spEmoji} ${curSp} Pedestal`;
-              const fSize = Math.max(9, Math.min(13, Math.round(11 * capTop.scale)));
-              ctx.font = `700 ${fSize}px "Plus Jakarta Sans", sans-serif`;
-              const tw = ctx.measureText(label).width + 12;
-              const ly = capTop.sy - 26 * capTop.scale;
-              ctx.fillStyle = 'rgba(16, 22, 20, 0.86)';
-              ctx.fillRect(capTop.sx - tw / 2, ly - 15, tw, 16);
-              ctx.strokeStyle = '#ffd57e';
-              ctx.lineWidth = 1;
-              ctx.strokeRect(capTop.sx - tw / 2, ly - 15, tw, 16);
-              ctx.fillStyle = '#ffe8b3';
-              ctx.textAlign = 'center';
-              ctx.fillText(label, capTop.sx, ly - 3);
             }
           });
 
@@ -1749,6 +1728,24 @@ export default function ParkWorld3D({
                 isNear ? '#ffd57e' : '#f7ead2'
               );
             }
+            // Name & Plot Code etched directly ON the 3D tombstone slab (no floating tag above)
+            const tombNamePt = project3D(m.worldX, 27, m.worldZ + 9);
+            const tombCodePt = project3D(m.worldX, 17, m.worldZ + 9);
+            if (tombNamePt) {
+              const ns = Math.max(8, Math.min(13, Math.round(10.5 * tombNamePt.scale)));
+              ctx.save();
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillStyle = m.styleId === 'moss-celtic' ? '#f5faf3' : '#263038';
+              ctx.font = `700 ${ns}px "Cormorant Garamond", serif`;
+              ctx.fillText(`${isOwner ? '⭐ ' : ''}${(m.name || 'Pet').slice(0, 10)}`, tombNamePt.sx, tombNamePt.sy);
+              if (tombCodePt) {
+                const cs = Math.max(7, Math.min(10, Math.round(8 * tombCodePt.scale)));
+                ctx.font = `600 ${cs}px "Plus Jakarta Sans", sans-serif`;
+                ctx.fillText(m.locationCode || 'Plot G-21', tombCodePt.sx, tombCodePt.sy);
+              }
+              ctx.restore();
+            }
           } else {
             // 3D Columbarium Alcove Tower
             const urnCol = {
@@ -1765,15 +1762,28 @@ export default function ParkWorld3D({
               stroke: isNear ? '#ffd57e' : '#a47e49',
             });
 
+            // Niche Code etched at the top of the pet picture on the 3D Ash Alcove
+            const nicheCodePt = project3D(m.worldX, 68, m.worldZ + 18);
+            if (nicheCodePt) {
+              const cs = Math.max(7, Math.min(11, Math.round(8.5 * nicheCodePt.scale)));
+              ctx.save();
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.font = `700 ${cs}px "Plus Jakarta Sans", sans-serif`;
+              ctx.fillStyle = '#ffe2a3';
+              ctx.fillText(m.locationCode || 'Niche A-21', nicheCodePt.sx, nicheCodePt.sy);
+              ctx.restore();
+            }
+
             // Pet picture at top center of 3D Ash Alcove
-            const ashPicPt = project3D(m.worldX, 58, m.worldZ + 18);
+            const ashPicPt = project3D(m.worldX, 52, m.worldZ + 18);
             if (ashPicPt) {
               drawCachedPetPortrait(
                 ctx,
                 m.photo,
                 ashPicPt.sx,
                 ashPicPt.sy,
-                Math.max(8, 11 * ashPicPt.scale),
+                Math.max(8, 10.5 * ashPicPt.scale),
                 getSpeciesEmoji(m.species),
                 isNear ? '#ffd57e' : '#e6c278'
               );
@@ -1789,24 +1799,27 @@ export default function ParkWorld3D({
               ctx.lineWidth = 1.5;
               ctx.stroke();
             }
+
+            // Brass nameplate directly ON the bottom of the 3D Ash Alcove
+            const nicheNamePt = project3D(m.worldX, 9, m.worldZ + 18);
+            if (nicheNamePt) {
+              const pw = 42 * nicheNamePt.scale;
+              const ph = 11 * nicheNamePt.scale;
+              ctx.save();
+              ctx.fillStyle = '#d8b26e';
+              ctx.fillRect(nicheNamePt.sx - pw / 2, nicheNamePt.sy - ph / 2, pw, ph);
+              ctx.fillStyle = '#281b09';
+              const ns = Math.max(7, Math.min(11, Math.round(8.5 * nicheNamePt.scale)));
+              ctx.font = `800 ${ns}px "Plus Jakarta Sans", sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(`${isOwner ? '⭐ ' : ''}${(m.name || 'Pet').slice(0, 9)}`, nicheNamePt.sx, nicheNamePt.sy);
+              ctx.restore();
+            }
           }
 
-          // Floating 3D Nameplate & Offerings
+          // Hit rect for tap-to-walk (no floating tag above tomb or niche)
           if (topLabelPt) {
-            const fontSize = Math.max(10, Math.min(15, Math.round(13 * topLabelPt.scale)));
-            ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
-            const text = `${isOwner ? '⭐ ' : ''}${m.name} (${m.locationCode})`;
-            const tw = ctx.measureText(text).width + 14;
-            ctx.fillStyle = 'rgba(16, 22, 20, 0.84)';
-            ctx.fillRect(topLabelPt.sx - tw / 2, topLabelPt.sy - 20, tw, 18);
-            ctx.strokeStyle = isNear ? '#ffd57e' : 'rgba(255,255,255,0.22)';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(topLabelPt.sx - tw / 2, topLabelPt.sy - 20, tw, 18);
-            ctx.fillStyle = '#ffe6b3';
-            ctx.textAlign = 'center';
-            ctx.fillText(text, topLabelPt.sx, topLabelPt.sy - 7);
-
-            // Hit rect for tap-to-walk
             newScreenHits.push({
               id: m.id,
               worldX: m.worldX,
@@ -1940,22 +1953,23 @@ export default function ParkWorld3D({
           stroke: '#ffd57e',
         });
         const gateCenter = project3D(0, 42, gateZ);
-        const gateTopPt = topGate || project3D(0, 96, gateZ);
+        const gateTopPt = project3D(0, 91, gateZ) || topGate;
         if (gateTopPt) {
-          ctx.font = `700 ${Math.max(10, Math.round(12 * gateTopPt.scale))}px "Plus Jakarta Sans", sans-serif`;
           const gTxt = '⛩️ Other Species Gate';
-          const gw = ctx.measureText(gTxt).width + 16;
+          const fontSize = Math.max(10, Math.round(12 * gateTopPt.scale));
+          ctx.save();
+          ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.92)';
+          ctx.shadowBlur = 5;
+          ctx.fillStyle = '#ffe5ad';
+          ctx.fillText(gTxt, gateTopPt.sx, gateTopPt.sy - 4);
+          const gw = ctx.measureText(gTxt).width + 12;
+          ctx.restore();
+
           const labelX = gateTopPt.sx - gw / 2;
           const labelY = gateTopPt.sy - 20;
-          ctx.fillStyle = 'rgba(20, 16, 18, 0.88)';
-          ctx.fillRect(labelX, labelY, gw, 19);
-          ctx.strokeStyle = '#ffd57e';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(labelX, labelY, gw, 19);
-          ctx.fillStyle = '#ffe5ad';
-          ctx.textAlign = 'center';
-          ctx.fillText(gTxt, gateTopPt.sx, labelY + 13);
-
           const baseCenter = gateCenter || gateTopPt;
           const xs = [labelX, labelX + gw, gateTopPt.sx - 38 * gateTopPt.scale, gateTopPt.sx + 38 * gateTopPt.scale];
           const ys = [labelY - 6, baseCenter.sy + 48 * baseCenter.scale];
