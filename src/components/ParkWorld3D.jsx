@@ -1432,6 +1432,92 @@ export default function ParkWorld3D({
               });
             });
           });
+
+          // Center Species Pedestal (60 units tall) + Two Small Angels beside it (30 units tall = half height)
+          const curSp = speciesRef.current || 'Dog';
+          const spEmoji = getSpeciesEmoji(curSp);
+          pushEntity(0, poolZ, () => {
+            // Pedestal stepped base (y: 0 -> 8)
+            draw3DBox(0, 0, poolZ, 34, 8, 34, {
+              top: atm === 'night' ? '#707b86' : '#c6ccd2',
+              front: atm === 'night' ? '#58626c' : '#9aa4ae',
+              side: atm === 'night' ? '#404850' : '#737d87',
+            });
+            // Pedestal main marble column (y: 8 -> 54)
+            draw3DBox(0, 8, poolZ, 22, 46, 22, {
+              top: atm === 'night' ? '#86929e' : '#f2ece1',
+              front: atm === 'night' ? '#6a7580' : '#ded6c8',
+              side: atm === 'night' ? '#4f5861' : '#b8afa0',
+              stroke: 'rgba(255, 213, 126, 0.5)',
+            });
+            // Golden pedestal crown cap (y: 54 -> 60, total pedestal height = 60)
+            const capTop = draw3DBox(0, 54, poolZ, 28, 6, 28, {
+              top: '#f4ce74',
+              front: '#d4a853',
+              side: '#9e7830',
+              stroke: '#ffe7ad',
+            });
+            // Species emblem & floating nameplate above pedestal
+            const emblemPt = project3D(0, 68, poolZ);
+            if (emblemPt) {
+              ctx.font = `${Math.max(13, Math.round(20 * emblemPt.scale))}px serif`;
+              ctx.textAlign = 'center';
+              ctx.fillText(spEmoji, emblemPt.sx, emblemPt.sy);
+            }
+            if (capTop) {
+              const label = `${spEmoji} ${curSp} Pedestal`;
+              const fSize = Math.max(9, Math.min(13, Math.round(11 * capTop.scale)));
+              ctx.font = `700 ${fSize}px "Plus Jakarta Sans", sans-serif`;
+              const tw = ctx.measureText(label).width + 12;
+              const ly = capTop.sy - 26 * capTop.scale;
+              ctx.fillStyle = 'rgba(16, 22, 20, 0.86)';
+              ctx.fillRect(capTop.sx - tw / 2, ly - 15, tw, 16);
+              ctx.strokeStyle = '#ffd57e';
+              ctx.lineWidth = 1;
+              ctx.strokeRect(capTop.sx - tw / 2, ly - 15, tw, 16);
+              ctx.fillStyle = '#ffe8b3';
+              ctx.textAlign = 'center';
+              ctx.fillText(label, capTop.sx, ly - 3);
+            }
+          });
+
+          // Two small angels beside the pedestal (30 units tall = half of 60-unit pedestal)
+          [-26, 26].forEach((ax) => {
+            pushEntity(ax, poolZ, () => {
+              // Small stone plinth (y: 0 -> 4)
+              draw3DBox(ax, 0, poolZ, 14, 4, 14, {
+                top: '#c6ccd2',
+                front: '#9aa4ae',
+                side: '#737d87',
+              });
+              // Angel wings (y: 12 -> 22)
+              draw3DBox(ax, 12, poolZ - 3, 20, 10, 4, {
+                top: '#ffffff',
+                front: '#e6edf5',
+                side: '#c2cdd9',
+              });
+              // Angel white robe body (y: 4 -> 21)
+              draw3DBox(ax, 4, poolZ, 10, 17, 10, {
+                top: '#fffaf0',
+                front: '#ebe4d6',
+                side: '#c8c0b2',
+              });
+              // Angel head (y: 21 -> 28) & golden halo (y: 28 -> 30, half height of 60)
+              draw3DBox(ax, 21, poolZ, 7, 7, 7, {
+                top: '#fff5e4',
+                front: '#f0dec4',
+                side: '#d1bfa4',
+              });
+              const haloPt = project3D(ax, 30, poolZ);
+              if (haloPt) {
+                ctx.strokeStyle = '#ffd57e';
+                ctx.lineWidth = 1.6;
+                ctx.beginPath();
+                ctx.ellipse(haloPt.sx, haloPt.sy, 5.5 * haloPt.scale, 2 * haloPt.scale, 0, 0, Math.PI * 2);
+                ctx.stroke();
+              }
+            });
+          });
         });
 
         const trees = [];

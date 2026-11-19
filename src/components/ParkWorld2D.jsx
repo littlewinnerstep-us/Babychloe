@@ -1086,6 +1086,91 @@ export default function ParkWorld2D({
             ctx.textAlign = 'center';
             ctx.fillText(f % 2 === 0 ? '🐟' : '🐠', swimX, swimY - jumpH);
           }
+
+          // Center Species Pedestal (44px tall) + Two Small Angels beside it (22px tall = half height)
+          const curSp = speciesRef.current || 'Dog';
+          const spEmoji = getSpeciesEmoji(curSp);
+          const pedBaseY = py + 10;
+          const pedH = 44;
+          const angelH = 22; // half tall of the pedestal
+
+          // Water ripples around pedestal & angel bases
+          ctx.strokeStyle = 'rgba(220, 245, 255, 0.45)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.ellipse(CENTER_X, pedBaseY + 2, 46, 11, 0, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Draw Left & Right Small Angels (half tall of pedestal: 22px)
+          [-30, 30].forEach((dx) => {
+            const ax = CENTER_X + dx;
+            const ay = pedBaseY;
+            const wingDir = dx < 0 ? -1 : 1;
+            // Stone pad
+            ctx.fillStyle = atm === 'night' ? '#6a747e' : '#c6ccd2';
+            ctx.beginPath();
+            ctx.ellipse(ax, ay, 8, 3.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Wings
+            ctx.fillStyle = atm === 'night' ? '#cfd8e3' : '#ffffff';
+            ctx.beginPath();
+            ctx.ellipse(ax - 5 * wingDir, ay - 12, 5.5, 3, -0.35 * wingDir, 0, Math.PI * 2);
+            ctx.ellipse(ax + 3.5 * wingDir, ay - 12, 4.5, 2.5, 0.35 * wingDir, 0, Math.PI * 2);
+            ctx.fill();
+            // Robe / body
+            ctx.fillStyle = atm === 'night' ? '#bbc6d1' : '#f4f0e8';
+            ctx.beginPath();
+            ctx.moveTo(ax - 5, ay - 1);
+            ctx.lineTo(ax - 2.5, ay - 14);
+            ctx.lineTo(ax + 2.5, ay - 14);
+            ctx.lineTo(ax + 5, ay - 1);
+            ctx.closePath();
+            ctx.fill();
+            // Head
+            ctx.fillStyle = atm === 'night' ? '#d9e0e7' : '#fffaf0';
+            ctx.beginPath();
+            ctx.arc(ax, ay - 17, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+            // Halo (top at ay - angelH = ay - 22)
+            ctx.strokeStyle = '#ffd57e';
+            ctx.lineWidth = 1.3;
+            ctx.beginPath();
+            ctx.ellipse(ax, ay - angelH, 4, 1.4, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          });
+
+          // Center Pedestal (44px tall: from pedBaseY up to pedBaseY - pedH)
+          // Stepped base
+          ctx.fillStyle = atm === 'night' ? '#58626c' : '#aeb6be';
+          drawRoundedRect(ctx, CENTER_X - 18, pedBaseY - 7, 36, 9, 3);
+          ctx.fill();
+          // Pillar shaft
+          ctx.fillStyle = atm === 'night' ? '#707b86' : '#e5dfd3';
+          ctx.fillRect(CENTER_X - 11, pedBaseY - pedH + 8, 22, pedH - 14);
+          ctx.strokeStyle = atm === 'night' ? 'rgba(255,213,126,0.45)' : 'rgba(130,104,64,0.45)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(CENTER_X - 11, pedBaseY - pedH + 8, 22, pedH - 14);
+          // Gold capital top
+          ctx.fillStyle = '#d4a853';
+          drawRoundedRect(ctx, CENTER_X - 15, pedBaseY - pedH + 3, 30, 7, 2);
+          ctx.fill();
+          // Species emblem atop pedestal
+          ctx.font = '15px serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(spEmoji, CENTER_X, pedBaseY - pedH + 1);
+          // Pedestal Label Plate ("Dog Pedestal", "Cat Pedestal", etc.)
+          const pedLabel = `${curSp} Pedestal`;
+          ctx.font = '700 8.5px "Plus Jakarta Sans", sans-serif';
+          const lblW = Math.max(66, ctx.measureText(pedLabel).width + 12);
+          ctx.fillStyle = 'rgba(20, 26, 23, 0.86)';
+          drawRoundedRect(ctx, CENTER_X - lblW / 2, pedBaseY + 6, lblW, 14, 5);
+          ctx.fill();
+          ctx.strokeStyle = '#ffd57e';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.fillStyle = '#ffe8b3';
+          ctx.fillText(pedLabel, CENTER_X, pedBaseY + 16);
+
           ctx.restore();
         });
 
