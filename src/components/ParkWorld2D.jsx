@@ -77,7 +77,7 @@ function loadAvatarPrefs() {
 const CENTER_X = 1400;
 const GATE_X = 2720; // End of right side of middle row road
 const TOP_PAD_2D = 125; // Extra breathing space behind Ash Room gate at top of map
-const BOTTOM_PAD_2D = 125; // Extra breathing space at bottom of map
+const BOTTOM_PAD_2D = 845; // Extra 3 rows (720px) + 125px breathing space at bottom of map
 const SIDE_PAD_2D = 125; // Extra breathing space on left and right of map
 
 const WORLD_BOUNDS = {

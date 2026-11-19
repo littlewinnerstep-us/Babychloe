@@ -275,7 +275,7 @@ export default function ParkWorld3D({
         : getLocalSpawnOffset(),
     z:
       savedInitPos3D && Number.isFinite(savedInitPos3D.z3d)
-        ? Math.max(-490, Math.min(2360, savedInitPos3D.z3d))
+        ? Math.max(-490, Math.min(3110, savedInitPos3D.z3d))
         : activeRoom === 'ash-room'
           ? 235
           : 190,
@@ -608,7 +608,7 @@ export default function ParkWorld3D({
     positionedRef.current = positionedMemorials;
     const activeList = positionedMemorials.filter((m) => m.space === roomRef.current);
     const maxMonZ = activeList.reduce((mx, m) => Math.max(mx, m.worldZ), 200);
-    maxZRef.current = Math.max(2360, maxMonZ + 320);
+    maxZRef.current = Math.max(3110, maxMonZ + 1070);
   }, [positionedMemorials, activeRoom]);
 
   useEffect(() => {
@@ -1204,7 +1204,7 @@ export default function ParkWorld3D({
         }
         // Expanded Main Stone Walkway along Z (extended behind Ash Room gate)
         const pathColor = atm === 'night' ? '#3d4952' : '#c6bea9';
-        for (let pz = -462; pz < maxZ - 20; pz += 66) {
+        for (let pz = -462; pz < Math.min(maxZ - 20, 2240); pz += 66) {
           drawGroundPoly(
             [
               [-72, 0, pz],
@@ -1217,7 +1217,7 @@ export default function ParkWorld3D({
           );
         }
         // Expanded Cross paths spanning all 10+10 columns (extend middle row to right-side gate)
-        for (let cz = -45; cz < maxZ - 40; cz += 250) {
+        for (let cz = -45; cz < Math.min(maxZ - 40, 2150); cz += 250) {
           for (let px = -1440; px < 1440; px += 180) {
             drawGroundPoly(
               [
@@ -1258,7 +1258,7 @@ export default function ParkWorld3D({
         });
       } else {
         // Ash Room Crimson & Gold Sanctuary Runners (10 rows: 10 left + 10 right niches = 200)
-        for (let pz = -424; pz < maxZ - 20; pz += 62) {
+        for (let pz = -424; pz < Math.min(maxZ - 20, 2240); pz += 62) {
           drawGroundPoly(
             [
               [-64, 0.5, pz],
