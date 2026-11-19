@@ -2709,15 +2709,23 @@ export default function ParkWorld3D({
                 <button
                   type="button"
                   className={zoomOverview === 0 ? 'btn-primary' : 'btn-ghost'}
-                  style={{ flex: 1, padding: '3px 6px', fontSize: '0.7rem', justifyContent: 'center' }}
+                  style={{ flex: 1, padding: '3px 5px', fontSize: '0.7rem', justifyContent: 'center' }}
                   onClick={() => setZoomOverview(0)}
                 >
                   1×
                 </button>
                 <button
                   type="button"
+                  className={zoomOverview === 25 ? 'btn-primary' : 'btn-ghost'}
+                  style={{ flex: 1, padding: '3px 5px', fontSize: '0.7rem', justifyContent: 'center' }}
+                  onClick={() => setZoomOverview(25)}
+                >
+                  25%
+                </button>
+                <button
+                  type="button"
                   className={zoomOverview === 50 ? 'btn-primary' : 'btn-ghost'}
-                  style={{ flex: 1, padding: '3px 6px', fontSize: '0.7rem', justifyContent: 'center' }}
+                  style={{ flex: 1, padding: '3px 5px', fontSize: '0.7rem', justifyContent: 'center' }}
                   onClick={() => setZoomOverview(50)}
                 >
                   50%
@@ -2725,7 +2733,7 @@ export default function ParkWorld3D({
                 <button
                   type="button"
                   className={zoomOverview === 100 ? 'btn-primary' : 'btn-ghost'}
-                  style={{ flex: 1, padding: '3px 6px', fontSize: '0.7rem', justifyContent: 'center' }}
+                  style={{ flex: 1, padding: '3px 5px', fontSize: '0.7rem', justifyContent: 'center' }}
                   onClick={() => setZoomOverview(100)}
                 >
                   All
