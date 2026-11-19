@@ -59,7 +59,7 @@ let currentAtmosphere = 'dusk';
 let isAppForeground = typeof document === 'undefined' ? true : !document.hidden;
 
 export const DEFAULT_SOUND_VOLUMES = {
-  master: 1.0,
+  master: 0.6,
   music: 0.3,
   weather: 0.3,
   thunder: 0.3,

@@ -1946,9 +1946,9 @@ export default function App() {
                   const next = { ...DEFAULT_SOUND_VOLUMES };
                   setSoundVolumesState(next);
                   setSoundVolumes(next);
-                  showGlobalNotice('🔊 Reset volumes: Master 100%, effects 30%.');
+                  showGlobalNotice('🔊 Reset volumes: Master 60%, effects 30%.');
                 }}
-                title="Reset Master to 100% and all other sounds to 30%"
+                title="Reset Master to 60% and all other sounds to 30%"
               >
                 ↺ Reset to defaults
               </button>

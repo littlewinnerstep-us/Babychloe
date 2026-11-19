@@ -30,7 +30,7 @@ const TOUR_STEPS = [
     selector: '[data-tour="volume-btn"]',
     icon: '🔊',
     title: 'Volume Mixer & Tips Switch',
-    desc: 'Adjust Master (default 100%) and individual effect sounds (default 30%), reset defaults, or toggle guide tips.',
+    desc: 'Adjust Master (default 60%) and individual effect sounds (default 30%), reset defaults, or toggle guide tips.',
   },
   {
     selector: '[data-tour="view-mode"]',
