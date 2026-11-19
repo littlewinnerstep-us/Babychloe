@@ -3045,3 +3045,81 @@ body.is-mobile-hud .world-container .world-proximity-card {
   padding: 0;
   cursor: pointer;
 }
+
+/* Custom Assets, Lively & Glowing Effects */
+@keyframes fxPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+@keyframes fxBreathing {
+  0%, 100% { transform: scale(1); opacity: 0.92; }
+  50% { transform: scale(1.035); opacity: 1; }
+}
+
+@keyframes fxFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes fxFlicker {
+  0%, 100% { opacity: 1; }
+  35% { opacity: 0.78; }
+  65% { opacity: 0.96; }
+  82% { opacity: 0.72; }
+}
+
+@keyframes fxShimmer {
+  0%, 100% { filter: brightness(1) saturate(1); }
+  50% { filter: brightness(1.18) saturate(1.22); }
+}
+
+.fx-glow {
+  box-shadow: 0 0 var(--fx-glow-px, 16px) var(--fx-glow, rgba(245, 208, 118, 0.75)) !important;
+}
+
+.fx-lively {
+  animation: fxFloat 2.6s ease-in-out infinite, fxShimmer 2.8s ease-in-out infinite;
+}
+
+.fx-pulse {
+  animation: fxPulse 1.8s ease-in-out infinite;
+}
+
+.fx-breathing {
+  animation: fxBreathing 3.4s ease-in-out infinite;
+}
+
+.fx-float {
+  animation: fxFloat 2.4s ease-in-out infinite;
+}
+
+.fx-flicker {
+  animation: fxFlicker 1.3s ease-in-out infinite;
+}
+
+.fx-shimmer {
+  animation: fxShimmer 2.5s ease-in-out infinite;
+}
+
+.fx-sparkle::after {
+  content: '✨';
+  position: absolute;
+  top: -6px;
+  right: -5px;
+  font-size: 0.72em;
+  pointer-events: none;
+  animation: fxFlicker 1.5s ease-in-out infinite;
+}
+
+.custom-offering-img {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.monument-stage.full .custom-offering-img {
+  width: 28px;
+  height: 28px;
+}

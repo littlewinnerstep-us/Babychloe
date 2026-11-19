@@ -1,18 +1,26 @@
-import React, { useState } from 'react';
-import { X, Upload, Sparkles } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { X, Upload, Sparkles, Link2, ShieldCheck } from 'lucide-react';
 import MonumentVisual from './MonumentVisual';
+import AdminAssetStudio from './AdminAssetStudio';
 import {
   MONUMENT_STYLES,
   PHOTO_PRESETS,
   SPECIES_LIST,
+  MAX_PLOTS_PER_GARDEN,
   getNextPlotCode,
+  getAdminSlotCode,
+  getUsedSlotsSet,
 } from '../data/memorialData';
 import { compressImageFile } from '../utils/imageCompressor';
+import { ASSET_EFFECTS, isSafeImageUrl, normalizeHex } from '../utils/customAssets';
 
 export default function CreateMemorialModal({
   currentUser,
   memorials = [],
   defaultSpecies = 'Dog',
+  isAdminUser = false,
+  adminAssets = [],
+  onPublishAsset,
   onClose,
   onCreate,
 }) {
@@ -28,8 +36,30 @@ export default function CreateMemorialModal({
   const [story, setStory] = useState('');
   const [favoriteTreat, setFavoriteTreat] = useState('');
   const [visibility, setVisibility] = useState('public');
+  const [customHex, setCustomHex] = useState('');
+  const [glowOn, setGlowOn] = useState(false);
+  const [glowColor, setGlowColor] = useState('#f5d076');
+  const [glowStrength, setGlowStrength] = useState(0.65);
+  const [effects, setEffects] = useState([]);
+  const [adminSlotMode, setAdminSlotMode] = useState('auto'); // 'auto' | 'custom'
+  const [adminSlotNum, setAdminSlotNum] = useState(1);
+  const [photoLinkDraft, setPhotoLinkDraft] = useState('');
+  const [photoLinkError, setPhotoLinkError] = useState('');
+  const [showAssetBuilder, setShowAssetBuilder] = useState(false);
 
-  const autoCode = getNextPlotCode(memorials, species, space);
+  const autoCode = getNextPlotCode(memorials, species, space, isAdminUser);
+  const usedSlots = useMemo(() => getUsedSlotsSet(memorials, species, space), [memorials, species, space]);
+  const chosenAdminCode =
+    isAdminUser && adminSlotMode === 'custom'
+      ? getAdminSlotCode(space, adminSlotNum)
+      : autoCode;
+  const adminSlotConflict =
+    isAdminUser && adminSlotMode === 'custom' && usedSlots.has(Number(adminSlotNum));
+
+  const customStylesForSpace = useMemo(() => {
+    const wanted = space === 'ash-room' ? 'niche-style' : 'plot-style';
+    return (adminAssets || []).filter((a) => a && !a.deletedAt && a.kind === wanted);
+  }, [adminAssets, space]);
 
   const handleSpaceChange = (next) => {
     setSpace(next);
@@ -49,6 +79,7 @@ export default function CreateMemorialModal({
     e.preventDefault();
     const cleanName = name.trim();
     if (!cleanName) return;
+    if (adminSlotConflict) return;
 
     const newMemorial = {
       id: `mem-${Date.now()}`,
@@ -58,7 +89,13 @@ export default function CreateMemorialModal({
       breed: breed.trim() || species,
       space,
       styleId,
-      locationCode: autoCode,
+      locationCode: chosenAdminCode,
+      adminManaged: Boolean(isAdminUser && adminSlotMode === 'custom'),
+      customHex: customHex ? normalizeHex(customHex, '#d8dfcf') : '',
+      glowOn: isAdminUser ? Boolean(glowOn) : false,
+      glowColor: isAdminUser && glowOn ? normalizeHex(glowColor, '#f5d076') : '',
+      glowStrength: isAdminUser ? glowStrength : 0,
+      effects: isAdminUser ? effects : [],
       zoneName: space === 'ash-room' ? `${species} Hall of Serenity` : `${species} Meadow`,
       birthDate,
       passedDate,
@@ -110,6 +147,11 @@ export default function CreateMemorialModal({
     birthDate,
     passedDate,
     photo,
+    customHex: customHex ? normalizeHex(customHex, '#d8dfcf') : '',
+    glowOn: isAdminUser ? Boolean(glowOn) : false,
+    glowColor: isAdminUser && glowOn ? normalizeHex(glowColor, '#f5d076') : '',
+    glowStrength: isAdminUser ? glowStrength : 0,
+    effects: isAdminUser ? effects : [],
     activeOfferings: space === 'ash-room' ? ['🕯️', '🪔', '🌸'] : ['🕯️', '🌸'],
   };
 
@@ -132,7 +174,7 @@ export default function CreateMemorialModal({
 
         {/* Live Preview */}
         <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 14 }}>
-          <MonumentVisual memorial={previewMemorial} mode="compact" />
+          <MonumentVisual memorial={previewMemorial} mode="compact" adminAssets={adminAssets} />
         </div>
 
         <form onSubmit={handleSubmit} className="form-grid">
@@ -180,6 +222,68 @@ export default function CreateMemorialModal({
                   </div>
                 </button>
               ))}
+              {customStylesForSpace.map((cs) => (
+                <button
+                  key={cs.id}
+                  type="button"
+                  className={`style-option ${styleId === `custom:${cs.id}` ? 'active' : ''}`}
+                  onClick={() => setStyleId(`custom:${cs.id}`)}
+                  style={{
+                    borderColor: styleId === `custom:${cs.id}` ? cs.accentColor : undefined,
+                  }}
+                >
+                  <strong style={{ fontSize: '0.82rem' }}>
+                    {cs.emoji} {cs.name}
+                  </strong>
+                  <div style={{ fontSize: '0.71rem', color: 'var(--text-muted)' }}>
+                    Admin Custom {cs.glowOn ? '• ✨ Glow' : ''}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Customer Color Trim for Visitors & Admins */}
+            <div
+              style={{
+                marginTop: 8,
+                padding: '8px 10px',
+                borderRadius: 10,
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(154,184,159,0.16)',
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                🎨 Custom Color Trim (Hex):
+              </span>
+              <input
+                type="color"
+                value={normalizeHex(customHex, '#d8dfcf')}
+                onChange={(e) => setCustomHex(e.target.value)}
+                style={{ width: 28, height: 26, borderRadius: 6, cursor: 'pointer' }}
+              />
+              <input
+                type="text"
+                maxLength={7}
+                className="input-control"
+                value={customHex}
+                onChange={(e) => setCustomHex(e.target.value)}
+                placeholder="#rrggbb (optional)"
+                style={{ width: 130, fontFamily: 'monospace', padding: '4px 8px' }}
+              />
+              {customHex && (
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  style={{ fontSize: '0.72rem', padding: '3px 8px' }}
+                  onClick={() => setCustomHex('')}
+                >
+                  Reset
+                </button>
+              )}
             </div>
           </div>
 
@@ -254,17 +358,181 @@ export default function CreateMemorialModal({
               />
             </div>
             <div>
-              <label className="field-label">Auto Sequential Plot / Niche</label>
+              <label className="field-label">
+                {isAdminUser ? 'Plot / Niche Slot (Admin: 1–200)' : 'Auto Sequential Plot / Niche'}
+              </label>
               <input
                 type="text"
                 readOnly
                 className="input-control"
-                value={autoCode}
+                value={chosenAdminCode}
                 style={{ fontWeight: 700, opacity: 0.9, cursor: 'default' }}
-                title="Auto-generated sequential code so plots are never duplicated"
+                title="Sequential code scoped per species gate"
               />
             </div>
           </div>
+
+          {isAdminUser && (
+            <div
+              style={{
+                background: 'rgba(243, 217, 139, 0.08)',
+                border: '1px solid rgba(243, 217, 139, 0.32)',
+                borderRadius: 12,
+                padding: 12,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <strong style={{ fontSize: '0.86rem', color: '#f3d98b', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <ShieldCheck size={15} /> Admin Enshrine Studio (Slots 1–200, Link, Glow &amp; Effects)
+                </strong>
+                {onPublishAsset && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ fontSize: '0.74rem', padding: '4px 10px' }}
+                    onClick={() => setShowAssetBuilder((v) => !v)}
+                  >
+                    {showAssetBuilder ? 'Hide Asset Publisher' : '✨ Publish Custom Asset'}
+                  </button>
+                )}
+              </div>
+
+              {showAssetBuilder && onPublishAsset && (
+                <AdminAssetStudio
+                  compact
+                  defaultKind={space === 'ash-room' ? 'niche-style' : 'plot-style'}
+                  adminAssets={adminAssets}
+                  onPublishAsset={onPublishAsset}
+                  onSelectCreatedAsset={(created) => {
+                    if (
+                      (space === 'ash-room' && created.kind === 'niche-style') ||
+                      (space === 'tombstone' && created.kind === 'plot-style')
+                    ) {
+                      setStyleId(`custom:${created.id}`);
+                    }
+                  }}
+                />
+              )}
+
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.78rem', color: '#cfe0d4' }}>Slot Assignment:</span>
+                <button
+                  type="button"
+                  className={`chip-btn ${adminSlotMode === 'auto' ? 'active' : ''}`}
+                  onClick={() => setAdminSlotMode('auto')}
+                >
+                  Auto ({autoCode})
+                </button>
+                <button
+                  type="button"
+                  className={`chip-btn ${adminSlotMode === 'custom' ? 'active' : ''}`}
+                  onClick={() => setAdminSlotMode('custom')}
+                >
+                  Pick Slot 1–200 ({species})
+                </button>
+                {adminSlotMode === 'custom' && (
+                  <input
+                    type="number"
+                    min={1}
+                    max={MAX_PLOTS_PER_GARDEN}
+                    value={adminSlotNum}
+                    onChange={(e) =>
+                      setAdminSlotNum(Math.max(1, Math.min(MAX_PLOTS_PER_GARDEN, Number(e.target.value) || 1)))
+                    }
+                    className="input-control"
+                    style={{ width: 90, padding: '4px 8px' }}
+                  />
+                )}
+              </div>
+              {adminSlotConflict && (
+                <p style={{ margin: 0, color: '#fca5a5', fontSize: '0.78rem' }}>
+                  ⚠️ Slot {chosenAdminCode} in {species} is already occupied. Pick another number or edit it in Admin Backend.
+                </p>
+              )}
+
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Link2 size={14} style={{ color: '#9ab89f' }} />
+                <input
+                  type="url"
+                  className="input-control"
+                  value={photoLinkDraft}
+                  onChange={(e) => setPhotoLinkDraft(e.target.value)}
+                  placeholder="Optional portrait / custom image https:// link"
+                  style={{ flex: 1, minWidth: 180, padding: '5px 8px' }}
+                />
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ padding: '5px 10px', fontSize: '0.76rem' }}
+                  onClick={() => {
+                    const clean = photoLinkDraft.trim();
+                    if (!clean.startsWith('https://') || !isSafeImageUrl(clean)) {
+                      setPhotoLinkError('Enter a valid https:// image link.');
+                      return;
+                    }
+                    setPhotoLinkError('');
+                    setPhoto(clean);
+                  }}
+                >
+                  Apply Link
+                </button>
+              </div>
+              {photoLinkError && <p style={{ margin: 0, color: '#fca5a5', fontSize: '0.76rem' }}>{photoLinkError}</p>}
+
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={glowOn} onChange={(e) => setGlowOn(e.target.checked)} />
+                  ✨ Glow Effect
+                </label>
+                {glowOn && (
+                  <>
+                    <input
+                      type="color"
+                      value={normalizeHex(glowColor, '#f5d076')}
+                      onChange={(e) => setGlowColor(e.target.value)}
+                      style={{ width: 28, height: 24, borderRadius: 6 }}
+                    />
+                    <input
+                      type="text"
+                      maxLength={7}
+                      value={glowColor}
+                      onChange={(e) => setGlowColor(e.target.value)}
+                      className="input-control"
+                      style={{ width: 88, fontFamily: 'monospace', padding: '3px 6px' }}
+                    />
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="1"
+                      step="0.05"
+                      value={glowStrength}
+                      onChange={(e) => setGlowStrength(Number(e.target.value))}
+                    />
+                  </>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {ASSET_EFFECTS.map((eff) => (
+                  <button
+                    key={eff.id}
+                    type="button"
+                    className={`chip-btn ${effects.includes(eff.id) ? 'active' : ''}`}
+                    onClick={() =>
+                      setEffects((prev) =>
+                        prev.includes(eff.id) ? prev.filter((x) => x !== eff.id) : [...prev, eff.id]
+                      )
+                    }
+                  >
+                    {eff.icon} {eff.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="form-row-2">
             <div>

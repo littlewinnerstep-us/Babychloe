@@ -31,7 +31,15 @@ import {
   getSpeciesEmoji,
   normalizeAndDeduplicateMemorials,
   isMemorialOwner,
+  getAdminSlotCode,
+  getUsedSlotsSet,
+  MAX_PLOTS_PER_GARDEN,
 } from './data/memorialData';
+import {
+  loadCustomerHoldPrefs,
+  saveCustomerHoldPrefs,
+  makeOfferingToken,
+} from './utils/customAssets';
 import MonumentVisual from './components/MonumentVisual';
 import ParkWorld2D from './components/ParkWorld2D';
 import ParkWorld3D from './components/ParkWorld3D';
@@ -72,6 +80,9 @@ import {
   normalizeAccountNameFix,
   getAdminConfig,
   getAdminNotifications,
+  getAdminAssets,
+  publishAdminAsset,
+  deleteAdminAsset,
   getActiveGroup,
   getGroupChatHistory,
   createGroupChat,
@@ -278,10 +289,17 @@ export default function App() {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [adminConfig, setAdminConfig] = useState(getAdminConfig);
   const [notifications, setNotifications] = useState(getAdminNotifications);
+  const [adminAssets, setAdminAssets] = useState(() => getAdminAssets());
+  const [customerHold, setCustomerHold] = useState(loadCustomerHoldPrefs);
   const [readNotifIds, setReadNotifIds] = useState(() => loadArrayPref(STORAGE_READ_NOTIFS_KEY));
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
+  const isAdminUser = Boolean(
+    adminAuthenticated ||
+      currentUser?.role === 'admin' ||
+      currentUser?.usernameLower === 'admin'
+  );
   const [activeTab, setActiveTab] = useState(() => {
     try {
       const savedRoom = typeof window !== 'undefined' ? localStorage.getItem('evergreen_paws_active_room_v1') : null;
@@ -666,6 +684,7 @@ export default function App() {
 
   const visibleMemorials = useMemo(() => {
     return memorials.filter((m) => {
+      if (!m || m.deletedAt) return false;
       const isOwner = isMemorialOwner(m, currentUser);
       if (m.visibility === 'private' && !isOwner) return false;
       return true;
@@ -702,7 +721,7 @@ export default function App() {
   }, [visibleMemorials]);
 
   const selectedMemorial = useMemo(
-    () => memorials.find((m) => m.id === selectedMemorialId) || null,
+    () => memorials.find((m) => m.id === selectedMemorialId && !m.deletedAt) || null,
     [memorials, selectedMemorialId]
   );
 
@@ -974,6 +993,16 @@ export default function App() {
             epitaph: incoming.epitaph || existing.epitaph,
             story: incoming.story || existing.story,
             favoriteTreat: incoming.favoriteTreat || existing.favoriteTreat,
+            adminManaged: incoming.adminManaged !== undefined ? incoming.adminManaged : existing.adminManaged,
+            deletedAt: incoming.deletedAt !== undefined ? incoming.deletedAt : existing.deletedAt,
+            isBlankPlaceholder: incoming.isBlankPlaceholder !== undefined ? incoming.isBlankPlaceholder : existing.isBlankPlaceholder,
+            customHex: incoming.customHex !== undefined ? incoming.customHex : existing.customHex,
+            customAccentHex: incoming.customAccentHex !== undefined ? incoming.customAccentHex : existing.customAccentHex,
+            glowColor: incoming.glowColor !== undefined ? incoming.glowColor : existing.glowColor,
+            glowOn: incoming.glowOn !== undefined ? incoming.glowOn : existing.glowOn,
+            glowStrength: incoming.glowStrength !== undefined ? incoming.glowStrength : existing.glowStrength,
+            effects: Array.isArray(incoming.effects) ? incoming.effects : existing.effects,
+            customImageUrl: incoming.customImageUrl !== undefined ? incoming.customImageUrl : existing.customImageUrl,
             updatedAt: Math.max(existing.updatedAt || 0, incoming.updatedAt || 0),
           }
         : {}),
@@ -995,9 +1024,10 @@ export default function App() {
 
   const buildWithOffering = (m, offering, visitorName) => {
     const now = Date.now();
+    const token = offering.token || offering.emoji;
     const nextActive = [
-      offering.emoji,
-      ...(m.activeOfferings || []).filter((e, i) => i < 5 || e !== offering.emoji),
+      token,
+      ...(m.activeOfferings || []).filter((e, i) => i < 5 || e !== token),
     ].slice(0, 6);
     return {
       ...m,
@@ -1011,6 +1041,8 @@ export default function App() {
         {
           id: `o-${now}-${Math.random().toString(36).slice(2, 6)}`,
           emoji: offering.emoji,
+          token,
+          color: offering.color || '',
           label: offering.label,
           visitor: visitorName,
           createdAt: now,
@@ -1066,6 +1098,9 @@ export default function App() {
       },
       onNotificationsChange: (list) => {
         setNotifications(list);
+      },
+      onAssetsChange: (list) => {
+        setAdminAssets(list);
       },
       onGroupChange: (grp) => {
         setActiveGroup(grp);
@@ -1347,6 +1382,185 @@ export default function App() {
     setActiveTab(finalMemorial.space === 'ash-room' ? 'ash-room' : 'tombstone');
     setActiveRoom(finalMemorial.space === 'ash-room' ? 'ash-room' : 'tombstone');
     setSelectedMemorialId(finalMemorial.id);
+  };
+
+  const handleUpdateCustomerHold = (patch) => {
+    const next = saveCustomerHoldPrefs({ ...customerHold, ...patch });
+    setCustomerHold(next);
+  };
+
+  const handleHoldFlowerEmote = () => {
+    const emoji = customerHold.flowerEmoji || '🌸';
+    const color = customerHold.flowerColor || '#ff7eb6';
+    const token = makeOfferingToken({ emoji, color });
+    sendMultiplayerEmote(token, `Holding ${emoji}`);
+  };
+
+  const handleAdminSaveMemorial = (payload) => {
+    if (!isAdminUser) {
+      return { ok: false, error: 'Admin permission required.' };
+    }
+    const now = Date.now();
+    const targetSpecies = payload.species || 'Dog';
+    const targetSpace = payload.space === 'ash-room' ? 'ash-room' : 'tombstone';
+    const slotNum = Math.max(1, Math.min(MAX_PLOTS_PER_GARDEN, Number(payload.slotNumber) || 1));
+    const nextCode = getAdminSlotCode(targetSpace, slotNum);
+
+    const existingList = memorialsRef.current;
+    const conflicting = existingList.find(
+      (m) =>
+        m &&
+        !m.deletedAt &&
+        m.id !== payload.id &&
+        (m.species || 'Dog') === targetSpecies &&
+        (m.space === 'ash-room' ? 'ash-room' : 'tombstone') === targetSpace &&
+        m.locationCode === nextCode
+    );
+    if (conflicting) {
+      return {
+        ok: false,
+        error: `${nextCode} in ${targetSpecies} is already occupied by ${conflicting.name}. Choose an empty slot or edit that plot directly.`,
+      };
+    }
+
+    const isEdit = Boolean(payload.id && existingList.some((m) => m.id === payload.id));
+    const base = isEdit ? existingList.find((m) => m.id === payload.id) : null;
+    const savedRaw = {
+      ...(base || {}),
+      ...payload,
+      id: payload.id || `mem-admin-${now}-${Math.random().toString(36).slice(2, 6)}`,
+      species: targetSpecies,
+      space: targetSpace,
+      locationCode: nextCode,
+      zoneName:
+        payload.zoneName ||
+        (targetSpace === 'ash-room'
+          ? `${targetSpecies} Sanctuary Columbaria`
+          : `${targetSpecies} Heritage Meadow`),
+      adminManaged: true,
+      deletedAt: null,
+      updatedAt: now,
+      createdAt: base?.createdAt || now,
+      candlesCount: base?.candlesCount ?? 0,
+      incenseCount: base?.incenseCount ?? 0,
+      flowersCount: base?.flowersCount ?? 0,
+      treatsCount: base?.treatsCount ?? 0,
+      visitsCount: base?.visitsCount ?? 0,
+      activeOfferings: base?.activeOfferings || [],
+      tributes: base?.tributes || [],
+      memories: base?.memories || [],
+      offeringsLog: base?.offeringsLog || [],
+      traits: Array.isArray(payload.traits) ? payload.traits : (base?.traits || ['Beloved']),
+    };
+
+    const nextRawList = isEdit
+      ? existingList.map((m) => (m.id === savedRaw.id ? savedRaw : m))
+      : [savedRaw, ...existingList];
+    const normalized = normalizeAndDeduplicateMemorials(nextRawList);
+    const finalSaved = normalized.find((m) => m.id === savedRaw.id) || savedRaw;
+    setMemorials(normalized);
+    if (finalSaved.visibility !== 'private') {
+      publishSharedMemorial(finalSaved);
+      sendMultiplayerAction({ kind: 'create_memorial', memorial: finalSaved });
+    }
+    showGlobalNotice(`🛡️ Saved ${finalSaved.locationCode} (${finalSaved.name}) in ${finalSaved.species}.`);
+    return { ok: true, memorial: finalSaved };
+  };
+
+  const handleAdminDeleteMemorial = (memorialId) => {
+    if (!isAdminUser) return;
+    const now = Date.now();
+    let deletedTarget = null;
+    const nextList = memorialsRef.current.map((m) => {
+      if (m.id !== memorialId) return m;
+      deletedTarget = { ...m, deletedAt: now, updatedAt: now };
+      return deletedTarget;
+    });
+    setMemorials(nextList);
+    if (selectedMemorialId === memorialId) {
+      setSelectedMemorialId(null);
+    }
+    if (deletedTarget && deletedTarget.visibility !== 'private') {
+      publishSharedMemorial(deletedTarget);
+    }
+    showGlobalNotice('🗑️ Plot/niche moved to Admin Trash.');
+  };
+
+  const handleAdminRestoreMemorial = (memorialId) => {
+    if (!isAdminUser) return;
+    const now = Date.now();
+    let restoredId = memorialId;
+    const nextRaw = memorialsRef.current.map((m) => {
+      if (m.id !== memorialId) return m;
+      return { ...m, deletedAt: null, adminManaged: true, updatedAt: now };
+    });
+    const normalized = normalizeAndDeduplicateMemorials(nextRaw);
+    const finalRestored = normalized.find((m) => m.id === restoredId);
+    setMemorials(normalized);
+    if (finalRestored && finalRestored.visibility !== 'private') {
+      publishSharedMemorial(finalRestored);
+    }
+    showGlobalNotice(`♻️ Restored ${finalRestored?.locationCode || 'memorial'}.`);
+  };
+
+  const handleBulkCreateBlankSlots = ({ species, space, styleId = 'granite' }) => {
+    if (!isAdminUser) return { created: 0 };
+    const targetSpecies = species || 'Dog';
+    const targetSpace = space === 'ash-room' ? 'ash-room' : 'tombstone';
+    const used = getUsedSlotsSet(memorialsRef.current, targetSpecies, targetSpace);
+    const now = Date.now();
+    const created = [];
+    for (let num = 1; num <= 20; num += 1) {
+      if (used.has(num)) continue;
+      const code = getAdminSlotCode(targetSpace, num);
+      created.push({
+        id: `mem-admin-${targetSpecies.toLowerCase().replace(/[^a-z0-9]/g, '')}-${targetSpace}-${num}-${now}`,
+        name: `Open ${code}`,
+        species: targetSpecies,
+        breed: targetSpace === 'ash-room' ? 'Open Ash Niche' : 'Open Memorial Plot',
+        years: 'Open Slot',
+        space: targetSpace,
+        styleId: styleId || (targetSpace === 'ash-room' ? 'celadon-urn' : 'granite'),
+        locationCode: code,
+        zoneName:
+          targetSpace === 'ash-room'
+            ? `${targetSpecies} Sanctuary Columbaria`
+            : `${targetSpecies} Heritage Meadow`,
+        photo: targetSpace === 'ash-room' ? '⚱️' : '🕊️',
+        epitaph: 'Reserved space prepared for remembrance.',
+        story: `Created by Park Admin for ${targetSpecies} gate (${code}).`,
+        favoriteTreat: 'Quiet sunlight',
+        traits: ['Open Plot'],
+        ownerName: 'Park Admin',
+        ownerUsername: 'admin',
+        visibility: 'public',
+        adminManaged: true,
+        isBlankPlaceholder: true,
+        candlesCount: 0,
+        incenseCount: 0,
+        flowersCount: 0,
+        treatsCount: 0,
+        visitsCount: 0,
+        activeOfferings: [],
+        tributes: [],
+        memories: [],
+        offeringsLog: [],
+        createdAt: now + num,
+        updatedAt: now + num,
+      });
+    }
+    if (created.length === 0) {
+      showGlobalNotice(`ℹ️ All slots 1–20 in ${targetSpecies} (${targetSpace}) are already filled.`);
+      return { created: 0 };
+    }
+    const normalized = normalizeAndDeduplicateMemorials([...created, ...memorialsRef.current]);
+    setMemorials(normalized);
+    created.forEach((c) => {
+      const synced = normalized.find((m) => m.id === c.id) || c;
+      publishSharedMemorial(synced);
+    });
+    showGlobalNotice(`✨ Created ${created.length} blank slots (1–20) for ${targetSpecies} ${targetSpace === 'ash-room' ? 'Ash Room' : 'Tombstones'}.`);
+    return { created: created.length };
   };
 
   const handleRequestSelectSpecies = (nextSpecies) => {
@@ -2110,6 +2324,10 @@ export default function App() {
             zoomGuideTipAt={zoomGuideTipAt}
             onClearZoomGuideTip={() => setZoomGuideTipAt(0)}
             isFirstVisitGuideOpen={showFirstGuide}
+            adminAssets={adminAssets}
+            customerHold={customerHold}
+            onUpdateCustomerHold={handleUpdateCustomerHold}
+            onHoldFlowerEmote={handleHoldFlowerEmote}
           />
         ) : viewMode === 'world2d' && activeTab !== 'sanctuary' && !showOnlyFavorites ? (
           <ParkWorld2D
@@ -2178,6 +2396,10 @@ export default function App() {
             onRequireLogin={() => setShowAuthModal(true)}
             zoomGuideTipAt={zoomGuideTipAt}
             onClearZoomGuideTip={() => setZoomGuideTipAt(0)}
+            adminAssets={adminAssets}
+            customerHold={customerHold}
+            onUpdateCustomerHold={handleUpdateCustomerHold}
+            onHoldFlowerEmote={handleHoldFlowerEmote}
           />
         ) : activeTab === 'sanctuary' && !currentUser && !showOnlyFavorites ? (
           <div className="empty-state">
@@ -2222,7 +2444,7 @@ export default function App() {
                   className={`memorial-card ${m.space === 'ash-room' ? 'ash-card' : ''}`}
                   onClick={() => handleOpenVisit(m.id)}
                 >
-                  <MonumentVisual memorial={m} mode="compact" />
+                  <MonumentVisual memorial={m} mode="compact" adminAssets={adminAssets} />
                   <div className="card-body">
                     <div className="card-top-row">
                       <div>
@@ -2318,6 +2540,10 @@ export default function App() {
           onAddMemory={handleAddMemory}
           onUpdateMemorial={handleUpdateMemorial}
           onRequireLogin={() => setShowAuthModal(true)}
+          adminAssets={adminAssets}
+          customerHold={customerHold}
+          onUpdateCustomerHold={handleUpdateCustomerHold}
+          onHoldFlowerEmote={handleHoldFlowerEmote}
         />
       )}
 
@@ -2326,6 +2552,9 @@ export default function App() {
           currentUser={currentUser}
           memorials={memorials}
           defaultSpecies={activeSpecies}
+          isAdminUser={isAdminUser}
+          adminAssets={adminAssets}
+          onPublishAsset={publishAdminAsset}
           onClose={() => setShowCreateModal(false)}
           onCreate={handleCreateMemorial}
         />
@@ -2362,9 +2591,20 @@ export default function App() {
         <AdminBackendModal
           adminAuthenticated={adminAuthenticated}
           onSetAdminAuthenticated={setAdminAuthenticated}
+          isAdminUser={isAdminUser}
           adminConfig={adminConfig}
           notifications={notifications}
           accountsList={accountsList}
+          allMemorials={memorials}
+          adminAssets={adminAssets}
+          activeSpecies={activeSpecies}
+          activeRoom={activeRoom}
+          onPublishAsset={publishAdminAsset}
+          onDeleteAsset={deleteAdminAsset}
+          onSaveAdminMemorial={handleAdminSaveMemorial}
+          onDeleteAdminMemorial={handleAdminDeleteMemorial}
+          onRestoreAdminMemorial={handleAdminRestoreMemorial}
+          onBulkCreateBlankSlots={handleBulkCreateBlankSlots}
           totalMemorials={visibleMemorials.length}
           totalAccounts={accountsList.length}
           onClose={() => setShowAdminModal(false)}

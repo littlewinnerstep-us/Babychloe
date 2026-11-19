@@ -25,6 +25,11 @@ import {
   getDailyLimitNotice,
 } from '../utils/dailyLimits';
 import { compressImageFile } from '../utils/imageCompressor';
+import {
+  CUSTOMER_FLOWER_PRESETS,
+  makeOfferingToken,
+  normalizeHex,
+} from '../utils/customAssets';
 
 const EMOTICONS = [
   '🐾', '❤️', '🕯️', '🌸', '🌈', '🙏', '🐶', '🐱',
@@ -47,6 +52,10 @@ export default function VisitMemorialModal({
   onAddMemory,
   onUpdateMemorial,
   onRequireLogin,
+  adminAssets = [],
+  customerHold = { flowerEmoji: '🌸', flowerColor: '#ff7eb6', glowOn: true },
+  onUpdateCustomerHold,
+  onHoldFlowerEmote,
 }) {
   const [activeTab, setActiveTab] = useState(initialOpenMessagePopup ? 'tributes' : 'sanctuary');
   const [pickerOpen, setPickerOpen] = useState(null); // 'flowers' | 'treats' | null
@@ -271,7 +280,7 @@ export default function VisitMemorialModal({
         </div>
 
         {/* Visual Stage */}
-        <MonumentVisual memorial={memorial} mode="full" />
+        <MonumentVisual memorial={memorial} mode="full" adminAssets={adminAssets} />
 
         {/* Interactive Ritual Controls */}
         {armtipText && <div className="armtip-notif" style={{ marginTop: 12 }}>{armtipText}</div>}
@@ -367,17 +376,132 @@ export default function VisitMemorialModal({
         </div>
 
         {pickerOpen === 'flowers' && (
-          <div className="picker-popover">
-            {OFFERING_TYPES.flowers.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                className="picker-item"
-                onClick={() => triggerOffering(f)}
-              >
-                {f.emoji} {f.label}
-              </button>
-            ))}
+          <div className="picker-popover" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {OFFERING_TYPES.flowers.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  className="picker-item"
+                  onClick={() => triggerOffering(f)}
+                >
+                  {f.emoji} {f.label}
+                </button>
+              ))}
+              {adminAssets
+                .filter((a) => a && !a.deletedAt && a.kind === 'flower')
+                .map((af) => (
+                  <button
+                    key={af.id}
+                    type="button"
+                    className="picker-item"
+                    style={{
+                      borderColor: af.accentColor || '#f3d98b',
+                      boxShadow: af.glowOn ? `0 0 8px ${af.glowColor || af.accentColor}` : undefined,
+                    }}
+                    onClick={() =>
+                      triggerOffering({
+                        id: af.id,
+                        category: 'flower',
+                        emoji: af.emoji || '🌸',
+                        label: af.name,
+                        color: af.primaryColor,
+                        token: makeOfferingToken({ asset: af }),
+                        blessing: `offered glowing ${af.name}`,
+                      })
+                    }
+                  >
+                    {af.imageUrl ? (
+                      <img src={af.imageUrl} alt={af.name} style={{ width: 16, height: 16, borderRadius: 4, objectFit: 'cover', verticalAlign: 'middle', marginRight: 4 }} />
+                    ) : (
+                      <span>{af.emoji} </span>
+                    )}
+                    {af.name}
+                  </button>
+                ))}
+            </div>
+
+            {/* Customer Flower & Hex Color Menu (Available to Regular Visitors) */}
+            <div
+              style={{
+                borderTop: '1px solid rgba(154,184,159,0.2)',
+                paddingTop: 8,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+              }}
+            >
+              <strong style={{ fontSize: '0.78rem', color: '#f3d98b' }}>
+                🎨 Customer Flower &amp; Hex Color Menu
+              </strong>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                {CUSTOMER_FLOWER_PRESETS.map((cf) => (
+                  <button
+                    key={cf.emoji}
+                    type="button"
+                    className={`chip-btn ${customerHold?.flowerEmoji === cf.emoji ? 'active' : ''}`}
+                    style={{ padding: '3px 8px' }}
+                    onClick={() => onUpdateCustomerHold?.({ flowerEmoji: cf.emoji })}
+                    title={cf.label}
+                  >
+                    {cf.emoji}
+                  </button>
+                ))}
+                <input
+                  type="color"
+                  value={normalizeHex(customerHold?.flowerColor, '#ff7eb6')}
+                  onChange={(e) => onUpdateCustomerHold?.({ flowerColor: e.target.value })}
+                  style={{ width: 30, height: 26, borderRadius: 6, cursor: 'pointer' }}
+                  title="Pick flower hex color"
+                />
+                <input
+                  type="text"
+                  maxLength={7}
+                  value={customerHold?.flowerColor || '#ff7eb6'}
+                  onChange={(e) => onUpdateCustomerHold?.({ flowerColor: e.target.value })}
+                  onBlur={() =>
+                    onUpdateCustomerHold?.({
+                      flowerColor: normalizeHex(customerHold?.flowerColor, '#ff7eb6'),
+                    })
+                  }
+                  className="input-control"
+                  style={{ width: 88, fontFamily: 'monospace', padding: '3px 6px' }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ fontSize: '0.76rem', padding: '5px 10px' }}
+                  onClick={() => {
+                    const hex = normalizeHex(customerHold?.flowerColor, '#ff7eb6');
+                    const em = customerHold?.flowerEmoji || '🌸';
+                    triggerOffering({
+                      id: `cust-flower-${em}`,
+                      category: 'flower',
+                      emoji: em,
+                      label: `Custom Flower (${hex})`,
+                      color: hex,
+                      token: makeOfferingToken({ emoji: em, color: hex }),
+                      blessing: `offered a radiant ${hex} flower`,
+                    });
+                  }}
+                >
+                  💐 Offer Customer Flower ({customerHold?.flowerEmoji || '🌸'})
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  style={{ fontSize: '0.76rem', padding: '5px 10px' }}
+                  onClick={() => {
+                    onHoldFlowerEmote?.();
+                    showArmtip(`✋ Now holding ${customerHold?.flowerEmoji || '🌸'} (${normalizeHex(customerHold?.flowerColor, '#ff7eb6')}) in park view!`);
+                  }}
+                >
+                  ✋ Hold Flower in World
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -393,6 +517,37 @@ export default function VisitMemorialModal({
                 {t.emoji} {t.label}
               </button>
             ))}
+            {adminAssets
+              .filter((a) => a && !a.deletedAt && a.kind === 'toy')
+              .map((at) => (
+                <button
+                  key={at.id}
+                  type="button"
+                  className="picker-item"
+                  style={{
+                    borderColor: at.accentColor || '#f3d98b',
+                    boxShadow: at.glowOn ? `0 0 8px ${at.glowColor || at.accentColor}` : undefined,
+                  }}
+                  onClick={() =>
+                    triggerOffering({
+                      id: at.id,
+                      category: 'treat',
+                      emoji: at.emoji || '🧸',
+                      label: at.name,
+                      color: at.primaryColor,
+                      token: makeOfferingToken({ asset: at }),
+                      blessing: `left ${at.name}`,
+                    })
+                  }
+                >
+                  {at.imageUrl ? (
+                    <img src={at.imageUrl} alt={at.name} style={{ width: 16, height: 16, borderRadius: 4, objectFit: 'cover', verticalAlign: 'middle', marginRight: 4 }} />
+                  ) : (
+                    <span>{at.emoji} </span>
+                  )}
+                  {at.name}
+                </button>
+              ))}
           </div>
         )}
 
@@ -622,6 +777,21 @@ export default function VisitMemorialModal({
                     </div>
                   </button>
                 ))}
+                {adminAssets
+                  .filter((a) => a && !a.deletedAt && a.kind === (editSpace === 'ash-room' ? 'niche-style' : 'plot-style'))
+                  .map((cs) => (
+                    <button
+                      key={cs.id}
+                      type="button"
+                      className={`style-option ${editStyleId === `custom:${cs.id}` ? 'active' : ''}`}
+                      onClick={() => setEditStyleId(`custom:${cs.id}`)}
+                    >
+                      <strong style={{ fontSize: '0.84rem' }}>{cs.emoji} {cs.name}</strong>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        Admin Custom {cs.glowOn ? '• ✨ Glow' : ''}
+                      </div>
+                    </button>
+                  ))}
               </div>
             </div>
 

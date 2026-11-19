@@ -2,6 +2,7 @@
 // plus BroadcastChannel for instant local tab sync and retained per-memorial/account persistence.
 import { prepareMemorialForSync } from './imageCompressor';
 import { DEMO_USER } from '../data/memorialData';
+import { sanitizeAsset } from './customAssets';
 
 const BROKERS = [
   'wss://broker.emqx.io:8084/mqtt',
@@ -12,6 +13,7 @@ const TOPIC_PREFIX = 'evergreen-paws-park/v2/room/';
 const ACCOUNTS_TOPIC_PREFIX = 'evergreen-paws-park/v2/accounts/';
 const ADMIN_CONFIG_TOPIC = 'evergreen-paws-park/v2/admin/config';
 const ADMIN_NOTIF_TOPIC_PREFIX = 'evergreen-paws-park/v2/admin/notif/';
+const ADMIN_ASSET_TOPIC_PREFIX = 'evergreen-paws-park/v2/admin/asset/';
 const GROUP_TOPIC_PREFIX = 'evergreen-paws-park/v2/group/';
 const GROUP_INVITE_TOPIC_PREFIX = 'evergreen-paws-park/v2/group-invite/';
 const FRIEND_REQ_TOPIC_PREFIX = 'evergreen-paws-park/v2/friend-req/';
@@ -21,6 +23,7 @@ const STORAGE_ONLINE_KEY = 'evergreen_paws_mp_online_v1';
 const STORAGE_ACCOUNTS_KEY = 'evergreen_paws_accounts_v1';
 const STORAGE_ADMIN_CONFIG_KEY = 'evergreen_paws_admin_config_v1';
 const STORAGE_ADMIN_NOTIFS_KEY = 'evergreen_paws_admin_notifs_v1';
+const STORAGE_ADMIN_ASSETS_KEY = 'evergreen_paws_admin_assets_v1';
 const STORAGE_GROUP_KEY = 'evergreen_paws_group_v1';
 const STORAGE_GROUP_CHAT_KEY = 'evergreen_paws_group_chat_v1';
 const STORAGE_GROUP_INVITES_KEY = 'evergreen_paws_group_invites_v1';
@@ -222,6 +225,26 @@ const notificationsMap = new Map(); // id -> notification
   }
 })();
 
+const assetsMap = new Map(); // id -> custom asset
+(() => {
+  try {
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem(STORAGE_ADMIN_ASSETS_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          arr.forEach((a) => {
+            const clean = sanitizeAsset(a);
+            if (clean && clean.id) assetsMap.set(clean.id, clean);
+          });
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+})();
+
 let activeGroup = (() => {
   try {
     if (typeof window !== 'undefined') {
@@ -314,6 +337,7 @@ let callbacks = {
   onStatusChange: null,
   onAdminConfigChange: null,
   onNotificationsChange: null,
+  onAssetsChange: null,
   onGroupChatChange: null,
   onGroupChange: null,
   onAccountsChange: null,
@@ -581,6 +605,22 @@ function saveNotifications() {
   }
 }
 
+function saveAdminAssets() {
+  const list = Array.from(assetsMap.values())
+    .filter((a) => a && !a.deletedAt)
+    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_ADMIN_ASSETS_KEY, JSON.stringify(Array.from(assetsMap.values())));
+    }
+  } catch {
+    // ignore
+  }
+  if (typeof callbacks.onAssetsChange === 'function') {
+    callbacks.onAssetsChange(list);
+  }
+}
+
 function persistGroupChat() {
   try {
     if (typeof window !== 'undefined') {
@@ -659,6 +699,23 @@ function handleIncomingPayload(msg) {
       notificationsMap.set(msg.notification.id, msg.notification);
     }
     saveNotifications();
+    return;
+  }
+
+  if (msg.type === 'admin_asset' && msg.asset && msg.asset.id) {
+    const clean = sanitizeAsset(msg.asset);
+    if (!clean) return;
+    const existing = assetsMap.get(clean.id);
+    const incTs = Date.parse(clean.updatedAt || '') || msg.ts || 0;
+    const exTs = existing ? (Date.parse(existing.updatedAt || '') || 0) : 0;
+    if (!existing || incTs >= exTs) {
+      if (msg.deleted) {
+        assetsMap.set(clean.id, { ...clean, deletedAt: new Date(incTs || Date.now()).toISOString() });
+      } else {
+        assetsMap.set(clean.id, clean);
+      }
+      saveAdminAssets();
+    }
     return;
   }
 
@@ -910,6 +967,7 @@ function processMqttBuffer(entry) {
         entry.ws.send(buildMqttSubscribe(4, `${ACCOUNTS_TOPIC_PREFIX}+`));
         entry.ws.send(buildMqttSubscribe(5, ADMIN_CONFIG_TOPIC));
         entry.ws.send(buildMqttSubscribe(6, `${ADMIN_NOTIF_TOPIC_PREFIX}+`));
+        entry.ws.send(buildMqttSubscribe(10, `${ADMIN_ASSET_TOPIC_PREFIX}+`));
         entry.ws.send(buildMqttSubscribe(8, `${GROUP_INVITE_TOPIC_PREFIX}+`));
         entry.ws.send(buildMqttSubscribe(9, `${FRIEND_REQ_TOPIC_PREFIX}+`));
         if (activeGroup?.id) {
@@ -1424,6 +1482,62 @@ export function deleteAdminNotification(id) {
   };
   markSeen(pktPayload.msgId);
   broadcastGlobalTopic(`${ADMIN_NOTIF_TOPIC_PREFIX}${id}`, pktPayload, true);
+}
+
+export function getAdminAssets(includeDeleted = false) {
+  return Array.from(assetsMap.values())
+    .filter((a) => a && (includeDeleted || !a.deletedAt))
+    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+}
+
+export function publishAdminAsset(rawAsset) {
+  const clean = sanitizeAsset({
+    ...rawAsset,
+    id: rawAsset?.id || `asset-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    updatedAt: new Date().toISOString(),
+    deletedAt: null,
+  });
+  if (!clean) {
+    return { ok: false, error: 'Invalid asset data or image exceeds size limit.' };
+  }
+  assetsMap.set(clean.id, clean);
+  saveAdminAssets();
+
+  seqCounter += 1;
+  const pktPayload = {
+    type: 'admin_asset',
+    peerId: myPeerId,
+    msgId: `${myPeerId}_${seqCounter}`,
+    ts: Date.now(),
+    asset: clean,
+  };
+  markSeen(pktPayload.msgId);
+  broadcastGlobalTopic(`${ADMIN_ASSET_TOPIC_PREFIX}${clean.id}`, pktPayload, true);
+  return { ok: true, asset: clean };
+}
+
+export function deleteAdminAsset(id) {
+  const existing = assetsMap.get(id);
+  if (!existing) return;
+  const deleted = {
+    ...existing,
+    deletedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  assetsMap.set(id, deleted);
+  saveAdminAssets();
+
+  seqCounter += 1;
+  const pktPayload = {
+    type: 'admin_asset',
+    peerId: myPeerId,
+    msgId: `${myPeerId}_${seqCounter}`,
+    ts: Date.now(),
+    deleted: true,
+    asset: deleted,
+  };
+  markSeen(pktPayload.msgId);
+  broadcastGlobalTopic(`${ADMIN_ASSET_TOPIC_PREFIX}${id}`, pktPayload, true);
 }
 
 export function getActiveGroup() {

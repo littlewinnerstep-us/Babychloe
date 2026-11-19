@@ -41,6 +41,14 @@ import {
   drawWrappedSpeechBubble,
   drawCachedPetPortrait,
 } from '../utils/avatarRenderer';
+import {
+  resolveStyle,
+  resolveOfferingToken,
+  effectPhase,
+  getCachedAssetImage,
+  makeOfferingToken,
+} from '../utils/customAssets';
+import CustomerFlowerPopover from './CustomerFlowerPopover';
 import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
 import AvatarCustomizerDrawer from './AvatarCustomizerDrawer';
 import SpeciesGateModal from './SpeciesGateModal';
@@ -170,8 +178,19 @@ export default function ParkWorld2D({
   onRequireLogin,
   zoomGuideTipAt = 0,
   onClearZoomGuideTip,
+  adminAssets = [],
+  customerHold = { flowerEmoji: '🌸', flowerColor: '#ff7eb6', glowOn: true },
+  onUpdateCustomerHold,
+  onHoldFlowerEmote,
 }) {
   const canvasRef = useRef(null);
+  const adminAssetsRef = useRef(adminAssets);
+  adminAssetsRef.current = adminAssets;
+  const customerHoldRef = useRef(customerHold);
+  customerHoldRef.current = customerHold;
+  const [holdFlowerActive, setHoldFlowerActive] = useState(false);
+  const holdFlowerActiveRef = useRef(holdFlowerActive);
+  holdFlowerActiveRef.current = holdFlowerActive;
   const [avatar, setAvatar] = useState(loadAvatarPrefs);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showAvatarPanel, setShowAvatarPanel] = useState(false);
@@ -1437,6 +1456,8 @@ export default function ParkWorld2D({
         const my = m.worldY;
         const isNear = m.id === nearbyIdRef.current;
         const isOwner = isMemorialOwner(m, userRef.current);
+        const resolved = resolveStyle(m.styleId, adminAssetsRef.current, m);
+        const fx = effectPhase(resolved.effects, now, (mx + my) * 0.01);
 
         // Proximity Ring
         if (isNear) {
@@ -1448,6 +1469,24 @@ export default function ParkWorld2D({
           ctx.stroke();
         }
 
+        if (resolved.glowOn) {
+          const gCol = resolved.glowColor || '#f5d076';
+          const gRad = (38 + (resolved.glowStrength || 0.65) * 32) * fx.glowMult;
+          const mg = ctx.createRadialGradient(mx, my - 4, 4, mx, my - 4, gRad);
+          mg.addColorStop(0, `${gCol}66`);
+          mg.addColorStop(1, `${gCol}00`);
+          ctx.fillStyle = mg;
+          ctx.beginPath();
+          ctx.arc(mx, my - 4, gRad, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.save();
+        ctx.globalAlpha *= fx.alpha;
+        ctx.translate(mx, my + fx.bobY);
+        ctx.scale(fx.scale, fx.scale);
+        ctx.translate(-mx, -my);
+
         if (room === 'tombstone') {
           // Ground shadow & grassy plot
           ctx.fillStyle = 'rgba(0,0,0,0.28)';
@@ -1455,8 +1494,8 @@ export default function ParkWorld2D({
           ctx.ellipse(mx, my + 24, 34, 13, 0, 0, Math.PI * 2);
           ctx.fill();
 
-          // Stone fill by styleId
-          const stonePalette = {
+          // Stone fill by styleId or admin/customer hex override
+          const stonePalette = resolved.primaryColor || {
             'classic-granite': '#aeb7c0',
             'angel-wings': '#ece4d4',
             'rose-heart': '#ebb8c4',
@@ -1464,7 +1503,7 @@ export default function ParkWorld2D({
           }[m.styleId] || '#aeb7c0';
 
           ctx.fillStyle = stonePalette;
-          ctx.strokeStyle = isNear ? '#ffe099' : 'rgba(255,255,255,0.5)';
+          ctx.strokeStyle = isNear ? '#ffe099' : (resolved.accentColor || 'rgba(255,255,255,0.5)');
           ctx.lineWidth = isNear ? 2.5 : 1.5;
 
           ctx.beginPath();
@@ -1482,16 +1521,26 @@ export default function ParkWorld2D({
           ctx.fill();
           ctx.stroke();
 
-          // Pet Picture at top center of Tombstone
-          drawCachedPetPortrait(
-            ctx,
-            m.photo,
-            mx,
-            my - 19,
-            11.5,
-            getSpeciesEmoji(m.species),
-            isNear ? '#ffe099' : '#f7ead2'
-          );
+          const customStyleImg = resolved.imageUrl ? getCachedAssetImage(resolved.imageUrl) : null;
+          if (customStyleImg) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(mx, my - 19, 13, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(customStyleImg, mx - 13, my - 32, 26, 26);
+            ctx.restore();
+          } else {
+            // Pet Picture at top center of Tombstone
+            drawCachedPetPortrait(
+              ctx,
+              m.photo,
+              mx,
+              my - 19,
+              11.5,
+              getSpeciesEmoji(m.species),
+              isNear ? '#ffe099' : '#f7ead2'
+            );
+          }
 
           // Pet Name & Plot Code
           ctx.fillStyle = m.styleId === 'moss-celtic' ? '#f5faf3' : '#263038';
@@ -1503,7 +1552,7 @@ export default function ParkWorld2D({
         } else {
           // Ash Room Columbarium Alcove
           const alcGlow = ctx.createRadialGradient(mx, my - 6, 4, mx, my - 6, 56);
-          alcGlow.addColorStop(0, 'rgba(255, 206, 128, 0.36)');
+          alcGlow.addColorStop(0, resolved.glowOn ? `${resolved.glowColor}55` : 'rgba(255, 206, 128, 0.36)');
           alcGlow.addColorStop(1, 'rgba(255, 206, 128, 0)');
           ctx.fillStyle = alcGlow;
           ctx.beginPath();
@@ -1513,7 +1562,7 @@ export default function ParkWorld2D({
           ctx.fillStyle = '#2b1d17';
           drawRoundedRect(ctx, mx - 34, my - 40, 68, 60, 10);
           ctx.fill();
-          ctx.strokeStyle = isNear ? '#ffd57e' : '#a47e49';
+          ctx.strokeStyle = isNear ? '#ffd57e' : (resolved.accentColor || '#a47e49');
           ctx.lineWidth = isNear ? 3 : 2;
           ctx.stroke();
 
@@ -1543,19 +1592,24 @@ export default function ParkWorld2D({
           ctx.fillText(nicheCode, mx, my - 42.5);
 
           // Urn silhouette inside alcove
-          const urnColor = {
+          const urnColor = resolved.primaryColor || {
             'celadon-urn': '#86b599',
             'gilded-lotus': '#d4a853',
             'starlight-glass': '#82b3ee',
             'warm-cherrywood': '#a95f3a',
           }[m.styleId] || '#86b599';
 
-          ctx.fillStyle = urnColor;
-          ctx.beginPath();
-          ctx.ellipse(mx, my - 2, 10, 12, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#e7c57c';
-          ctx.fillRect(mx - 7, my - 15, 14, 3);
+          const customUrnImg = resolved.imageUrl ? getCachedAssetImage(resolved.imageUrl) : null;
+          if (customUrnImg) {
+            ctx.drawImage(customUrnImg, mx - 11, my - 14, 22, 24);
+          } else {
+            ctx.fillStyle = urnColor;
+            ctx.beginPath();
+            ctx.ellipse(mx, my - 2, 10, 12, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = resolved.accentColor || '#e7c57c';
+            ctx.fillRect(mx - 7, my - 15, 14, 3);
+          }
 
           // Brass plaque
           ctx.fillStyle = '#d8b26e';
@@ -1566,6 +1620,14 @@ export default function ParkWorld2D({
           ctx.fillText((m.name || 'Pet').slice(0, 9), mx, my + 20);
         }
 
+        if (fx.sparkle && Math.sin(fx.t * 4.5 + mx) > 0.1) {
+          ctx.font = '10px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('✨', mx - 24, my - 26);
+        }
+
+        ctx.restore();
+
         // Owner Star
         if (isOwner) {
           ctx.font = '12px sans-serif';
@@ -1575,22 +1637,30 @@ export default function ParkWorld2D({
 
         // Live active offerings around base
         const tokens = (m.activeOfferings || []).slice(0, 4);
-        ctx.font = '13px serif';
         ctx.textAlign = 'center';
-        tokens.forEach((tok, ti) => {
+        tokens.forEach((rawTok, ti) => {
+          const tokMeta = resolveOfferingToken(rawTok, adminAssetsRef.current);
+          const ofx = effectPhase(tokMeta.effects, now, ti + mx * 0.01);
           const ox = mx - 21 + ti * 14;
-          const oy = my + 32;
-          if (tok === '🕯️') {
-            const flicker = 8 + Math.sin(now * 0.015 + ti) * 2;
-            const cg = ctx.createRadialGradient(ox, oy - 5, 1, ox, oy - 5, flicker + 4);
-            cg.addColorStop(0, 'rgba(255, 212, 108, 0.75)');
-            cg.addColorStop(1, 'rgba(255, 212, 108, 0)');
+          const oy = my + 32 + ofx.bobY;
+          if (tokMeta.emoji === '🕯️' || tokMeta.glowOn) {
+            const gCol = tokMeta.glowColor || tokMeta.color || '#ffd46c';
+            const flicker = (8 + (tokMeta.glowStrength || 0.5) * 6) * ofx.glowMult;
+            const cg = ctx.createRadialGradient(ox, oy - 4, 1, ox, oy - 4, flicker + 4);
+            cg.addColorStop(0, `${gCol}bb`);
+            cg.addColorStop(1, `${gCol}00`);
             ctx.fillStyle = cg;
             ctx.beginPath();
-            ctx.arc(ox, oy - 5, flicker + 4, 0, Math.PI * 2);
+            ctx.arc(ox, oy - 4, flicker + 4, 0, Math.PI * 2);
             ctx.fill();
           }
-          ctx.fillText(tok, ox, oy);
+          const oImg = tokMeta.imageUrl ? getCachedAssetImage(tokMeta.imageUrl) : null;
+          if (oImg) {
+            ctx.drawImage(oImg, ox - 7, oy - 12, 14, 14);
+          } else {
+            ctx.font = `${Math.round(13 * ofx.scale)}px serif`;
+            ctx.fillText(tokMeta.emoji, ox, oy);
+          }
         });
       });
 
@@ -1814,7 +1884,22 @@ export default function ParkWorld2D({
         ctx.fill();
       }
 
-      drawAvatar2D(ctx, p.x, p.y, 1, bobOffset, av, 'rgba(255,255,255,0.45)', atm);
+      drawAvatar2D(
+        ctx,
+        p.x,
+        p.y,
+        1,
+        bobOffset,
+        {
+          ...av,
+          flowerColor: customerHoldRef.current?.flowerColor || av.flowerColor,
+          heldFlowerEmoji: customerHoldRef.current?.flowerEmoji,
+          flowerGlowOn: customerHoldRef.current?.glowOn,
+          forceHoldFlower: holdFlowerActiveRef.current,
+        },
+        'rgba(255,255,255,0.45)',
+        atm
+      );
 
       // Player Name Tag
       const gEmoji = av.gender === 'boy' ? '👦' : '👩';
@@ -1854,11 +1939,12 @@ export default function ParkWorld2D({
         pt.y += pt.vy;
         pt.life -= 1;
         pt.alpha = Math.max(0, pt.life / 75);
+        const ptMeta = resolveOfferingToken(pt.emoji, adminAssetsRef.current);
         ctx.save();
         ctx.globalAlpha = pt.alpha;
         ctx.font = '16px serif';
         ctx.textAlign = 'center';
-        ctx.fillText(pt.emoji, pt.x, pt.y);
+        ctx.fillText(ptMeta.emoji || '✨', pt.x, pt.y);
         ctx.restore();
       });
 
@@ -2336,11 +2422,16 @@ export default function ParkWorld2D({
             onMove={(x, y) => {
               joystickRef.current = { x, y };
             }}
-            onEmote={() =>
-              atmosphere === 'morning' || atmosphere === 'dusk'
-                ? triggerEmote('🌸', 'Holding mourning flower')
-                : triggerEmote('🕯️', 'Holding lantern light')
-            }
+            onEmote={() => {
+              if (holdFlowerActive || atmosphere === 'morning' || atmosphere === 'dusk') {
+                const em = customerHold?.flowerEmoji || '🌸';
+                const col = customerHold?.flowerColor || '#ff7eb6';
+                triggerEmote(makeOfferingToken({ emoji: em, color: col }), `Holding ${em} (${col})`);
+                setHoldFlowerActive(true);
+              } else {
+                triggerEmote('🕯️', 'Holding lantern light');
+              }
+            }}
           />
         ) : (
           <div className="world-dpad" aria-label="Walk controls">
@@ -2371,14 +2462,19 @@ export default function ParkWorld2D({
             <button
               type="button"
               className="dpad-btn center"
-              onClick={() =>
-                atmosphere === 'morning' || atmosphere === 'dusk'
-                  ? triggerEmote('🌸', 'Holding mourning flower')
-                  : triggerEmote('🕯️', 'Holding lantern light')
-              }
+              onClick={() => {
+                if (holdFlowerActive || atmosphere === 'morning' || atmosphere === 'dusk') {
+                  const em = customerHold?.flowerEmoji || '🌸';
+                  const col = customerHold?.flowerColor || '#ff7eb6';
+                  triggerEmote(makeOfferingToken({ emoji: em, color: col }), `Holding ${em} (${col})`);
+                  setHoldFlowerActive(true);
+                } else {
+                  triggerEmote('🕯️', 'Holding lantern light');
+                }
+              }}
               aria-label={atmosphere === 'morning' || atmosphere === 'dusk' ? 'Mourning flower emote' : 'Lantern emote'}
             >
-              {atmosphere === 'morning' || atmosphere === 'dusk' ? '🌸' : '🏮'}
+              {holdFlowerActive || atmosphere === 'morning' || atmosphere === 'dusk' ? (customerHold?.flowerEmoji || '🌸') : '🏮'}
             </button>
             <button
               type="button"
@@ -2406,6 +2502,17 @@ export default function ParkWorld2D({
             <div />
           </div>
         )}
+
+        {/* Customer Flower & Hex Color Floating Hold Menu (Regular Visitors) */}
+        <CustomerFlowerPopover
+          mobileHud={mobileHud}
+          customerHold={customerHold}
+          holdFlowerActive={holdFlowerActive}
+          onSetHoldFlowerActive={setHoldFlowerActive}
+          onUpdateCustomerHold={onUpdateCustomerHold}
+          onTriggerEmote={triggerEmote}
+          onHoldFlowerEmote={onHoldFlowerEmote}
+        />
 
         {/* Nearby Popup Note (Tap to Open Vigil Card) */}
         {nearbyMemorial && !inspectedMemorial && (

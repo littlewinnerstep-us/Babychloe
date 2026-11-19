@@ -12,6 +12,8 @@ import {
   LogOut,
   AlertCircle,
 } from 'lucide-react';
+import AdminAssetStudio from './AdminAssetStudio';
+import AdminPlotManager from './AdminPlotManager';
 import {
   verifyAdminCredentials,
   publishAdminConfig,
@@ -28,10 +30,21 @@ export default function AdminBackendModal({
   adminConfig,
   notifications = [],
   accountsList = [],
+  allMemorials = [],
+  adminAssets = [],
+  activeSpecies = 'Dog',
+  activeRoom = 'tombstone',
+  onPublishAsset,
+  onDeleteAsset,
+  onSaveAdminMemorial,
+  onDeleteAdminMemorial,
+  onRestoreAdminMemorial,
+  onBulkCreateBlankSlots,
   totalMemorials = 0,
   totalAccounts = 0,
   onClose,
 }) {
+  const [adminTab, setAdminTab] = useState('general'); // 'general' | 'plots' | 'assets'
   const [adminUser, setAdminUser] = useState('admin');
   const [adminPass, setAdminPass] = useState('');
   const [authError, setAuthError] = useState('');
@@ -240,6 +253,54 @@ export default function AdminBackendModal({
               </button>
             </div>
 
+            {/* Admin Workspace Tabs */}
+            <div className="modal-tabs" style={{ marginTop: 0 }}>
+              <button
+                type="button"
+                className={`modal-tab ${adminTab === 'general' ? 'active' : ''}`}
+                onClick={() => setAdminTab('general')}
+              >
+                ⚙️ General &amp; Moderation
+              </button>
+              <button
+                type="button"
+                className={`modal-tab ${adminTab === 'plots' ? 'active' : ''}`}
+                onClick={() => setAdminTab('plots')}
+              >
+                🪦 Plots &amp; Niches (1–200)
+              </button>
+              <button
+                type="button"
+                className={`modal-tab ${adminTab === 'assets' ? 'active' : ''}`}
+                onClick={() => setAdminTab('assets')}
+              >
+                ✨ Custom Asset Studio ({adminAssets.length})
+              </button>
+            </div>
+
+            {adminTab === 'plots' && (
+              <AdminPlotManager
+                allMemorials={allMemorials}
+                adminAssets={adminAssets}
+                defaultSpecies={activeSpecies}
+                defaultRoom={activeRoom}
+                onSaveMemorial={onSaveAdminMemorial}
+                onDeleteMemorial={onDeleteAdminMemorial}
+                onRestoreMemorial={onRestoreAdminMemorial}
+                onBulkCreateBlankSlots={onBulkCreateBlankSlots}
+              />
+            )}
+
+            {adminTab === 'assets' && (
+              <AdminAssetStudio
+                adminAssets={adminAssets}
+                onPublishAsset={onPublishAsset}
+                onDeleteAsset={onDeleteAsset}
+              />
+            )}
+
+            {adminTab === 'general' && (
+            <>
             {/* 1. Demo Feature Visibility Control */}
             <div
               style={{
@@ -654,6 +715,8 @@ export default function AdminBackendModal({
                 )}
               </div>
             </div>
+            </>
+            )}
           </div>
         )}
       </div>

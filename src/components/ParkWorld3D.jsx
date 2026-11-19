@@ -45,6 +45,14 @@ import {
   drawWrappedSpeechBubble,
   drawCachedPetPortrait,
 } from '../utils/avatarRenderer';
+import {
+  resolveStyle,
+  resolveOfferingToken,
+  effectPhase,
+  getCachedAssetImage,
+  makeOfferingToken,
+} from '../utils/customAssets';
+import CustomerFlowerPopover from './CustomerFlowerPopover';
 import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
 import AvatarCustomizerDrawer from './AvatarCustomizerDrawer';
 import SpeciesGateModal from './SpeciesGateModal';
@@ -156,9 +164,20 @@ export default function ParkWorld3D({
   zoomGuideTipAt = 0,
   onClearZoomGuideTip,
   isFirstVisitGuideOpen = false,
+  adminAssets = [],
+  customerHold = { flowerEmoji: '🌸', flowerColor: '#ff7eb6', glowOn: true },
+  onUpdateCustomerHold,
+  onHoldFlowerEmote,
 }) {
   const initialViewPrefs = useMemo(() => loadViewPrefs(), []);
   const canvasRef = useRef(null);
+  const adminAssetsRef = useRef(adminAssets);
+  adminAssetsRef.current = adminAssets;
+  const customerHoldRef = useRef(customerHold);
+  customerHoldRef.current = customerHold;
+  const [holdFlowerActive, setHoldFlowerActive] = useState(false);
+  const holdFlowerActiveRef = useRef(holdFlowerActive);
+  holdFlowerActiveRef.current = holdFlowerActive;
   const [avatar, setAvatar] = useState(loadAvatarPrefs);
   const [cameraMode, setCameraMode] = useState(initialViewPrefs.cameraMode);
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -1719,14 +1738,39 @@ export default function ParkWorld3D({
             }
           }
 
+          const resolved = resolveStyle(m.styleId, adminAssetsRef.current, m);
+          const fx = effectPhase(resolved.effects, now, (m.worldX + m.worldZ) * 0.01);
+          const yLift = fx.bobY ? Math.max(0, fx.bobY * 0.9) : 0;
+
+          if (resolved.glowOn) {
+            const gPt = project3D(m.worldX, 28 + yLift, m.worldZ);
+            if (gPt) {
+              const gCol = resolved.glowColor || '#f5d076';
+              const gRad = Math.max(18, (36 + (resolved.glowStrength || 0.65) * 28) * gPt.scale * fx.glowMult);
+              const mg = ctx.createRadialGradient(gPt.sx, gPt.sy, 2, gPt.sx, gPt.sy, gRad);
+              mg.addColorStop(0, `${gCol}66`);
+              mg.addColorStop(1, `${gCol}00`);
+              ctx.fillStyle = mg;
+              ctx.beginPath();
+              ctx.arc(gPt.sx, gPt.sy, gRad, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+
           let topLabelPt = null;
           if (room === 'tombstone') {
-            const palette = {
-              'classic-granite': { top: '#cfd6dd', front: '#9aa4ae', side: '#6d7782' },
-              'angel-wings': { top: '#fbf7ee', front: '#e2dac9', side: '#bfb49f' },
-              'rose-heart': { top: '#fadfe5', front: '#e2aeb9', side: '#ba8290' },
-              'moss-celtic': { top: '#9fb49c', front: '#6c856b', side: '#4b614b' },
-            }[m.styleId] || { top: '#cfd6dd', front: '#9aa4ae', side: '#6d7782' };
+            const palette = resolved.primaryColor
+              ? {
+                  top: resolved.accentColor || resolved.primaryColor,
+                  front: resolved.primaryColor,
+                  side: resolved.primaryColor,
+                }
+              : {
+                  'classic-granite': { top: '#cfd6dd', front: '#9aa4ae', side: '#6d7782' },
+                  'angel-wings': { top: '#fbf7ee', front: '#e2dac9', side: '#bfb49f' },
+                  'rose-heart': { top: '#fadfe5', front: '#e2aeb9', side: '#ba8290' },
+                  'moss-celtic': { top: '#9fb49c', front: '#6c856b', side: '#4b614b' },
+                }[m.styleId] || { top: '#cfd6dd', front: '#9aa4ae', side: '#6d7782' };
 
             // Stone plinth
             draw3DBox(m.worldX, 0, m.worldZ, 52, 10, 34, {
@@ -1735,27 +1779,38 @@ export default function ParkWorld3D({
               side: '#454e49',
             });
             // Extruded gravestone slab
-            topLabelPt = draw3DBox(m.worldX, 10, m.worldZ, 38, 48, 16, {
+            topLabelPt = draw3DBox(m.worldX, 10 + yLift, m.worldZ, 38 * fx.scale, 48 * fx.scale, 16, {
               ...palette,
-              stroke: isNear ? '#ffd57e' : 'rgba(255,255,255,0.35)',
+              stroke: isNear ? '#ffd57e' : (resolved.accentColor || 'rgba(255,255,255,0.35)'),
             });
 
             // Pet picture at top center of 3D tombstone
-            const tombPicPt = project3D(m.worldX, 46, m.worldZ + 9);
+            const tombPicPt = project3D(m.worldX, 46 + yLift, m.worldZ + 9);
+            const customTombImg = resolved.imageUrl ? getCachedAssetImage(resolved.imageUrl) : null;
             if (tombPicPt) {
-              drawCachedPetPortrait(
-                ctx,
-                m.photo,
-                tombPicPt.sx,
-                tombPicPt.sy,
-                Math.max(8, 11.5 * tombPicPt.scale),
-                getSpeciesEmoji(m.species),
-                isNear ? '#ffd57e' : '#f7ead2'
-              );
+              const r = Math.max(8, 11.5 * tombPicPt.scale);
+              if (customTombImg) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(tombPicPt.sx, tombPicPt.sy, r, 0, Math.PI * 2);
+                ctx.clip();
+                ctx.drawImage(customTombImg, tombPicPt.sx - r, tombPicPt.sy - r, r * 2, r * 2);
+                ctx.restore();
+              } else {
+                drawCachedPetPortrait(
+                  ctx,
+                  m.photo,
+                  tombPicPt.sx,
+                  tombPicPt.sy,
+                  r,
+                  getSpeciesEmoji(m.species),
+                  isNear ? '#ffd57e' : '#f7ead2'
+                );
+              }
             }
             // Name & Plot Code etched directly ON the 3D tombstone slab (no floating tag above)
-            const tombNamePt = project3D(m.worldX, 27, m.worldZ + 9);
-            const tombCodePt = project3D(m.worldX, 17, m.worldZ + 9);
+            const tombNamePt = project3D(m.worldX, 27 + yLift, m.worldZ + 9);
+            const tombCodePt = project3D(m.worldX, 17 + yLift, m.worldZ + 9);
             if (tombNamePt) {
               const ns = Math.max(8, Math.min(13, Math.round(10.5 * tombNamePt.scale)));
               ctx.save();
@@ -1773,22 +1828,22 @@ export default function ParkWorld3D({
             }
           } else {
             // 3D Columbarium Alcove Tower
-            const urnCol = {
+            const urnCol = resolved.primaryColor || {
               'celadon-urn': '#86b599',
               'gilded-lotus': '#d4a853',
               'starlight-glass': '#82b3ee',
               'warm-cherrywood': '#a95f3a',
             }[m.styleId] || '#86b599';
 
-            topLabelPt = draw3DBox(m.worldX, 0, m.worldZ, 56, 74, 34, {
-              top: '#7a573d',
+            topLabelPt = draw3DBox(m.worldX, yLift, m.worldZ, 56 * fx.scale, 74 * fx.scale, 34, {
+              top: resolved.accentColor || '#7a573d',
               front: '#3e291e',
               side: '#2a1b13',
-              stroke: isNear ? '#ffd57e' : '#a47e49',
+              stroke: isNear ? '#ffd57e' : (resolved.accentColor || '#a47e49'),
             });
 
             // Niche Code etched at the top of the pet picture on the 3D Ash Alcove
-            const nicheCodePt = project3D(m.worldX, 68, m.worldZ + 18);
+            const nicheCodePt = project3D(m.worldX, 68 + yLift, m.worldZ + 18);
             if (nicheCodePt) {
               const cs = Math.max(7, Math.min(11, Math.round(8.5 * nicheCodePt.scale)));
               ctx.save();
@@ -1801,7 +1856,7 @@ export default function ParkWorld3D({
             }
 
             // Pet picture at top center of 3D Ash Alcove
-            const ashPicPt = project3D(m.worldX, 52, m.worldZ + 18);
+            const ashPicPt = project3D(m.worldX, 52 + yLift, m.worldZ + 18);
             if (ashPicPt) {
               drawCachedPetPortrait(
                 ctx,
@@ -1814,19 +1869,25 @@ export default function ParkWorld3D({
               );
             }
 
-            const urnPt = project3D(m.worldX, 27, m.worldZ + 18);
+            const urnPt = project3D(m.worldX, 27 + yLift, m.worldZ + 18);
             if (urnPt) {
-              ctx.fillStyle = urnCol;
-              ctx.beginPath();
-              ctx.ellipse(urnPt.sx, urnPt.sy, 9.5 * urnPt.scale, 13 * urnPt.scale, 0, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.strokeStyle = '#f2d085';
-              ctx.lineWidth = 1.5;
-              ctx.stroke();
+              const customUrnImg = resolved.imageUrl ? getCachedAssetImage(resolved.imageUrl) : null;
+              if (customUrnImg) {
+                const uw = 20 * urnPt.scale;
+                ctx.drawImage(customUrnImg, urnPt.sx - uw / 2, urnPt.sy - uw / 2, uw, uw);
+              } else {
+                ctx.fillStyle = urnCol;
+                ctx.beginPath();
+                ctx.ellipse(urnPt.sx, urnPt.sy, 9.5 * urnPt.scale, 13 * urnPt.scale, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = resolved.accentColor || '#f2d085';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+              }
             }
 
             // Brass nameplate directly ON the bottom of the 3D Ash Alcove
-            const nicheNamePt = project3D(m.worldX, 9, m.worldZ + 18);
+            const nicheNamePt = project3D(m.worldX, 9 + yLift, m.worldZ + 18);
             if (nicheNamePt) {
               const pw = 42 * nicheNamePt.scale;
               const ph = 11 * nicheNamePt.scale;
@@ -1886,10 +1947,32 @@ export default function ParkWorld3D({
           });
           const baseFront = project3D(m.worldX, 6, m.worldZ + 26);
           if (baseFront && otherOfferings.length > 0) {
-            const toks = otherOfferings.join(' ');
-            ctx.font = `${Math.max(11, Math.round(14 * baseFront.scale))}px serif`;
-            ctx.textAlign = 'center';
-            ctx.fillText(toks, baseFront.sx, baseFront.sy);
+            otherOfferings.forEach((rawTok, oi) => {
+              const oMeta = resolveOfferingToken(rawTok, adminAssetsRef.current);
+              const ofx = effectPhase(oMeta.effects, now, oi + m.worldX * 0.02);
+              const ox = baseFront.sx + (oi - (otherOfferings.length - 1) / 2) * 15 * baseFront.scale;
+              const oy = baseFront.sy + ofx.bobY * baseFront.scale;
+              if (oMeta.glowOn) {
+                const gCol = oMeta.glowColor || oMeta.color || '#ffd46c';
+                const gr = Math.max(6, 12 * baseFront.scale * ofx.glowMult);
+                const cg = ctx.createRadialGradient(ox, oy, 1, ox, oy, gr);
+                cg.addColorStop(0, `${gCol}aa`);
+                cg.addColorStop(1, `${gCol}00`);
+                ctx.fillStyle = cg;
+                ctx.beginPath();
+                ctx.arc(ox, oy, gr, 0, Math.PI * 2);
+                ctx.fill();
+              }
+              const oImg = oMeta.imageUrl ? getCachedAssetImage(oMeta.imageUrl) : null;
+              if (oImg) {
+                const sz = Math.max(10, 14 * baseFront.scale * ofx.scale);
+                ctx.drawImage(oImg, ox - sz / 2, oy - sz / 2, sz, sz);
+              } else {
+                ctx.font = `${Math.max(11, Math.round(14 * baseFront.scale * ofx.scale))}px serif`;
+                ctx.textAlign = 'center';
+                ctx.fillText(oMeta.emoji, ox, oy);
+              }
+            });
           }
         });
       });
@@ -2217,9 +2300,28 @@ export default function ParkWorld3D({
         const head = project3D(p.x, 37 + bobY, p.z);
         drawVisitorStyle(p.x, 2 + bobY, p.z, head, av);
         if (head) {
-          if (av.carryingLantern) {
-            if (atm === 'morning' || atm === 'dusk') {
-              drawMourningFlower(ctx, head.sx + 15 * head.scale, head.sy + 14 * head.scale, Math.max(0.75, head.scale), av.flowerColor || '#f7f5ef');
+          if (holdFlowerActiveRef.current || av.carryingLantern) {
+            if (holdFlowerActiveRef.current || atm === 'morning' || atm === 'dusk') {
+              const fCol = customerHoldRef.current?.flowerColor || av.flowerColor || '#f7f5ef';
+              const fEm = customerHoldRef.current?.flowerEmoji || '🌸';
+              const fxPos = head.sx + 15 * head.scale;
+              const fyPos = head.sy + 14 * head.scale;
+              if (customerHoldRef.current?.glowOn && customerHoldRef.current?.flowerColor) {
+                const fg = ctx.createRadialGradient(fxPos, fyPos, 1, fxPos, fyPos, 16 * head.scale);
+                fg.addColorStop(0, `${fCol}88`);
+                fg.addColorStop(1, `${fCol}00`);
+                ctx.fillStyle = fg;
+                ctx.beginPath();
+                ctx.arc(fxPos, fyPos, 16 * head.scale, 0, Math.PI * 2);
+                ctx.fill();
+              }
+              if (fEm !== '🌸') {
+                ctx.font = `${Math.max(11, Math.round(14 * head.scale))}px serif`;
+                ctx.textAlign = 'center';
+                ctx.fillText(fEm, fxPos, fyPos);
+              } else {
+                drawMourningFlower(ctx, fxPos, fyPos, Math.max(0.75, head.scale), fCol);
+              }
             } else {
               const lx = head.sx + 16 * head.scale;
               const ly = head.sy + 12 * head.scale;
@@ -2307,11 +2409,12 @@ export default function ParkWorld3D({
         pt.life -= dt;
         const sp = project3D(pt.x, pt.y, pt.z);
         if (sp) {
+          const ptMeta = resolveOfferingToken(pt.emoji, adminAssetsRef.current);
           ctx.save();
           ctx.globalAlpha = Math.max(0, Math.min(1, pt.life));
           ctx.font = `${Math.max(13, Math.round(18 * sp.scale))}px serif`;
           ctx.textAlign = 'center';
-          ctx.fillText(pt.emoji, sp.sx, sp.sy);
+          ctx.fillText(ptMeta.emoji || '✨', sp.sx, sp.sy);
           ctx.restore();
         }
       });
@@ -2881,11 +2984,16 @@ export default function ParkWorld3D({
             onMove={(x, y) => {
               joystickRef.current = { x, y };
             }}
-            onEmote={() =>
-              atmosphere === 'morning' || atmosphere === 'dusk'
-                ? triggerEmote('🌸', 'Holding mourning flower')
-                : triggerEmote('🕯️', 'Holding lantern light')
-            }
+            onEmote={() => {
+              if (holdFlowerActive || atmosphere === 'morning' || atmosphere === 'dusk') {
+                const em = customerHold?.flowerEmoji || '🌸';
+                const col = customerHold?.flowerColor || '#ff7eb6';
+                triggerEmote(makeOfferingToken({ emoji: em, color: col }), `Holding ${em} (${col})`);
+                setHoldFlowerActive(true);
+              } else {
+                triggerEmote('🕯️', 'Holding lantern light');
+              }
+            }}
           />
         ) : (
           <div className="world-dpad" aria-label="3D walk controls">
@@ -2916,14 +3024,19 @@ export default function ParkWorld3D({
             <button
               type="button"
               className="dpad-btn center"
-              onClick={() =>
-                atmosphere === 'morning' || atmosphere === 'dusk'
-                  ? triggerEmote('🌸', 'Holding mourning flower')
-                  : triggerEmote('🕯️', 'Holding lantern light')
-              }
+              onClick={() => {
+                if (holdFlowerActive || atmosphere === 'morning' || atmosphere === 'dusk') {
+                  const em = customerHold?.flowerEmoji || '🌸';
+                  const col = customerHold?.flowerColor || '#ff7eb6';
+                  triggerEmote(makeOfferingToken({ emoji: em, color: col }), `Holding ${em} (${col})`);
+                  setHoldFlowerActive(true);
+                } else {
+                  triggerEmote('🕯️', 'Holding lantern light');
+                }
+              }}
               aria-label={atmosphere === 'morning' || atmosphere === 'dusk' ? 'Mourning flower emote' : 'Lantern emote'}
             >
-              {atmosphere === 'morning' || atmosphere === 'dusk' ? '🌸' : '🏮'}
+              {holdFlowerActive || atmosphere === 'morning' || atmosphere === 'dusk' ? (customerHold?.flowerEmoji || '🌸') : '🏮'}
             </button>
             <button
               type="button"
@@ -2951,6 +3064,17 @@ export default function ParkWorld3D({
             <div />
           </div>
         )}
+
+        {/* Customer Flower & Hex Color Floating Hold Menu (Regular Visitors) */}
+        <CustomerFlowerPopover
+          mobileHud={mobileHud}
+          customerHold={customerHold}
+          holdFlowerActive={holdFlowerActive}
+          onSetHoldFlowerActive={setHoldFlowerActive}
+          onUpdateCustomerHold={onUpdateCustomerHold}
+          onTriggerEmote={triggerEmote}
+          onHoldFlowerEmote={onHoldFlowerEmote}
+        />
 
         {/* Nearby Popup Note (Tap to Open Vigil Card) */}
         {nearbyMemorial && !inspectedMemorial && (

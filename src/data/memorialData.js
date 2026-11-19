@@ -610,13 +610,32 @@ const STARTER_ORDER = {
 export const MAX_PLOTS_PER_GARDEN = 200;
 export const RESERVED_PLOT_END = 20;
 
-function parsePlotNumber(code) {
+export function parsePlotNumber(code) {
   const m = String(code || '').match(/(\d+)\s*$/);
   return m ? Math.max(1, parseInt(m[1], 10)) : null;
 }
 
-function formatSequentialCode(space, num) {
+export function formatSequentialCode(space, num) {
   return space === 'ash-room' ? `Niche A-${num}` : `Plot G-${num}`;
+}
+
+export function getAdminSlotCode(space, num) {
+  const safeNum = Math.max(1, Math.min(MAX_PLOTS_PER_GARDEN, Math.round(Number(num) || 1)));
+  return formatSequentialCode(space === 'ash-room' ? 'ash-room' : 'tombstone', safeNum);
+}
+
+export function getUsedSlotsSet(memorials, species, space) {
+  const targetSpecies = species || 'Dog';
+  const targetSpace = space === 'ash-room' ? 'ash-room' : 'tombstone';
+  const used = new Set();
+  (memorials || []).forEach((m) => {
+    if (!m || m.deletedAt) return;
+    if ((m.species || 'Dog') === targetSpecies && (m.space === 'ash-room' ? 'ash-room' : 'tombstone') === targetSpace) {
+      const n = parsePlotNumber(m.locationCode);
+      if (n) used.add(n);
+    }
+  });
+  return used;
 }
 
 export function normalizeAndDeduplicateMemorials(memorials) {
@@ -625,7 +644,7 @@ export function normalizeAndDeduplicateMemorials(memorials) {
   const valid = memorials.filter((m) => {
     if (!m || typeof m !== 'object' || !m.id) return false;
     const rawNum = parsePlotNumber(m.locationCode);
-    if (rawNum && rawNum >= 666 && rawNum <= 668) return false;
+    if (!m.adminManaged && rawNum && rawNum >= 666 && rawNum <= 668) return false;
     return true;
   });
   if (valid.length === 0) return INITIAL_MEMORIALS;
@@ -633,6 +652,9 @@ export function normalizeAndDeduplicateMemorials(memorials) {
   const sorted = valid
     .slice()
     .sort((a, b) => {
+      const am = a.adminManaged ? 0 : 1;
+      const bm = b.adminManaged ? 0 : 1;
+      if (am !== bm) return am - bm;
       const sa = STARTER_ORDER[a.id] || 9999;
       const sb = STARTER_ORDER[b.id] || 9999;
       if (sa !== sb) return sa - sb;
@@ -655,15 +677,34 @@ export function normalizeAndDeduplicateMemorials(memorials) {
     const used = usedPerBucket.get(bucketKey);
 
     let num = parsePlotNumber(m.locationCode);
-    // Plots 1-20 are reserved blank; current & new plots are arranged in 21-200
-    if (!num || num <= RESERVED_PLOT_END || num > MAX_PLOTS_PER_GARDEN) {
-      num = RESERVED_PLOT_END + 1;
+    if (m.deletedAt) {
+      const safeNum = num && num >= 1 && num <= MAX_PLOTS_PER_GARDEN ? num : RESERVED_PLOT_END + 1;
+      updatedById.set(m.id, {
+        ...m,
+        name: String(m.name || 'Beloved Pet'),
+        species: sp,
+        space,
+        locationCode: formatSequentialCode(space, safeNum),
+        visitsCount: Number.isFinite(Number(m.visitsCount)) ? Number(m.visitsCount) : 0,
+        activeOfferings: Array.isArray(m.activeOfferings) ? m.activeOfferings : [],
+        tributes: Array.isArray(m.tributes) ? m.tributes : [],
+        memories: Array.isArray(m.memories) ? m.memories : [],
+        offeringsLog: Array.isArray(m.offeringsLog) ? m.offeringsLog : [],
+        traits: Array.isArray(m.traits) ? m.traits : [],
+      });
+      continue;
+    }
+
+    // Plots 1-20 are reserved blank for regular visitors unless adminManaged is true
+    const minAllowed = m.adminManaged ? 1 : RESERVED_PLOT_END + 1;
+    if (!num || num < minAllowed || num > MAX_PLOTS_PER_GARDEN) {
+      num = minAllowed;
     }
     while (used.has(num) && num <= MAX_PLOTS_PER_GARDEN) {
       num += 1;
     }
     if (num > MAX_PLOTS_PER_GARDEN) {
-      num = RESERVED_PLOT_END + 1;
+      num = minAllowed;
       while (used.has(num)) {
         num += 1;
       }
@@ -690,19 +731,12 @@ export function normalizeAndDeduplicateMemorials(memorials) {
   return valid.map((m) => updatedById.get(m.id) || m);
 }
 
-export function getNextPlotCode(memorials, species, space) {
+export function getNextPlotCode(memorials, species, space, includeReserved = false) {
   const targetSpecies = species || 'Dog';
   const targetSpace = space === 'ash-room' ? 'ash-room' : 'tombstone';
-  const used = new Set();
+  const used = getUsedSlotsSet(memorials, targetSpecies, targetSpace);
 
-  (memorials || []).forEach((m) => {
-    if ((m.species || 'Dog') === targetSpecies && (m.space === 'ash-room' ? 'ash-room' : 'tombstone') === targetSpace) {
-      const n = parsePlotNumber(m.locationCode);
-      if (n) used.add(n);
-    }
-  });
-
-  let nextNum = RESERVED_PLOT_END + 1;
+  let nextNum = includeReserved ? 1 : RESERVED_PLOT_END + 1;
   while (used.has(nextNum) && nextNum <= MAX_PLOTS_PER_GARDEN) {
     nextNum += 1;
   }

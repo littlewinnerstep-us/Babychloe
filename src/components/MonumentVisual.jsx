@@ -1,6 +1,12 @@
 import React from 'react';
+import { resolveOfferingToken, resolveStyle } from '../utils/customAssets';
 
-function UrnArtwork({ styleId }) {
+function isImageSrc(val) {
+  const s = String(val || '').trim();
+  return s.startsWith('data:') || s.startsWith('http://') || s.startsWith('https://') || s.startsWith('/') || s.startsWith('./');
+}
+
+function UrnArtwork({ styleId, customPrimary }) {
   if (styleId === 'warm-cherrywood') {
     return (
       <svg className="urn-svg" viewBox="0 0 80 100" aria-hidden="true">
@@ -51,23 +57,34 @@ function UrnArtwork({ styleId }) {
   );
 }
 
-function OfferingTokens({ activeOfferings = [] }) {
+function OfferingTokens({ activeOfferings = [], adminAssets = [] }) {
   const items = (Array.isArray(activeOfferings) ? activeOfferings : []).slice(0, 6);
   return (
     <>
-      {items.map((emoji, idx) => {
-        const isCandle = emoji === '🕯️';
-        const isIncense = emoji === '🪔';
+      {items.map((rawToken, idx) => {
+        const tok = resolveOfferingToken(rawToken, adminAssets);
+        const isCandle = tok.emoji === '🕯️';
+        const isIncense = tok.emoji === '🪔';
+        const effectClasses = (tok.effects || []).map((id) => `fx-${id}`);
         const cls = [
           'offering-token',
           isCandle ? 'candle-glow' : '',
           isIncense ? 'incense-smoke' : '',
+          tok.glowOn ? 'fx-glow' : '',
+          ...effectClasses,
         ]
           .filter(Boolean)
           .join(' ');
+        const style = {
+          ...(tok.color ? { '--fx-glow': tok.glowColor || tok.color, filter: tok.glowOn ? `drop-shadow(0 0 ${Math.round((tok.glowStrength || 0.6) * 10)}px ${tok.glowColor || tok.color})` : undefined } : {}),
+        };
         return (
-          <span key={`${emoji}-${idx}`} className={cls}>
-            {emoji}
+          <span key={`${rawToken}-${idx}`} className={cls} style={style} title={tok.label}>
+            {tok.imageUrl ? (
+              <img className="custom-offering-img" src={tok.imageUrl} alt={tok.label} />
+            ) : (
+              tok.emoji
+            )}
           </span>
         );
       })}
@@ -75,45 +92,91 @@ function OfferingTokens({ activeOfferings = [] }) {
   );
 }
 
-export default function MonumentVisual({ memorial, mode = 'compact' }) {
+export default function MonumentVisual({ memorial, mode = 'compact', adminAssets = [] }) {
   const birthYear = memorial.birthDate ? memorial.birthDate.slice(0, 4) : '—';
   const passedYear = memorial.passedDate ? memorial.passedDate.slice(0, 4) : '—';
-  const yearsLabel = `${birthYear} – ${passedYear}`;
+  const yearsLabel = memorial.years || `${birthYear} – ${passedYear}`;
+  const resolved = resolveStyle(memorial.styleId, adminAssets, memorial);
+  const fxClasses = [
+    resolved.glowOn ? 'fx-glow' : '',
+    ...(resolved.effects || []).map((e) => `fx-${e}`),
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const customStageVars = {
+    '--fx-glow': resolved.glowColor || '#f5d076',
+    '--fx-glow-px': `${Math.round((resolved.glowStrength || 0.65) * 24)}px`,
+  };
+  const customSurfaceStyle = {
+    ...(resolved.primaryColor
+      ? {
+          background: `linear-gradient(165deg, ${resolved.primaryColor}, ${resolved.accentColor || resolved.primaryColor})`,
+          borderColor: resolved.accentColor || resolved.primaryColor,
+        }
+      : {}),
+    ...customStageVars,
+  };
 
   if (memorial.space === 'ash-room') {
     return (
       <div className={`monument-stage stage-ash-room ${mode}`}>
-        <div className="niche-alcove">
+        <div
+          className={`niche-alcove ${fxClasses}`}
+          style={{
+            ...(resolved.primaryColor ? { borderColor: resolved.accentColor || resolved.primaryColor } : {}),
+            ...customStageVars,
+          }}
+        >
           <div className="niche-spotlight" />
           <div className="niche-row">
-            <div className="niche-frame">
-              <img src={memorial.photo} alt={memorial.name} />
+            <div className="niche-frame" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {isImageSrc(memorial.photo) ? (
+                <img src={memorial.photo} alt={memorial.name} />
+              ) : (
+                <span style={{ fontSize: mode === 'full' ? '2rem' : '1.4rem' }}>{memorial.photo || '⚱️'}</span>
+              )}
             </div>
-            <UrnArtwork styleId={memorial.styleId || 'celadon-urn'} />
+            {resolved.imageUrl ? (
+              <img
+                src={resolved.imageUrl}
+                alt={resolved.name || 'Custom Urn'}
+                style={{ width: mode === 'full' ? 70 : 50, height: mode === 'full' ? 84 : 62, objectFit: 'cover', borderRadius: 10 }}
+              />
+            ) : (
+              <UrnArtwork styleId={memorial.styleId || 'celadon-urn'} customPrimary={resolved.primaryColor} />
+            )}
           </div>
           <div className="niche-plaque">
             {memorial.name} • {yearsLabel}
           </div>
         </div>
         <div className="niche-shelf">
-          <OfferingTokens activeOfferings={memorial.activeOfferings} />
+          <OfferingTokens activeOfferings={memorial.activeOfferings} adminAssets={adminAssets} />
         </div>
       </div>
     );
   }
 
-  const stoneClass = `tombstone-stone stone-${memorial.styleId || 'classic-granite'}`;
+  const stoneClass = `tombstone-stone stone-${memorial.styleId || 'classic-granite'} ${fxClasses}`;
 
   return (
     <div className={`monument-stage stage-tombstone ${mode}`}>
       <div className="stage-stars" />
-      <div className={stoneClass}>
-        <img className="stone-portrait" src={memorial.photo} alt={memorial.name} />
+      <div className={stoneClass} style={customSurfaceStyle}>
+        {resolved.imageUrl ? (
+          <img className="stone-portrait" src={resolved.imageUrl} alt={memorial.name} />
+        ) : isImageSrc(memorial.photo) ? (
+          <img className="stone-portrait" src={memorial.photo} alt={memorial.name} />
+        ) : (
+          <div className="stone-portrait" style={{ display: 'grid', placeItems: 'center', fontSize: mode === 'full' ? '1.8rem' : '1.3rem', background: 'rgba(255,255,255,0.22)' }}>
+            {memorial.photo || '🕊️'}
+          </div>
+        )}
         <div className="stone-name">{memorial.name}</div>
         <div className="stone-years">{yearsLabel}</div>
       </div>
       <div className="meadow-base">
-        <OfferingTokens activeOfferings={memorial.activeOfferings} />
+        <OfferingTokens activeOfferings={memorial.activeOfferings} adminAssets={adminAssets} />
       </div>
     </div>
   );

@@ -213,9 +213,25 @@ export function drawAvatar2D(ctx, cx, cy, scale, bobOff, cAv, outlineColor = 'rg
   // Head & Hair
   drawAvatarHeadAndHair(ctx, 0, -16 * scale, scale, cAv);
 
-  if (cAv?.carryingLantern) {
-    if (atmosphere === 'morning' || atmosphere === 'dusk') {
-      drawMourningFlower(ctx, 14 * scale, 0 * scale, scale, cAv?.flowerColor || '#f7f5ef');
+  if (cAv?.forceHoldFlower || cAv?.carryingLantern) {
+    if (cAv?.forceHoldFlower || atmosphere === 'morning' || atmosphere === 'dusk') {
+      const fCol = cAv?.flowerColor || '#f7f5ef';
+      if (cAv?.flowerGlowOn && cAv?.flowerColor) {
+        const fg = ctx.createRadialGradient(14 * scale, 0, 1, 14 * scale, 0, 14 * scale);
+        fg.addColorStop(0, `${fCol}88`);
+        fg.addColorStop(1, `${fCol}00`);
+        ctx.fillStyle = fg;
+        ctx.beginPath();
+        ctx.arc(14 * scale, 0, 14 * scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (cAv?.heldFlowerEmoji && cAv.heldFlowerEmoji !== '🌸') {
+        ctx.font = `${Math.round(13 * scale)}px serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(cAv.heldFlowerEmoji, 15 * scale, 2 * scale);
+      } else {
+        drawMourningFlower(ctx, 14 * scale, 0 * scale, scale, fCol);
+      }
     } else {
       ctx.font = `${Math.round(13 * scale)}px serif`;
       ctx.textAlign = 'center';
