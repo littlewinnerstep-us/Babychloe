@@ -218,7 +218,8 @@ export default function ParkWorld3D({
   };
   openSpeciesGateRef.current = openSpeciesGate;
 
-  const getGateZ = () => Math.max(2130, maxZRef.current - 65);
+  const GATE_X_3D = 1465;
+  const getGateZ = (r = roomRef.current) => (r === 'ash-room' ? 830 : 955);
 
   const startWalkToSpeciesGate = (targetSpecies) => {
     if (!targetSpecies || targetSpecies === speciesRef.current) return;
@@ -228,11 +229,11 @@ export default function ParkWorld3D({
     pendingOpenGateRef.current = false;
     pendingOpenIdRef.current = null;
     pendingTargetSpeciesRef.current = targetSpecies;
-    if (Math.hypot(p.x - 0, p.z - gateZ) < 54) {
-      p.x = 0;
-      p.z = gateZ - 110;
+    if (Math.hypot(p.x - GATE_X_3D, p.z - gateZ) < 54) {
+      p.x = GATE_X_3D - 110;
+      p.z = gateZ;
     }
-    p.targetX = 0;
+    p.targetX = GATE_X_3D;
     p.targetZ = gateZ;
     setWalkMessage(`Walking to ${getSpeciesEmoji(targetSpecies)} ${targetSpecies} Gates...`);
     setTimeout(() => setWalkMessage(''), 2600);
@@ -247,8 +248,8 @@ export default function ParkWorld3D({
       return;
     }
     pendingOpenGateRef.current = true;
-    playerRef.current.targetX = 0;
-    playerRef.current.targetZ = getGateZ() - 48;
+    playerRef.current.targetX = GATE_X_3D - 48;
+    playerRef.current.targetZ = getGateZ();
     setWalkMessage('Walking to Species Sanctuary Gate...');
     setTimeout(() => setWalkMessage(''), 2200);
   };
@@ -921,8 +922,8 @@ export default function ParkWorld3D({
         setNearPortal(isNearPortalNow);
       }
 
-      const gateZ = Math.max(2130, maxZ - 65);
-      const gateDist = Math.hypot(p.x - 0, p.z - gateZ);
+      const gateZ = getGateZ(room);
+      const gateDist = Math.hypot(p.x - GATE_X_3D, p.z - gateZ);
       const isNearGateNow = gateDist < 92;
       if (isNearGateNow !== nearGateRef.current) {
         nearGateRef.current = isNearGateNow;
@@ -1215,7 +1216,7 @@ export default function ParkWorld3D({
             'rgba(0,0,0,0.12)'
           );
         }
-        // Expanded Cross paths spanning all 10+10 columns
+        // Expanded Cross paths spanning all 10+10 columns (extend middle row to right-side gate)
         for (let cz = -45; cz < maxZ - 40; cz += 250) {
           for (let px = -1440; px < 1440; px += 180) {
             drawGroundPoly(
@@ -1224,6 +1225,18 @@ export default function ParkWorld3D({
                 [px + 180, 0, cz - 28],
                 [px + 180, 0, cz + 28],
                 [px, 0, cz + 28],
+              ],
+              pathColor,
+              'rgba(0,0,0,0.08)'
+            );
+          }
+          if (cz === 955) {
+            drawGroundPoly(
+              [
+                [1440, 0, cz - 28],
+                [1495, 0, cz - 28],
+                [1495, 0, cz + 28],
+                [1440, 0, cz + 28],
               ],
               pathColor,
               'rgba(0,0,0,0.08)'
@@ -1266,6 +1279,18 @@ export default function ParkWorld3D({
                 [px + 180, 0.5, rz - 36],
                 [px + 180, 0.5, rz + 36],
                 [px, 0.5, rz + 36],
+              ],
+              '#5e262b',
+              '#d4a853'
+            );
+          }
+          if (row === 4) {
+            drawGroundPoly(
+              [
+                [1440, 0.5, rz - 36],
+                [1495, 0.5, rz - 36],
+                [1495, 0.5, rz + 36],
+                [1440, 0.5, rz + 36],
               ],
               '#5e262b',
               '#d4a853'
@@ -1942,18 +1967,18 @@ export default function ParkWorld3D({
         });
       });
 
-      // 2b. Species Sanctuary Gate (End of map middle road at x=0, z=gateZ)
-      pushEntity(0, gateZ, () => {
-        const leftPost = draw3DBox(-28, 0, gateZ, 12, 82, 12, { top: '#b84242', front: '#943030', side: '#6e2020' });
-        const rightPost = draw3DBox(28, 0, gateZ, 12, 82, 12, { top: '#b84242', front: '#943030', side: '#6e2020' });
-        const topGate = draw3DBox(0, 76, gateZ, 76, 12, 16, {
+      // 2b. Species Sanctuary Gate (End of right side of middle row at x=GATE_X_3D, z=gateZ)
+      pushEntity(GATE_X_3D, gateZ, () => {
+        const leftPost = draw3DBox(GATE_X_3D, 0, gateZ - 28, 12, 82, 12, { top: '#b84242', front: '#943030', side: '#6e2020' });
+        const rightPost = draw3DBox(GATE_X_3D, 0, gateZ + 28, 12, 82, 12, { top: '#b84242', front: '#943030', side: '#6e2020' });
+        const topGate = draw3DBox(GATE_X_3D, 76, gateZ, 16, 12, 76, {
           top: '#e0a958',
           front: '#8f2929',
           side: '#6b1d1d',
           stroke: '#ffd57e',
         });
-        const gateCenter = project3D(0, 42, gateZ);
-        const gateTopPt = project3D(0, 91, gateZ) || topGate;
+        const gateCenter = project3D(GATE_X_3D, 42, gateZ);
+        const gateTopPt = project3D(GATE_X_3D, 91, gateZ) || topGate;
         if (gateTopPt) {
           const gTxt = '⛩️ Other Species Gate';
           const fontSize = Math.max(10, Math.round(12 * gateTopPt.scale));
