@@ -15,7 +15,7 @@ import {
 import AdminAssetStudio from './AdminAssetStudio';
 import AdminPlotManager from './AdminPlotManager';
 import AdminUsersTab from './AdminUsersTab';
-import { SPECIES_LIST } from '../data/memorialData';
+import { DEFAULT_PET_TRAITS, SPECIES_LIST } from '../data/memorialData';
 import {
   verifyAdminCredentials,
   publishAdminConfig,
@@ -62,6 +62,7 @@ export default function AdminBackendModal({
   const [customHours, setCustomHours] = useState('12');
   const [newSpeciesName, setNewSpeciesName] = useState('');
   const [newSpeciesEmoji, setNewSpeciesEmoji] = useState('🐾');
+  const [newTraitName, setNewTraitName] = useState('');
   const [feedback, setFeedback] = useState('');
 
   const showNotice = (msg) => {
@@ -663,6 +664,76 @@ export default function AdminBackendModal({
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Dynamic Pet Trait Badges Manager */}
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 12,
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-soft)',
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 4 }}>
+                ✨ Manage Pet Trait Badges ({DEFAULT_PET_TRAITS.length} Built-in + {(adminConfig?.customTraits || []).length} Custom)
+              </div>
+              <p style={{ margin: '0 0 8px', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                Create custom pet personality badges using the existing ✨ badge style. Visitors can choose these for their pets in Enshrine &amp; Customize.
+              </p>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const label = newTraitName.trim().slice(0, 32);
+                  if (!label) return;
+                  const existing = Array.isArray(adminConfig?.customTraits) ? adminConfig.customTraits : [];
+                  const dup =
+                    DEFAULT_PET_TRAITS.some((t) => t.toLowerCase() === label.toLowerCase()) ||
+                    existing.some((t) => t.toLowerCase() === label.toLowerCase());
+                  if (dup) {
+                    showNotice(`Trait badge "${label}" already exists.`);
+                    return;
+                  }
+                  const nextTraits = [...existing, label];
+                  publishAdminConfig({ customTraits: nextTraits });
+                  setNewTraitName('');
+                  showNotice(`Added trait badge: ✨ ${label}!`);
+                }}
+                style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}
+              >
+                <input
+                  type="text"
+                  maxLength={32}
+                  aria-label="New pet trait badge"
+                  className="input-control"
+                  placeholder="New trait badge (e.g., Sunbeam Lover)"
+                  value={newTraitName}
+                  onChange={(e) => setNewTraitName(e.target.value)}
+                  style={{ flex: 1, minWidth: 180 }}
+                />
+                <button type="submit" className="btn-primary" style={{ padding: '8px 12px', fontSize: '0.8rem' }}>
+                  + Add Trait Badge
+                </button>
+              </form>
+              <div className="trait-row" style={{ marginTop: 8 }}>
+                {(adminConfig?.customTraits || []).map((trait) => (
+                  <span key={trait} className="trait-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    ✨ {trait}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${trait}`}
+                      onClick={() => {
+                        const next = (adminConfig?.customTraits || []).filter((x) => x !== trait);
+                        publishAdminConfig({ customTraits: next });
+                        showNotice(`Removed custom trait "${trait}".`);
+                      }}
+                      style={{ background: 'none', border: 'none', color: '#b91c1c', cursor: 'pointer', fontWeight: 700, padding: 0 }}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
             </div>
             </>
             )}

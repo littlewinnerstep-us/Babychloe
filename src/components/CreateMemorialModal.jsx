@@ -6,6 +6,7 @@ import {
   MONUMENT_STYLES,
   PHOTO_PRESETS,
   getAllSpeciesList,
+  getAllPetTraits,
   MAX_PLOTS_PER_GARDEN,
   getNextPlotCode,
   getAdminSlotCode,
@@ -20,6 +21,7 @@ export default function CreateMemorialModal({
   defaultSpecies = 'Dog',
   isAdminUser = false,
   adminAssets = [],
+  customTraits = [],
   onPublishAsset,
   onClose,
   onCreate,
@@ -35,6 +37,7 @@ export default function CreateMemorialModal({
   const [epitaph, setEpitaph] = useState('');
   const [story, setStory] = useState('');
   const [favoriteTreat, setFavoriteTreat] = useState('');
+  const [selectedTraits, setSelectedTraits] = useState(['Cherished Companion', 'Forever Loved']);
   const [visibility, setVisibility] = useState('public');
   const [customHex, setCustomHex] = useState('');
   const [glowOn, setGlowOn] = useState(false);
@@ -110,7 +113,7 @@ export default function CreateMemorialModal({
         story.trim() ||
         `${cleanName} brought endless warmth and joyful paws into our home every single day.`,
       favoriteTreat: favoriteTreat.trim() || 'Golden Biscuit',
-      traits: ['Cherished Companion', 'Forever Loved'],
+      traits: selectedTraits.length > 0 ? selectedTraits : ['Cherished Companion'],
       candlesCount: 1,
       incenseCount: space === 'ash-room' ? 1 : 0,
       flowersCount: 1,
@@ -575,6 +578,42 @@ export default function CreateMemorialModal({
               value={story}
               onChange={(e) => setStory(e.target.value)}
             />
+          </div>
+
+          <div>
+            <label className="field-label">
+              Pet Trait Badges (Tap up to 5 • {selectedTraits.length}/5 selected)
+            </label>
+            <div className="trait-row">
+              {getAllPetTraits(customTraits).map((trait) => {
+                const active = selectedTraits.includes(trait);
+                return (
+                  <button
+                    key={trait}
+                    type="button"
+                    aria-pressed={active}
+                    className="trait-tag"
+                    style={{
+                      cursor: 'pointer',
+                      border: active ? '1.5px solid var(--accent)' : '1px solid var(--border-soft)',
+                      background: active ? 'var(--accent)' : 'var(--bg-elevated)',
+                      color: active ? '#fff' : 'var(--text-primary)',
+                    }}
+                    onClick={() =>
+                      setSelectedTraits((prev) =>
+                        prev.includes(trait)
+                          ? prev.filter((t) => t !== trait)
+                          : prev.length >= 5
+                            ? prev
+                            : [...prev, trait]
+                      )
+                    }
+                  >
+                    {active ? '✓ ' : ''}✨ {trait}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="form-row-2">

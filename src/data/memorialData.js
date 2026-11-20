@@ -87,6 +87,63 @@ export function getSpeciesEmoji(species, extraList = null) {
   return all.find((s) => s.id === species)?.emoji || '🐾';
 }
 
+export const DEFAULT_PET_TRAITS = [
+  'Gentle Soul',
+  'Ball Chaser',
+  'Porch Guardian',
+  'Window Watcher',
+  'Purr Engine',
+  'Velvet Paws',
+  'Snow Runner',
+  'Chatty Woo-Woo',
+  'Trailblazer',
+  'Binky Champion',
+  'Clover Nibbler',
+  'Velvet Ears',
+  'Midnight Muse',
+  'Desk Supervisor',
+  'Starlight Whiskers',
+  'Shiba Smile',
+  'Cinnamon Curl',
+  'Sunbeam Napper',
+  'Cherished Companion',
+  'Forever Loved',
+];
+
+let customTraitsRegistry = [];
+
+export function setCustomTraitsRegistry(list) {
+  if (!Array.isArray(list)) {
+    customTraitsRegistry = [];
+    return;
+  }
+  const seen = new Set(DEFAULT_PET_TRAITS.map((t) => t.toLowerCase()));
+  const clean = [];
+  list.forEach((item) => {
+    const label = String(item || '').trim().slice(0, 32);
+    if (!label) return;
+    const key = label.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    clean.push(label);
+  });
+  customTraitsRegistry = clean;
+}
+
+export function getAllPetTraits(extraList = null) {
+  const extra = Array.isArray(extraList) ? extraList : customTraitsRegistry;
+  if (!extra || extra.length === 0) return DEFAULT_PET_TRAITS;
+  const seen = new Set(DEFAULT_PET_TRAITS.map((t) => t.toLowerCase()));
+  const merged = [...DEFAULT_PET_TRAITS];
+  extra.forEach((item) => {
+    const label = String(item || '').trim().slice(0, 32);
+    if (!label || seen.has(label.toLowerCase())) return;
+    seen.add(label.toLowerCase());
+    merged.push(label);
+  });
+  return merged;
+}
+
 export const AVATAR_STYLES = [
   { id: 'classic', label: 'Classic Cloak' },
   { id: 'uniform', label: 'Keeper Uniform' },

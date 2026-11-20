@@ -15,6 +15,7 @@ import MonumentVisual from './MonumentVisual';
 import {
   MONUMENT_STYLES,
   OFFERING_TYPES,
+  getAllPetTraits,
   formatTimeAgo,
   getUserIdentityKey,
   isMemorialOwner,
@@ -53,6 +54,7 @@ export default function VisitMemorialModal({
   onUpdateMemorial,
   onRequireLogin,
   adminAssets = [],
+  customTraits = [],
   customerHold = { flowerEmoji: '🌸', flowerColor: '#ff7eb6', glowOn: true },
   onUpdateCustomerHold,
   onHoldFlowerEmote,
@@ -73,6 +75,7 @@ export default function VisitMemorialModal({
   const [editStyleId, setEditStyleId] = useState(memorial.styleId);
   const [editEpitaph, setEditEpitaph] = useState(memorial.epitaph);
   const [editStory, setEditStory] = useState(memorial.story);
+  const [editTraits, setEditTraits] = useState(Array.isArray(memorial.traits) ? memorial.traits : []);
   const [editVisibility, setEditVisibility] = useState(memorial.visibility);
   const [savedNotice, setSavedNotice] = useState(false);
   const [, setTimeTick] = useState(0);
@@ -179,6 +182,7 @@ export default function VisitMemorialModal({
           : (memorial.locationCode || 'Niche A-1').replace('Niche A-', 'Plot G-').replace('Niche B-', 'Plot G-'),
       epitaph: editEpitaph.trim() || memorial.epitaph,
       story: editStory.trim() || memorial.story,
+      traits: editTraits,
       visibility: editVisibility,
     });
     setSavedNotice(true);
@@ -813,6 +817,42 @@ export default function VisitMemorialModal({
                 value={editStory}
                 onChange={(e) => setEditStory(e.target.value)}
               />
+            </div>
+
+            <div>
+              <label className="field-label">
+                Pet Trait Badges ({editTraits.length}/5 selected)
+              </label>
+              <div className="trait-row">
+                {getAllPetTraits(customTraits).map((trait) => {
+                  const active = editTraits.includes(trait);
+                  return (
+                    <button
+                      key={trait}
+                      type="button"
+                      aria-pressed={active}
+                      className="trait-tag"
+                      style={{
+                        cursor: 'pointer',
+                        border: active ? '1.5px solid var(--accent)' : '1px solid var(--border-soft)',
+                        background: active ? 'var(--accent)' : 'var(--bg-elevated)',
+                        color: active ? '#fff' : 'var(--text-primary)',
+                      }}
+                      onClick={() =>
+                        setEditTraits((prev) =>
+                          prev.includes(trait)
+                            ? prev.filter((t) => t !== trait)
+                            : prev.length >= 5
+                              ? prev
+                              : [...prev, trait]
+                        )
+                      }
+                    >
+                      {active ? '✓ ' : ''}✨ {trait}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div>

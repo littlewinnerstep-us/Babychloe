@@ -107,7 +107,7 @@ import {
   supabaseFetchAssets,
   supabaseFetchConfig,
 } from './utils/supabaseClient';
-import { setCustomSpeciesRegistry } from './data/memorialData';
+import { setCustomSpeciesRegistry, setCustomTraitsRegistry } from './data/memorialData';
 
 const STORAGE_MEMORIALS_KEY = 'evergreen_paws_memorials_v1';
 const STORAGE_USER_KEY = 'evergreen_paws_user_v1';
@@ -1003,6 +1003,7 @@ export default function App() {
             epitaph: incoming.epitaph || existing.epitaph,
             story: incoming.story || existing.story,
             favoriteTreat: incoming.favoriteTreat || existing.favoriteTreat,
+            traits: Array.isArray(incoming.traits) ? incoming.traits : existing.traits,
             adminManaged: incoming.adminManaged !== undefined ? incoming.adminManaged : existing.adminManaged,
             deletedAt: incoming.deletedAt !== undefined ? incoming.deletedAt : existing.deletedAt,
             isBlankPlaceholder: incoming.isBlankPlaceholder !== undefined ? incoming.isBlankPlaceholder : existing.isBlankPlaceholder,
@@ -1129,6 +1130,7 @@ export default function App() {
       }
       if (sbConfig && (sbConfig.updatedAt || 0) > (adminConfig?.updatedAt || 0)) {
         setCustomSpeciesRegistry(sbConfig.customSpecies);
+        setCustomTraitsRegistry(sbConfig.customTraits);
         setAdminConfig((prev) => ({ ...prev, ...sbConfig }));
       }
     })();
@@ -2601,6 +2603,7 @@ export default function App() {
           onUpdateMemorial={handleUpdateMemorial}
           onRequireLogin={() => setShowAuthModal(true)}
           adminAssets={adminAssets}
+          customTraits={adminConfig?.customTraits || []}
           customerHold={customerHold}
           onUpdateCustomerHold={handleUpdateCustomerHold}
           onHoldFlowerEmote={handleHoldFlowerEmote}
@@ -2614,6 +2617,7 @@ export default function App() {
           defaultSpecies={activeSpecies}
           isAdminUser={isAdminUser}
           adminAssets={adminAssets}
+          customTraits={adminConfig?.customTraits || []}
           onPublishAsset={publishAdminAsset}
           onClose={() => setShowCreateModal(false)}
           onCreate={handleCreateMemorial}
