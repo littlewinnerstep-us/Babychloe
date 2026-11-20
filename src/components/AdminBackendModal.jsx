@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import AdminAssetStudio from './AdminAssetStudio';
 import AdminPlotManager from './AdminPlotManager';
+import AdminUsersTab from './AdminUsersTab';
 import { SPECIES_LIST } from '../data/memorialData';
 import {
   verifyAdminCredentials,
@@ -263,7 +264,14 @@ export default function AdminBackendModal({
                 className={`modal-tab ${adminTab === 'general' ? 'active' : ''}`}
                 onClick={() => setAdminTab('general')}
               >
-                ⚙️ General &amp; Moderation
+                ⚙️ General
+              </button>
+              <button
+                type="button"
+                className={`modal-tab ${adminTab === 'users' ? 'active' : ''}`}
+                onClick={() => setAdminTab('users')}
+              >
+                👥 Users &amp; Data ({accountsList.length})
               </button>
               <button
                 type="button"
@@ -280,6 +288,13 @@ export default function AdminBackendModal({
                 ✨ Custom Asset Studio ({adminAssets.length})
               </button>
             </div>
+
+            {adminTab === 'users' && (
+              <AdminUsersTab
+                accountsList={accountsList}
+                onFeedback={showNotice}
+              />
+            )}
 
             {adminTab === 'plots' && (
               <AdminPlotManager
@@ -648,184 +663,6 @@ export default function AdminBackendModal({
                   ))}
                 </div>
               )}
-            </div>
-
-            {/* 4. Registered Users List & Moderation */}
-            <div
-              style={{
-                padding: 12,
-                borderRadius: 12,
-                background: 'var(--bg-elevated)',
-                border: '1px solid var(--border-soft)',
-              }}
-            >
-              <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 4 }}>
-                👥 All Registered Users ({accountsList.length})
-              </div>
-              <p style={{ margin: '0 0 10px', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-                Select duration and manage per-user Vigil Action pause, Chat/Message mute, or Login ban.
-              </p>
-
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                {[
-                  { id: '15m', label: '15m' },
-                  { id: '1h', label: '1h' },
-                  { id: '6h', label: '6h' },
-                  { id: '24h', label: '24h' },
-                  { id: '7d', label: '7d' },
-                  { id: 'custom', label: 'Custom (h)' },
-                  { id: 'perm', label: 'Permanent' },
-                ].map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    className={`chip ${banPreset === opt.id ? 'active' : ''}`}
-                    style={{ fontSize: '0.72rem', padding: '4px 8px' }}
-                    onClick={() => setBanPreset(opt.id)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-                {banPreset === 'custom' && (
-                  <input
-                    type="number"
-                    min="0.25"
-                    max="8760"
-                    step="0.25"
-                    className="input-control"
-                    value={customHours}
-                    onChange={(e) => setCustomHours(e.target.value)}
-                    placeholder="Hours"
-                    style={{ width: 88, padding: '4px 8px', fontSize: '0.74rem' }}
-                    aria-label="Custom ban duration in hours"
-                  />
-                )}
-              </div>
-
-              <input
-                type="search"
-                className="input-control"
-                value={userSearch}
-                onChange={(e) => setUserSearch(e.target.value)}
-                placeholder="Search users by name or @username..."
-                style={{ marginBottom: 8, padding: '6px 10px', fontSize: '0.78rem' }}
-              />
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, overflowY: 'auto' }}>
-                {filteredUsers.length === 0 ? (
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', padding: 6 }}>
-                    No registered users match your filter.
-                  </div>
-                ) : (
-                  filteredUsers.map((acc) => {
-                    const isAdminAcc = acc.role === 'admin' || acc.usernameLower === 'admin';
-                    const mod = acc.moderation || {};
-                    const vigilPaused = isModerationActive(mod.vigilPausedUntil);
-                    const muted = isModerationActive(mod.mutedUntil);
-                    const loginBanned = isModerationActive(mod.loginBannedUntil);
-
-                    return (
-                      <div
-                        key={acc.usernameLower || acc.username}
-                        style={{
-                          padding: '9px 10px',
-                          borderRadius: 10,
-                          background: 'var(--bg-surface)',
-                          border: '1px solid var(--border-soft)',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 6,
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          <div style={{ fontSize: '0.8rem' }}>
-                            <strong>{acc.name || acc.username}</strong>{' '}
-                            <span style={{ color: 'var(--text-muted)' }}>@{acc.username}</span>{' '}
-                            <span>{acc.gender === 'boy' ? '👦' : '👩'}</span>
-                            {isAdminAcc && (
-                              <span className="owner-pill" style={{ marginLeft: 6 }}>
-                                🛡️ Admin
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', fontSize: '0.7rem' }}>
-                            {vigilPaused && (
-                              <span className="owner-pill">
-                                ⏸️ Vigil Paused ({formatModerationRemaining(mod.vigilPausedUntil)})
-                              </span>
-                            )}
-                            {muted && (
-                              <span className="owner-pill">
-                                🔇 Muted ({formatModerationRemaining(mod.mutedUntil)})
-                              </span>
-                            )}
-                            {loginBanned && (
-                              <span className="owner-pill">
-                                ⛔ Login Banned ({formatModerationRemaining(mod.loginBannedUntil)})
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {!isAdminAcc && (
-                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                            <button
-                              type="button"
-                              className={vigilPaused ? 'btn-primary' : 'btn-ghost'}
-                              style={{ padding: '4px 8px', fontSize: '0.71rem' }}
-                              onClick={() =>
-                                handleModerateUser(
-                                  acc,
-                                  { vigilPausedUntil: vigilPaused ? 0 : resolveDurationTarget() },
-                                  vigilPaused
-                                    ? `Resumed vigil activity for ${acc.name}.`
-                                    : `Paused vigil visit, message & actions for ${acc.name} (${formatDurationLabel()}).`
-                                )
-                              }
-                            >
-                              {vigilPaused ? '▶️ Resume Vigil' : `⏸️ Pause Vigil (${formatDurationLabel()})`}
-                            </button>
-
-                            <button
-                              type="button"
-                              className={muted ? 'btn-primary' : 'btn-ghost'}
-                              style={{ padding: '4px 8px', fontSize: '0.71rem' }}
-                              onClick={() =>
-                                handleModerateUser(
-                                  acc,
-                                  { mutedUntil: muted ? 0 : resolveDurationTarget() },
-                                  muted
-                                    ? `Unmuted ${acc.name}.`
-                                    : `Muted ${acc.name} (${formatDurationLabel()}).`
-                                )
-                              }
-                            >
-                              {muted ? '🔊 Unmute' : `🔇 Mute (${formatDurationLabel()})`}
-                            </button>
-
-                            <button
-                              type="button"
-                              className={loginBanned ? 'btn-primary' : 'btn-ghost'}
-                              style={{ padding: '4px 8px', fontSize: '0.71rem' }}
-                              onClick={() =>
-                                handleModerateUser(
-                                  acc,
-                                  { loginBannedUntil: loginBanned ? 0 : resolveDurationTarget() },
-                                  loginBanned
-                                    ? `Unbanned login for ${acc.name}.`
-                                    : `Banned ${acc.name} from login (${formatDurationLabel()}).`
-                                )
-                              }
-                            >
-                              {loginBanned ? '✅ Unban Login' : `⛔ Ban Login (${formatDurationLabel()})`}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
             </div>
             </>
             )}

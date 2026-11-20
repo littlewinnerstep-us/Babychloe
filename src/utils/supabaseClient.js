@@ -162,23 +162,30 @@ export async function supabaseSignIn({ identifier, password }) {
     }
 
     const authUser = data?.user;
-    if (!resolvedProfile && authUser?.id) {
-      resolvedProfile = await fetchProfileById(authUser.id);
-      if (!resolvedProfile && authUser) {
-        const meta = authUser.user_metadata || {};
-        if (meta.username) {
-          await supabase.from('profiles').upsert({
-            id: authUser.id,
-            username: meta.username,
-            username_lower: (meta.username_lower || meta.username).toLowerCase(),
-            email: authUser.email,
-            name: meta.name || meta.username,
-            gender: meta.gender || 'girl',
-            role: 'visitor',
-            avatar: meta.avatar || {},
-            updated_at: new Date().toISOString(),
-          });
-        }
+    if (authUser?.id) {
+      if (!resolvedProfile) {
+        resolvedProfile = await fetchProfileById(authUser.id);
+      }
+      const meta = authUser.user_metadata || {};
+      const nowIso = new Date().toISOString();
+      if (!resolvedProfile && meta.username) {
+        await supabase.from('profiles').upsert({
+          id: authUser.id,
+          username: meta.username,
+          username_lower: (meta.username_lower || meta.username).toLowerCase(),
+          email: authUser.email,
+          name: meta.name || meta.username,
+          gender: meta.gender || 'girl',
+          role: 'visitor',
+          avatar: meta.avatar || {},
+          updated_at: nowIso,
+        });
+      } else if (resolvedProfile) {
+        await supabase
+          .from('profiles')
+          .update({ updated_at: nowIso })
+          .eq('id', authUser.id);
+        resolvedProfile = { ...resolvedProfile, updated_at: nowIso };
       }
     }
 
@@ -342,5 +349,35 @@ export async function supabaseFetchConfig() {
     return data.value;
   } catch {
     return null;
+  }
+}
+
+export async function supabaseFetchProfiles() {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, username_lower, email, name, gender, role, avatar, moderation, created_at, updated_at')
+      .order('created_at', { ascending: false })
+      .limit(500);
+    if (error || !Array.isArray(data)) return [];
+    return data.map((p) => ({
+      id: p.id,
+      supabaseId: p.id,
+      username: p.username,
+      usernameLower: p.username_lower || String(p.username || '').toLowerCase(),
+      email: p.email || '',
+      name: p.name || p.username,
+      gender: p.gender === 'boy' ? 'boy' : 'girl',
+      role: p.role || 'visitor',
+      avatar: p.avatar || null,
+      moderation: p.moderation || {},
+      createdAt: p.created_at ? Date.parse(p.created_at) : null,
+      lastLoginAt: p.updated_at ? Date.parse(p.updated_at) : null,
+      updatedAt: p.updated_at ? Date.parse(p.updated_at) : null,
+      source: 'supabase',
+    }));
+  } catch {
+    return [];
   }
 }

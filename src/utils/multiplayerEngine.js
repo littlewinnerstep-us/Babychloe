@@ -1341,6 +1341,7 @@ export function registerAccount({ username, password, name, email = '', gender =
     return { ok: false, error: 'Password must be at least 4 characters.' };
   }
 
+  const nowTs = Date.now();
   const cleanEmail = String(email || '').trim().toLowerCase() || `${cleanLower}@evergreenpaws.local`;
   const account = {
     username: cleanUser,
@@ -1351,7 +1352,9 @@ export function registerAccount({ username, password, name, email = '', gender =
     gender: gender === 'boy' ? 'boy' : 'girl',
     role: 'user',
     avatar: avatar || null,
-    updatedAt: Date.now(),
+    createdAt: nowTs,
+    lastLoginAt: nowTs,
+    updatedAt: nowTs,
   };
 
   accountsMap.set(cleanLower, account);
@@ -1381,7 +1384,39 @@ export function authenticateAccount(usernameOrEmail, password) {
       error: `Account banned from logging in (${formatModerationRemaining(loginBannedUntil)}). Contact Admin for assistance.`,
     };
   }
-  return { ok: true, user: found };
+  const nowTs = Date.now();
+  const updated = {
+    ...found,
+    createdAt: found.createdAt || found.updatedAt || nowTs,
+    lastLoginAt: nowTs,
+    updatedAt: nowTs,
+  };
+  accountsMap.set(found.usernameLower, updated);
+  persistAccountsRegistry();
+  broadcastAccountRecord(updated);
+  notifyAccountsChanged();
+  return { ok: true, user: updated };
+}
+
+export function adminResetUserPassword(usernameOrEmail, newPassword) {
+  const cleanPass = String(newPassword || '');
+  if (cleanPass.length < 4) {
+    return { ok: false, error: 'New password must be at least 4 characters.' };
+  }
+  const found = findRegisteredAccount(usernameOrEmail);
+  if (!found) {
+    return { ok: false, error: 'Local account not found. Use Send Reset Email for Supabase-only accounts.' };
+  }
+  const updated = {
+    ...found,
+    password: cleanPass,
+    updatedAt: Date.now(),
+  };
+  accountsMap.set(found.usernameLower, updated);
+  persistAccountsRegistry();
+  broadcastAccountRecord(updated);
+  notifyAccountsChanged();
+  return { ok: true, user: updated };
 }
 
 export function verifyAdminCredentials(username, password) {
