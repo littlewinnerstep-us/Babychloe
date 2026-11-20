@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Sparkles, LogIn, UserPlus, AlertCircle } from 'lucide-react';
+import { X, Sparkles, LogIn, UserPlus, AlertCircle, KeyRound, Mail, CheckCircle2 } from 'lucide-react';
 import {
   DEMO_USER,
   AVATAR_STYLES,
@@ -14,21 +14,43 @@ import {
   isDisplayNameTaken,
   validateTextOnlyDisplayName,
 } from '../utils/multiplayerEngine';
+import {
+  isSupabaseConfigured,
+  supabaseSignUp,
+  supabaseSignIn,
+  supabaseSendPasswordReset,
+  supabaseUpdatePassword,
+} from '../utils/supabaseClient';
 import { drawAvatar2D } from '../utils/avatarRenderer';
 
-export default function AuthModal({ showDemoLogin = false, onClose, onLogin }) {
-  const [mode, setMode] = useState('signin'); // 'signin' | 'register'
+export default function AuthModal({
+  showDemoLogin = false,
+  initialMode = 'signin',
+  onClose,
+  onLogin,
+}) {
+  const [mode, setMode] = useState(initialMode); // 'signin' | 'register' | 'forgot' | 'reset'
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [gender, setGender] = useState('girl');
   const [avatarStyle, setAvatarStyle] = useState('classic');
   const [hairStyle, setHairStyle] = useState('long');
   const [hairColor, setHairColor] = useState(HAIR_OPTIONS[0].color);
   const [cloakColor, setCloakColor] = useState('#b86578');
+  const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   const previewCanvasRef = useRef(null);
+
+  useEffect(() => {
+    setMode(initialMode || 'signin');
+    setErrorMsg('');
+    setSuccessMsg('');
+  }, [initialMode]);
 
   const handleGenderSwitch = (nextGender) => {
     setGender(nextGender);
@@ -58,26 +80,99 @@ export default function AuthModal({ showDemoLogin = false, onClose, onLogin }) {
   }, [mode, gender, avatarStyle, hairStyle, hairColor, cloakColor]);
 
   const usernameTaken = mode === 'register' && username.trim().length >= 2 && isUsernameTaken(username);
-  const displayNameCheck = mode === 'register' && name.trim().length > 0 ? validateTextOnlyDisplayName(name) : { ok: true, error: '' };
-  const displayNameTaken = mode === 'register' && displayNameCheck.ok && name.trim().length >= 2 && isDisplayNameTaken(name);
+  const displayNameCheck =
+    mode === 'register' && name.trim().length > 0
+      ? validateTextOnlyDisplayName(name)
+      : { ok: true, error: '' };
+  const displayNameTaken =
+    mode === 'register' && displayNameCheck.ok && name.trim().length >= 2 && isDisplayNameTaken(name);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+    setSuccessMsg('');
 
-    if (mode === 'signin') {
-      const res = authenticateAccount(username, password);
+    if (mode === 'forgot') {
+      setSubmitting(true);
+      const res = await supabaseSendPasswordReset(email || username);
+      setSubmitting(false);
       if (!res.ok) {
         setErrorMsg(res.error);
         return;
       }
-      onLogin(res.user);
+      const targetEmail = (email || username).trim().toLowerCase();
+      setSuccessMsg(
+        `Password reset email sent to ${targetEmail}. Open the link in your inbox to set a new password.`
+      );
       return;
     }
 
+    if (mode === 'reset') {
+      if (password.length < 6) {
+        setErrorMsg('New password must be at least 6 characters.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setErrorMsg('Passwords do not match.');
+        return;
+      }
+      setSubmitting(true);
+      const res = await supabaseUpdatePassword(password);
+      setSubmitting(false);
+      if (!res.ok) {
+        setErrorMsg(res.error);
+        return;
+      }
+      setSuccessMsg('Password updated! You can now enter the park.');
+      if (res.user) {
+        setTimeout(() => onLogin(res.user), 800);
+      } else {
+        setMode('signin');
+      }
+      return;
+    }
+
+    if (mode === 'signin') {
+      setSubmitting(true);
+      if (isSupabaseConfigured) {
+        const sbRes = await supabaseSignIn({ identifier: username, password });
+        if (sbRes.ok && sbRes.user) {
+          setSubmitting(false);
+          onLogin(sbRes.user);
+          return;
+        }
+        // Only fall back to local registry if account wasn't found in Supabase or offline
+        if (!sbRes.notFoundInSupabase && !sbRes.networkError) {
+          const localCheck = authenticateAccount(username, password);
+          if (localCheck.ok) {
+            setSubmitting(false);
+            onLogin(localCheck.user);
+            return;
+          }
+          setSubmitting(false);
+          setErrorMsg(sbRes.error || 'Incorrect credentials. Please try again.');
+          return;
+        }
+      }
+
+      const localRes = authenticateAccount(username, password);
+      setSubmitting(false);
+      if (!localRes.ok) {
+        setErrorMsg(localRes.error);
+        return;
+      }
+      onLogin(localRes.user);
+      return;
+    }
+
+    // mode === 'register'
     const dnCheck = validateTextOnlyDisplayName(name);
     if (!dnCheck.ok) {
       setErrorMsg(dnCheck.error);
+      return;
+    }
+    if (password.length < 6) {
+      setErrorMsg('Password must be at least 6 characters.');
       return;
     }
 
@@ -90,13 +185,52 @@ export default function AuthModal({ showDemoLogin = false, onClose, onLogin }) {
       companion: 'none',
       carryingLantern: true,
     };
+
+    setSubmitting(true);
+    if (isSupabaseConfigured) {
+      const sbRes = await supabaseSignUp({
+        email,
+        password,
+        username,
+        name: dnCheck.clean,
+        gender,
+        avatar,
+      });
+      if (!sbRes.ok) {
+        setSubmitting(false);
+        setErrorMsg(sbRes.error);
+        return;
+      }
+      // Keep local/MQTT account directory mirrored for presence & lookup
+      registerAccount({
+        username,
+        password,
+        email,
+        name: dnCheck.clean,
+        gender,
+        avatar,
+      });
+      setSubmitting(false);
+      if (sbRes.needsEmailConfirm) {
+        setSuccessMsg(
+          `Account created! Please check ${email.trim()} to verify your email, then Sign In.`
+        );
+        setMode('signin');
+        return;
+      }
+      onLogin({ ...(sbRes.user || {}), avatar });
+      return;
+    }
+
     const res = registerAccount({
       username,
       password,
+      email,
       name: dnCheck.clean,
       gender,
       avatar,
     });
+    setSubmitting(false);
     if (!res.ok) {
       setErrorMsg(res.error);
       return;
@@ -113,7 +247,11 @@ export default function AuthModal({ showDemoLogin = false, onClose, onLogin }) {
               Welcome to Evergreen Paws
             </h2>
             <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-              Sign in with username &amp; password or create your own unique visitor character
+              {mode === 'forgot'
+                ? 'Enter your account email to receive a password reset link'
+                : mode === 'reset'
+                  ? 'Set your new Evergreen Paws account password'
+                  : 'Sign in with username/email & password or create your visitor character'}
             </p>
           </div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
@@ -121,7 +259,7 @@ export default function AuthModal({ showDemoLogin = false, onClose, onLogin }) {
           </button>
         </div>
 
-        {showDemoLogin && (
+        {showDemoLogin && mode === 'signin' && (
           <button
             type="button"
             className="btn-primary"
@@ -132,28 +270,43 @@ export default function AuthModal({ showDemoLogin = false, onClose, onLogin }) {
           </button>
         )}
 
-        <div className="modal-tabs" style={{ marginBottom: 12 }}>
-          <button
-            type="button"
-            className={`modal-tab ${mode === 'signin' ? 'active' : ''}`}
-            onClick={() => {
-              setMode('signin');
-              setErrorMsg('');
-            }}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            className={`modal-tab ${mode === 'register' ? 'active' : ''}`}
-            onClick={() => {
-              setMode('register');
-              setErrorMsg('');
-            }}
-          >
-            Create Account
-          </button>
-        </div>
+        {mode !== 'reset' && (
+          <div className="modal-tabs" style={{ marginBottom: 12 }}>
+            <button
+              type="button"
+              className={`modal-tab ${mode === 'signin' ? 'active' : ''}`}
+              onClick={() => {
+                setMode('signin');
+                setErrorMsg('');
+                setSuccessMsg('');
+              }}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              className={`modal-tab ${mode === 'register' ? 'active' : ''}`}
+              onClick={() => {
+                setMode('register');
+                setErrorMsg('');
+                setSuccessMsg('');
+              }}
+            >
+              Create Account
+            </button>
+            <button
+              type="button"
+              className={`modal-tab ${mode === 'forgot' ? 'active' : ''}`}
+              onClick={() => {
+                setMode('forgot');
+                setErrorMsg('');
+                setSuccessMsg('');
+              }}
+            >
+              Forgot Password
+            </button>
+          </div>
+        )}
 
         {errorMsg && (
           <div className="armtip-notif" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
@@ -162,73 +315,194 @@ export default function AuthModal({ showDemoLogin = false, onClose, onLogin }) {
           </div>
         )}
 
+        {successMsg && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginBottom: 10,
+              padding: '9px 12px',
+              borderRadius: 10,
+              background: '#dcfce7',
+              color: '#166534',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+            }}
+          >
+            <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="form-grid" style={{ gap: 10 }}>
-          <div className={mode === 'register' ? 'form-row-2' : 'form-grid'} style={{ gap: 10 }}>
+          {mode === 'forgot' ? (
             <div>
-              <label className="field-label">
-                {mode === 'register' ? 'Unique Username *' : 'Username or Email *'}
+              <label className="field-label" htmlFor="auth-reset-email">
+                Account Email Address *
               </label>
               <input
-                type="text"
+                id="auth-reset-email"
+                type="email"
                 required
                 className="input-control"
-                placeholder={mode === 'register' ? 'e.g., jamie_paws' : 'alex or email'}
-                value={username}
+                placeholder="you@example.com"
+                value={email}
                 onChange={(e) => {
-                  setUsername(e.target.value);
-                  setErrorMsg('');
-                }}
-              />
-              {usernameTaken && (
-                <div style={{ fontSize: '0.72rem', color: '#e05252', marginTop: 3, fontWeight: 600 }}>
-                  Username is already taken
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="field-label">Password *</label>
-              <input
-                type="password"
-                required
-                minLength={4}
-                className="input-control"
-                placeholder="At least 4 characters"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
+                  setEmail(e.target.value);
                   setErrorMsg('');
                 }}
               />
             </div>
-          </div>
-
-          {mode === 'register' && (
+          ) : mode === 'reset' ? (
             <>
               <div>
-                <label className="field-label">Unique Display Name (Text Only) *</label>
+                <label className="field-label" htmlFor="auth-new-pass">
+                  New Password *
+                </label>
                 <input
-                  type="text"
+                  id="auth-new-pass"
+                  type="password"
                   required
-                  maxLength={32}
+                  minLength={6}
                   className="input-control"
-                  placeholder="e.g., Jamie Chen (letters & spaces only)"
-                  value={name}
+                  placeholder="At least 6 characters"
+                  value={password}
                   onChange={(e) => {
-                    setName(e.target.value);
+                    setPassword(e.target.value);
                     setErrorMsg('');
                   }}
                 />
-                {!displayNameCheck.ok && (
+              </div>
+              <div>
+                <label className="field-label" htmlFor="auth-confirm-pass">
+                  Confirm New Password *
+                </label>
+                <input
+                  id="auth-confirm-pass"
+                  type="password"
+                  required
+                  minLength={6}
+                  className="input-control"
+                  placeholder="Re-enter new password"
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    setErrorMsg('');
+                  }}
+                />
+              </div>
+            </>
+          ) : (
+            <div className={mode === 'register' ? 'form-row-2' : 'form-grid'} style={{ gap: 10 }}>
+              <div>
+                <label className="field-label" htmlFor="auth-username">
+                  {mode === 'register' ? 'Unique Username *' : 'Username or Email *'}
+                </label>
+                <input
+                  id="auth-username"
+                  type="text"
+                  required
+                  className="input-control"
+                  placeholder={mode === 'register' ? 'e.g., jamie_paws' : 'username or email'}
+                  value={username}
+                  onChange={(e) => {
+                    setUsername(e.target.value);
+                    setErrorMsg('');
+                  }}
+                />
+                {usernameTaken && (
                   <div style={{ fontSize: '0.72rem', color: '#e05252', marginTop: 3, fontWeight: 600 }}>
-                    {displayNameCheck.error}
+                    Username is already taken
                   </div>
                 )}
-                {displayNameTaken && (
-                  <div style={{ fontSize: '0.72rem', color: '#e05252', marginTop: 3, fontWeight: 600 }}>
-                    Display name is already taken
+              </div>
+
+              <div>
+                <label className="field-label" htmlFor="auth-password">
+                  Password *
+                </label>
+                <input
+                  id="auth-password"
+                  type="password"
+                  required
+                  minLength={mode === 'register' ? 6 : 4}
+                  className="input-control"
+                  placeholder={mode === 'register' ? 'At least 6 characters' : 'Enter your password'}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setErrorMsg('');
+                  }}
+                />
+                {mode === 'signin' && (
+                  <div style={{ textAlign: 'right', marginTop: 4 }}>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      style={{ fontSize: '0.74rem', padding: '2px 8px', border: 'none' }}
+                      onClick={() => {
+                        setMode('forgot');
+                        setErrorMsg('');
+                        setSuccessMsg('');
+                      }}
+                    >
+                      Forgot Password?
+                    </button>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {mode === 'register' && (
+            <>
+              <div className="form-row-2" style={{ gap: 10 }}>
+                <div>
+                  <label className="field-label" htmlFor="auth-email">
+                    Email Address (for Password Reset) *
+                  </label>
+                  <input
+                    id="auth-email"
+                    type="email"
+                    required
+                    className="input-control"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setErrorMsg('');
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="auth-display-name">
+                    Unique Display Name (Text Only) *
+                  </label>
+                  <input
+                    id="auth-display-name"
+                    type="text"
+                    required
+                    maxLength={32}
+                    className="input-control"
+                    placeholder="e.g., Jamie Chen"
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      setErrorMsg('');
+                    }}
+                  />
+                  {!displayNameCheck.ok && (
+                    <div style={{ fontSize: '0.72rem', color: '#e05252', marginTop: 3, fontWeight: 600 }}>
+                      {displayNameCheck.error}
+                    </div>
+                  )}
+                  {displayNameTaken && (
+                    <div style={{ fontSize: '0.72rem', color: '#e05252', marginTop: 3, fontWeight: 600 }}>
+                      Display name is already taken
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Live Character Preview + Girl/Boy Picker */}
@@ -315,16 +589,17 @@ export default function AuthModal({ showDemoLogin = false, onClose, onLogin }) {
               <div className="form-row-2" style={{ gap: 10 }}>
                 <div>
                   <label className="field-label">Hair Color</label>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {HAIR_OPTIONS.map((h) => (
                       <button
                         key={h.id}
                         type="button"
                         title={h.label}
+                        aria-label={`Hair color ${h.label}`}
                         onClick={() => setHairColor(h.color)}
                         style={{
-                          width: 24,
-                          height: 24,
+                          width: 30,
+                          height: 30,
                           borderRadius: '50%',
                           background: h.color,
                           border:
@@ -340,16 +615,17 @@ export default function AuthModal({ showDemoLogin = false, onClose, onLogin }) {
 
                 <div>
                   <label className="field-label">Uniform / Cloak Color</label>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {CLOAK_OPTIONS.map((c) => (
                       <button
                         key={c.id}
                         type="button"
                         title={c.label}
+                        aria-label={`Cloak color ${c.label}`}
                         onClick={() => setCloakColor(c.color)}
                         style={{
-                          width: 24,
-                          height: 24,
+                          width: 30,
+                          height: 30,
                           borderRadius: '50%',
                           background: c.color,
                           border:
@@ -369,12 +645,22 @@ export default function AuthModal({ showDemoLogin = false, onClose, onLogin }) {
           <button
             type="submit"
             className="btn-primary"
-            disabled={usernameTaken}
-            style={{ justifyContent: 'center', padding: '11px', opacity: usernameTaken ? 0.6 : 1 }}
+            disabled={submitting || usernameTaken}
+            style={{ justifyContent: 'center', padding: '11px', opacity: submitting || usernameTaken ? 0.65 : 1 }}
           >
-            {mode === 'register' ? (
+            {submitting ? (
+              'Please wait...'
+            ) : mode === 'register' ? (
               <>
                 <UserPlus size={15} /> Create Account &amp; Enter Park
+              </>
+            ) : mode === 'forgot' ? (
+              <>
+                <Mail size={15} /> Send Password Reset Email
+              </>
+            ) : mode === 'reset' ? (
+              <>
+                <KeyRound size={15} /> Update Password
               </>
             ) : (
               <>
@@ -382,6 +668,21 @@ export default function AuthModal({ showDemoLogin = false, onClose, onLogin }) {
               </>
             )}
           </button>
+
+          {(mode === 'forgot' || mode === 'reset') && (
+            <button
+              type="button"
+              className="btn-ghost"
+              style={{ justifyContent: 'center' }}
+              onClick={() => {
+                setMode('signin');
+                setErrorMsg('');
+                setSuccessMsg('');
+              }}
+            >
+              Back to Sign In
+            </button>
+          )}
         </form>
       </div>
     </div>

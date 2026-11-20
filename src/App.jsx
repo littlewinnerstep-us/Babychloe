@@ -100,6 +100,7 @@ import {
   cancelOutgoingFriendRequest,
   setCurrentUserIdentity,
 } from './utils/multiplayerEngine';
+import { supabase, supabaseSignOut } from './utils/supabaseClient';
 
 const STORAGE_MEMORIALS_KEY = 'evergreen_paws_memorials_v1';
 const STORAGE_USER_KEY = 'evergreen_paws_user_v1';
@@ -350,6 +351,7 @@ export default function App() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [pendingCreate, setPendingCreate] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authInitialMode, setAuthInitialMode] = useState('signin');
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [accountsList, setAccountsList] = useState(getRegisteredAccounts);
   const [globalNotice, setGlobalNotice] = useState('');
@@ -940,6 +942,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    supabaseSignOut();
     setCurrentUser(null);
     setShowUserMenu(false);
     if (selectedMemorial?.visibility === 'private') {
@@ -1082,6 +1085,19 @@ export default function App() {
       prev.map((m) => (m.id === memorialId ? buildWithTribute(m, message, author) : m))
     );
   };
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthInitialMode('reset');
+        setShowAuthModal(true);
+      }
+    });
+    return () => {
+      data?.subscription?.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     initMultiplayer({
@@ -2567,8 +2583,10 @@ export default function App() {
       {showAuthModal && (
         <AuthModal
           showDemoLogin={Boolean(adminConfig?.showDemoLogin)}
+          initialMode={authInitialMode}
           onClose={() => {
             setShowAuthModal(false);
+            setAuthInitialMode('signin');
             setPendingMemorialId(null);
             setPendingCreate(false);
           }}
