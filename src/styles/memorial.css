@@ -2416,9 +2416,14 @@ select {
   color: rgba(246, 239, 226, 0.65);
 }
 
+.world-chat-bar:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .world-chat-send {
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: none;
   background: var(--accent);
@@ -3213,4 +3218,48 @@ body.is-mobile-hud .world-container .world-proximity-card {
 .monument-stage.full .custom-offering-img {
   width: 28px;
   height: 28px;
+}
+
+.swatch-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  cursor: pointer;
+}
+
+.color-swatch.active {
+  border-color: #ffd57e;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* Global keyboard focus & reduced motion accessibility */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-lively,
+  .fx-pulse,
+  .fx-breathing,
+  .fx-float,
+  .fx-flicker,
+  .fx-shimmer,
+  .fx-sparkle::after,
+  .candle-glow::before,
+  .incense-smoke::after {
+    animation: none !important;
+  }
 }

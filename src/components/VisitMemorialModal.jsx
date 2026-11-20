@@ -605,8 +605,8 @@ export default function VisitMemorialModal({
                 margin: '0 0 10px',
                 padding: '10px 14px',
                 background: 'var(--bg-elevated)',
-                borderLeft: '3px solid var(--accent)',
-                borderRadius: '0 10px 10px 0',
+                border: '1px solid var(--border-soft)',
+                borderRadius: 10,
               }}
             >
               “{memorial.epitaph}”

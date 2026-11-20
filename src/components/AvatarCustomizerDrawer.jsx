@@ -50,7 +50,7 @@ export default function AvatarCustomizerDrawer({
         <button
           type="button"
           className="modal-close"
-          style={{ width: 28, height: 28 }}
+          style={{ width: 36, height: 36 }}
           onClick={onClose}
           aria-label="Close avatar customizer"
         >
@@ -118,16 +118,17 @@ export default function AvatarCustomizerDrawer({
 
         <div>
           <div className="field-label">Uniform / Cloak Color</div>
-          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {CLOAK_OPTIONS.map((c) => (
               <button
                 key={c.id}
                 type="button"
                 title={c.label}
+                aria-label={`Cloak color ${c.label}`}
                 onClick={() => onUpdateAvatar({ cloakColor: c.color })}
                 style={{
-                  width: 24,
-                  height: 24,
+                  width: 32,
+                  height: 32,
                   borderRadius: '50%',
                   background: c.color,
                   border:
@@ -143,16 +144,17 @@ export default function AvatarCustomizerDrawer({
 
         <div>
           <div className="field-label">Hair Color</div>
-          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {HAIR_OPTIONS.map((h) => (
               <button
                 key={h.id}
                 type="button"
                 title={h.label}
+                aria-label={`Hair color ${h.label}`}
                 onClick={() => onUpdateAvatar({ hairColor: h.color })}
                 style={{
-                  width: 24,
-                  height: 24,
+                  width: 32,
+                  height: 32,
                   borderRadius: '50%',
                   background: h.color,
                   border:

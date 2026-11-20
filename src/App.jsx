@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Trees,
   Flame,
@@ -41,14 +41,14 @@ import {
   makeOfferingToken,
 } from './utils/customAssets';
 import MonumentVisual from './components/MonumentVisual';
-import ParkWorld2D from './components/ParkWorld2D';
-import ParkWorld3D from './components/ParkWorld3D';
+const ParkWorld2D = lazy(() => import('./components/ParkWorld2D'));
+const ParkWorld3D = lazy(() => import('./components/ParkWorld3D'));
 import VisitMemorialModal from './components/VisitMemorialModal';
 import CreateMemorialModal from './components/CreateMemorialModal';
 import AuthModal from './components/AuthModal';
 import SpeciesGateModal from './components/SpeciesGateModal';
 import FavoritesModal from './components/FavoritesModal';
-import AdminBackendModal from './components/AdminBackendModal';
+const AdminBackendModal = lazy(() => import('./components/AdminBackendModal'));
 import NotificationsModal from './components/NotificationsModal';
 import UpdateCheckModal, { APP_BUILD_VERSION } from './components/UpdateCheckModal';
 import FirstVisitGuide from './components/FirstVisitGuide';
@@ -2257,7 +2257,8 @@ export default function App() {
 
         {/* 3D Walkable Park, 2D Walkable Park, or Cards / Favorites Directory */}
         {viewMode === 'world3d' && activeTab !== 'sanctuary' && !showOnlyFavorites ? (
-          <ParkWorld3D
+          <Suspense fallback={<div className="empty-state">Loading 3D Sanctuary...</div>}>
+            <ParkWorld3D
             isApk={isApk}
             isMobileHud={isMobileHud}
             onOpenUpdateModal={() => setShowUpdateModal(true)}
@@ -2329,7 +2330,9 @@ export default function App() {
             onUpdateCustomerHold={handleUpdateCustomerHold}
             onHoldFlowerEmote={handleHoldFlowerEmote}
           />
+          </Suspense>
         ) : viewMode === 'world2d' && activeTab !== 'sanctuary' && !showOnlyFavorites ? (
+          <Suspense fallback={<div className="empty-state">Loading 2D Sanctuary...</div>}>
           <ParkWorld2D
             isApk={isApk}
             isMobileHud={isMobileHud}
@@ -2401,6 +2404,7 @@ export default function App() {
             onUpdateCustomerHold={handleUpdateCustomerHold}
             onHoldFlowerEmote={handleHoldFlowerEmote}
           />
+          </Suspense>
         ) : activeTab === 'sanctuary' && !currentUser && !showOnlyFavorites ? (
           <div className="empty-state">
             <h4 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.45rem', margin: '0 0 8px' }}>
@@ -2588,6 +2592,7 @@ export default function App() {
       )}
 
       {showAdminModal && (
+        <Suspense fallback={null}>
         <AdminBackendModal
           adminAuthenticated={adminAuthenticated}
           onSetAdminAuthenticated={setAdminAuthenticated}
@@ -2609,6 +2614,7 @@ export default function App() {
           totalAccounts={accountsList.length}
           onClose={() => setShowAdminModal(false)}
         />
+        </Suspense>
       )}
 
       {showSpeciesGate && (

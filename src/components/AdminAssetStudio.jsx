@@ -355,6 +355,7 @@ export default function AdminAssetStudio({
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <input
                   type="color"
+                  aria-label={`${c.label} color picker`}
                   value={normalizeHex(form[c.key], c.fallback)}
                   onChange={(e) => setColorField(c.key, e.target.value)}
                   style={{ width: 34, height: 32, padding: 2, borderRadius: 6, cursor: 'pointer' }}
@@ -362,6 +363,7 @@ export default function AdminAssetStudio({
                 <input
                   type="text"
                   maxLength={7}
+                  aria-label={`${c.label} hex value`}
                   className="input-control"
                   value={form[c.key]}
                   onChange={(e) => setColorField(c.key, e.target.value)}

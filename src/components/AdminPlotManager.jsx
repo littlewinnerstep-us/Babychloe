@@ -423,6 +423,7 @@ export default function AdminPlotManager({
             <input
               type="url"
               className="input-control"
+              aria-label="Photo URL link"
               placeholder="or https:// photo link"
               value={photoLinkDraft}
               onChange={(e) => setPhotoLinkDraft(e.target.value)}
@@ -435,6 +436,7 @@ export default function AdminPlotManager({
               type="text"
               maxLength={8}
               className="input-control"
+              aria-label="Plot or niche emoji icon"
               value={editing.photo?.startsWith('data:') || editing.photo?.startsWith('https://') ? '' : editing.photo}
               onChange={(e) => setEditing((p) => ({ ...p, photo: e.target.value || '🕊️' }))}
               placeholder="Emoji"
