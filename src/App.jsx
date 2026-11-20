@@ -100,7 +100,14 @@ import {
   cancelOutgoingFriendRequest,
   setCurrentUserIdentity,
 } from './utils/multiplayerEngine';
-import { supabase, supabaseSignOut } from './utils/supabaseClient';
+import {
+  supabase,
+  supabaseSignOut,
+  supabaseFetchMemorials,
+  supabaseFetchAssets,
+  supabaseFetchConfig,
+} from './utils/supabaseClient';
+import { setCustomSpeciesRegistry } from './data/memorialData';
 
 const STORAGE_MEMORIALS_KEY = 'evergreen_paws_memorials_v1';
 const STORAGE_USER_KEY = 'evergreen_paws_user_v1';
@@ -1094,7 +1101,40 @@ export default function App() {
         setShowAuthModal(true);
       }
     });
+
+    // Hydrate persisted memorials, custom assets, and config from Supabase Postgres
+    let cancelled = false;
+    (async () => {
+      const [sbMemorials, sbAssets, sbConfig] = await Promise.all([
+        supabaseFetchMemorials(),
+        supabaseFetchAssets(),
+        supabaseFetchConfig(),
+      ]);
+      if (cancelled) return;
+      if (sbMemorials.length > 0) {
+        setMemorials((prev) => {
+          let next = prev;
+          sbMemorials.forEach((m) => {
+            next = mergeIncomingMemorial(next, m);
+          });
+          return next;
+        });
+      }
+      if (sbAssets.length > 0) {
+        setAdminAssets((prev) => {
+          const map = new Map((prev || []).map((a) => [a.id, a]));
+          sbAssets.forEach((a) => map.set(a.id, a));
+          return Array.from(map.values()).filter((a) => !a.deletedAt);
+        });
+      }
+      if (sbConfig && (sbConfig.updatedAt || 0) > (adminConfig?.updatedAt || 0)) {
+        setCustomSpeciesRegistry(sbConfig.customSpecies);
+        setAdminConfig((prev) => ({ ...prev, ...sbConfig }));
+      }
+    })();
+
     return () => {
+      cancelled = true;
       data?.subscription?.unsubscribe();
     };
   }, []);

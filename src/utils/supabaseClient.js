@@ -283,3 +283,64 @@ export async function supabaseFetchMemorials() {
     return [];
   }
 }
+
+export async function supabaseSyncAsset(asset) {
+  if (!supabase || !asset?.id) return;
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session) return;
+    await supabase.from('admin_assets').upsert({
+      id: asset.id,
+      kind: asset.kind || 'flower',
+      deleted_at: asset.deletedAt || null,
+      payload: asset,
+      updated_at: asset.updatedAt || new Date().toISOString(),
+    });
+  } catch {
+    // ignore transient sync error
+  }
+}
+
+export async function supabaseFetchAssets() {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('admin_assets')
+      .select('payload')
+      .limit(300);
+    if (error || !Array.isArray(data)) return [];
+    return data.map((r) => r.payload).filter((a) => a && a.id && !a.deletedAt);
+  } catch {
+    return [];
+  }
+}
+
+export async function supabaseSyncConfig(config) {
+  if (!supabase || !config) return;
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session) return;
+    await supabase.from('app_config').upsert({
+      key: 'park_config',
+      value: config,
+      updated_at: new Date().toISOString(),
+    });
+  } catch {
+    // ignore transient sync error
+  }
+}
+
+export async function supabaseFetchConfig() {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', 'park_config')
+      .maybeSingle();
+    if (error || !data?.value) return null;
+    return data.value;
+  } catch {
+    return null;
+  }
+}

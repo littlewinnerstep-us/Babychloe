@@ -3,6 +3,11 @@
 import { prepareMemorialForSync } from './imageCompressor';
 import { DEMO_USER, setCustomSpeciesRegistry } from '../data/memorialData';
 import { sanitizeAsset } from './customAssets';
+import {
+  supabaseSyncMemorial,
+  supabaseSyncAsset,
+  supabaseSyncConfig,
+} from './supabaseClient';
 
 const BROKERS = [
   'wss://broker.emqx.io:8084/mqtt',
@@ -514,6 +519,7 @@ export async function publishSharedMemorial(memorial) {
   if (!memorial || !memorial.id || memorial.visibility === 'private') return;
   touchedMemorialIds.add(memorial.id);
   const compact = await prepareMemorialForSync(memorial);
+  supabaseSyncMemorial(compact);
 
   seqCounter += 1;
   const msg = {
@@ -1433,6 +1439,7 @@ export function publishAdminConfig(patch) {
   };
   markSeen(msg.msgId);
   broadcastGlobalTopic(ADMIN_CONFIG_TOPIC, msg, true);
+  supabaseSyncConfig(next);
   return next;
 }
 
@@ -1518,6 +1525,7 @@ export function publishAdminAsset(rawAsset) {
   };
   markSeen(pktPayload.msgId);
   broadcastGlobalTopic(`${ADMIN_ASSET_TOPIC_PREFIX}${clean.id}`, pktPayload, true);
+  supabaseSyncAsset(clean);
   return { ok: true, asset: clean };
 }
 
@@ -1543,6 +1551,7 @@ export function deleteAdminAsset(id) {
   };
   markSeen(pktPayload.msgId);
   broadcastGlobalTopic(`${ADMIN_ASSET_TOPIC_PREFIX}${id}`, pktPayload, true);
+  supabaseSyncAsset(deleted);
 }
 
 export function getActiveGroup() {
