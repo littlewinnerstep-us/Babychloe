@@ -32,13 +32,59 @@ export const SPECIES_LIST = [
   { id: 'Cow', label: 'Cow', emoji: '🐄' },
   { id: 'Horse', label: 'Horse', emoji: '🐎' },
   { id: 'Elephant', label: 'Elephant', emoji: '🐘' },
+  { id: 'Hippopotamus', label: 'Hippopotamus', emoji: '🦛' },
   { id: 'Small Pet', label: 'Small Pet', emoji: '🐾' },
   { id: 'Medium Pet', label: 'Medium Pet', emoji: '🐾' },
   { id: 'Large Pet', label: 'Large Pet', emoji: '🐾' },
 ];
 
-export function getSpeciesEmoji(species) {
-  return SPECIES_LIST.find((s) => s.id === species)?.emoji || '🐾';
+let customSpeciesRegistry = [];
+
+export function setCustomSpeciesRegistry(list) {
+  if (!Array.isArray(list)) {
+    customSpeciesRegistry = [];
+    return;
+  }
+  const seen = new Set(SPECIES_LIST.map((s) => s.id.toLowerCase()));
+  const clean = [];
+  list.forEach((item) => {
+    const label = String(item?.label || item?.id || '').trim().slice(0, 32);
+    if (!label) return;
+    const key = label.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    clean.push({
+      id: label,
+      label,
+      emoji: String(item?.emoji || '🐾').trim().slice(0, 8) || '🐾',
+      custom: true,
+    });
+  });
+  customSpeciesRegistry = clean;
+}
+
+export function getAllSpeciesList(extraList = null) {
+  const extra = Array.isArray(extraList) ? extraList : customSpeciesRegistry;
+  if (!extra || extra.length === 0) return SPECIES_LIST;
+  const seen = new Set(SPECIES_LIST.map((s) => s.id.toLowerCase()));
+  const merged = [...SPECIES_LIST];
+  extra.forEach((item) => {
+    const label = String(item?.label || item?.id || '').trim().slice(0, 32);
+    if (!label || seen.has(label.toLowerCase())) return;
+    seen.add(label.toLowerCase());
+    merged.push({
+      id: label,
+      label,
+      emoji: String(item?.emoji || '🐾').trim().slice(0, 8) || '🐾',
+      custom: true,
+    });
+  });
+  return merged;
+}
+
+export function getSpeciesEmoji(species, extraList = null) {
+  const all = getAllSpeciesList(extraList);
+  return all.find((s) => s.id === species)?.emoji || '🐾';
 }
 
 export const AVATAR_STYLES = [

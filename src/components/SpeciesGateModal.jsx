@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { X, DoorOpen, Search } from 'lucide-react';
-import { SPECIES_LIST } from '../data/memorialData';
+import { getAllSpeciesList } from '../data/memorialData';
 
 export default function SpeciesGateModal({
   activeSpecies,
@@ -10,12 +10,13 @@ export default function SpeciesGateModal({
 }) {
   const [filterText, setFilterText] = useState('');
   const [confirmSpecies, setConfirmSpecies] = useState(null);
+  const allSpecies = getAllSpeciesList();
 
   const filteredSpecies = useMemo(() => {
     const q = filterText.trim().toLowerCase();
-    if (!q) return SPECIES_LIST;
-    return SPECIES_LIST.filter((sp) => sp.label.toLowerCase().includes(q));
-  }, [filterText]);
+    if (!q) return allSpecies;
+    return allSpecies.filter((sp) => sp.label.toLowerCase().includes(q));
+  }, [filterText, allSpecies]);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>

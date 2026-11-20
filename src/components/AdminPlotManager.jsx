@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Plus, Edit3, Trash2, RotateCcw, Upload, Link2, Sparkles, Grid } from 'lucide-react';
 import {
-  SPECIES_LIST,
+  getAllSpeciesList,
   MONUMENT_STYLES,
   MAX_PLOTS_PER_GARDEN,
   getAdminSlotCode,
@@ -223,9 +223,9 @@ export default function AdminPlotManager({
               }}
               style={{ width: 'auto', padding: '5px 10px' }}
             >
-              {SPECIES_LIST.map((sp) => (
-                <option key={sp.name} value={sp.name}>
-                  {sp.emoji} {sp.name}
+              {getAllSpeciesList().map((sp) => (
+                <option key={sp.id} value={sp.id}>
+                  {sp.emoji} {sp.label}
                 </option>
               ))}
             </select>

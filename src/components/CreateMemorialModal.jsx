@@ -5,7 +5,7 @@ import AdminAssetStudio from './AdminAssetStudio';
 import {
   MONUMENT_STYLES,
   PHOTO_PRESETS,
-  SPECIES_LIST,
+  getAllSpeciesList,
   MAX_PLOTS_PER_GARDEN,
   getNextPlotCode,
   getAdminSlotCode,
@@ -337,7 +337,7 @@ export default function CreateMemorialModal({
                 value={species}
                 onChange={(e) => setSpecies(e.target.value)}
               >
-                {SPECIES_LIST.map((sp) => (
+                {getAllSpeciesList().map((sp) => (
                   <option key={sp.id} value={sp.id}>
                     {sp.emoji} {sp.label}
                   </option>

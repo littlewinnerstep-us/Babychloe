@@ -1,7 +1,7 @@
 // Zero-setup real-time multiplayer engine using MQTT 3.1.1 over WSS dual brokers
 // plus BroadcastChannel for instant local tab sync and retained per-memorial/account persistence.
 import { prepareMemorialForSync } from './imageCompressor';
-import { DEMO_USER } from '../data/memorialData';
+import { DEMO_USER, setCustomSpeciesRegistry } from '../data/memorialData';
 import { sanitizeAsset } from './customAssets';
 
 const BROKERS = [
@@ -186,6 +186,7 @@ let adminConfig = (() => {
     globalMusicUrl: '',
     showDemoLogin: false,
     enabledViews: { world3d: true, world2d: true, grid: true },
+    customSpecies: [],
     updatedAt: 0,
   };
   try {
@@ -193,11 +194,14 @@ let adminConfig = (() => {
       const raw = localStorage.getItem(STORAGE_ADMIN_CONFIG_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        return {
+        const hydrated = {
           ...fallback,
           ...parsed,
+          customSpecies: Array.isArray(parsed?.customSpecies) ? parsed.customSpecies : [],
           enabledViews: { ...fallback.enabledViews, ...(parsed?.enabledViews || {}) },
         };
+        setCustomSpeciesRegistry(hydrated.customSpecies);
+        return hydrated;
       }
     }
   } catch {
@@ -579,6 +583,7 @@ function markSeen(msgId) {
 
 function saveAdminConfig(nextCfg) {
   adminConfig = nextCfg;
+  setCustomSpeciesRegistry(adminConfig?.customSpecies);
   try {
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_ADMIN_CONFIG_KEY, JSON.stringify(adminConfig));

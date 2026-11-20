@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import AdminAssetStudio from './AdminAssetStudio';
 import AdminPlotManager from './AdminPlotManager';
+import { SPECIES_LIST } from '../data/memorialData';
 import {
   verifyAdminCredentials,
   publishAdminConfig,
@@ -58,6 +59,8 @@ export default function AdminBackendModal({
   const [userSearch, setUserSearch] = useState('');
   const [banPreset, setBanPreset] = useState('24h'); // '15m' | '1h' | '6h' | '24h' | '7d' | 'custom' | 'perm'
   const [customHours, setCustomHours] = useState('12');
+  const [newSpeciesName, setNewSpeciesName] = useState('');
+  const [newSpeciesEmoji, setNewSpeciesEmoji] = useState('🐾');
   const [feedback, setFeedback] = useState('');
 
   const showNotice = (msg) => {
@@ -533,6 +536,115 @@ export default function AdminBackendModal({
                         <Trash2 size={12} />
                       </button>
                     </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Dynamic Species Gates Manager */}
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 12,
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-soft)',
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 4 }}>
+                🐾 Manage Species Gates ({SPECIES_LIST.length} Built-in + {(adminConfig?.customSpecies || []).length} Custom)
+              </div>
+              <p style={{ margin: '0 0 8px', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                Add new pet species gates anytime. They immediately appear in Species Gate, Enshrine, and Plots &amp; Niches for all visitors.
+              </p>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const label = newSpeciesName.trim().slice(0, 32);
+                  const emoji = newSpeciesEmoji.trim().slice(0, 8) || '🐾';
+                  if (!label) return;
+                  const existing = Array.isArray(adminConfig?.customSpecies) ? adminConfig.customSpecies : [];
+                  const dup =
+                    SPECIES_LIST.some((s) => s.id.toLowerCase() === label.toLowerCase()) ||
+                    existing.some((s) => (s.label || s.id || '').toLowerCase() === label.toLowerCase());
+                  if (dup) {
+                    showNotice(`Species "${label}" already exists.`);
+                    return;
+                  }
+                  const nextCustom = [...existing, { id: label, label, emoji }];
+                  publishAdminConfig({ customSpecies: nextCustom });
+                  setNewSpeciesName('');
+                  setNewSpeciesEmoji('🐾');
+                  showNotice(`Added new species gate: ${emoji} ${label}!`);
+                }}
+                style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}
+              >
+                <input
+                  type="text"
+                  maxLength={32}
+                  aria-label="New species name"
+                  className="input-control"
+                  placeholder="New species name (e.g. Capybara)"
+                  value={newSpeciesName}
+                  onChange={(e) => setNewSpeciesName(e.target.value)}
+                  style={{ flex: 2, minWidth: 160 }}
+                />
+                <input
+                  type="text"
+                  maxLength={8}
+                  aria-label="New species emoji"
+                  className="input-control"
+                  value={newSpeciesEmoji}
+                  onChange={(e) => setNewSpeciesEmoji(e.target.value)}
+                  style={{ width: 64, textAlign: 'center' }}
+                />
+                <button type="submit" className="btn-primary" style={{ padding: '8px 12px', fontSize: '0.8rem' }}>
+                  + Add Species
+                </button>
+              </form>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 6 }}>
+                {['🦫', '🦊', '🦉', '🐼', '🐨', '🦚', '🦋', '🐢'].map((em) => (
+                  <button
+                    key={em}
+                    type="button"
+                    className={`chip-btn ${newSpeciesEmoji === em ? 'active' : ''}`}
+                    style={{ padding: '2px 8px' }}
+                    onClick={() => setNewSpeciesEmoji(em)}
+                  >
+                    {em}
+                  </button>
+                ))}
+              </div>
+              {(adminConfig?.customSpecies || []).length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                  {adminConfig.customSpecies.map((cs) => (
+                    <span
+                      key={cs.id}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '4px 10px',
+                        borderRadius: 999,
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border-soft)',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {cs.emoji} {cs.label}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${cs.label}`}
+                        onClick={() => {
+                          const next = (adminConfig?.customSpecies || []).filter((x) => x.id !== cs.id);
+                          publishAdminConfig({ customSpecies: next });
+                          showNotice(`Removed custom species "${cs.label}".`);
+                        }}
+                        style={{ background: 'none', border: 'none', color: '#b91c1c', cursor: 'pointer', fontWeight: 700, padding: 0 }}
+                      >
+                        ✕
+                      </button>
+                    </span>
                   ))}
                 </div>
               )}
