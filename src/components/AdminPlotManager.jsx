@@ -65,7 +65,7 @@ export default function AdminPlotManager({
     return (adminAssets || []).filter((a) => a && !a.deletedAt && a.kind === wantedKind);
   }, [adminAssets, space]);
 
-  const builtInStyles = space === 'ash-room' ? MONUMENT_STYLES.ashRoom : MONUMENT_STYLES.tombstone;
+  const builtInStyles = MONUMENT_STYLES[space] || MONUMENT_STYLES.tombstone;
 
   const findNextAvailableSlot = (start = 21) => {
     let n = start;
@@ -83,7 +83,7 @@ export default function AdminPlotManager({
         name: existingMemorial.name || '',
         breed: existingMemorial.breed || '',
         years: existingMemorial.years || '',
-        styleId: existingMemorial.styleId || builtInStyles[0]?.id || 'granite',
+        styleId: existingMemorial.styleId || builtInStyles[0]?.id || (space === 'ash-room' ? 'celadon-urn' : 'classic-granite'),
         photo: existingMemorial.photo || (space === 'ash-room' ? '⚱️' : '🕊️'),
         epitaph: existingMemorial.epitaph || '',
         story: existingMemorial.story || '',
@@ -104,7 +104,7 @@ export default function AdminPlotManager({
         name: `Open ${code}`,
         breed: space === 'ash-room' ? 'Sanctuary Niche' : 'Memorial Plot',
         years: 'Open Slot',
-        styleId: builtInStyles[0]?.id || 'granite',
+        styleId: builtInStyles[0]?.id || (space === 'ash-room' ? 'celadon-urn' : 'classic-granite'),
         photo: space === 'ash-room' ? '⚱️' : '🕊️',
         epitaph: 'Reserved space prepared for remembrance.',
         story: '',

@@ -1503,7 +1503,7 @@ export default function App() {
     showGlobalNotice(`♻️ Restored ${finalRestored?.locationCode || 'memorial'}.`);
   };
 
-  const handleBulkCreateBlankSlots = ({ species, space, styleId = 'granite' }) => {
+  const handleBulkCreateBlankSlots = ({ species, space, styleId = '' }) => {
     if (!isAdminUser) return { created: 0 };
     const targetSpecies = species || 'Dog';
     const targetSpace = space === 'ash-room' ? 'ash-room' : 'tombstone';
@@ -1520,7 +1520,7 @@ export default function App() {
         breed: targetSpace === 'ash-room' ? 'Open Ash Niche' : 'Open Memorial Plot',
         years: 'Open Slot',
         space: targetSpace,
-        styleId: styleId || (targetSpace === 'ash-room' ? 'celadon-urn' : 'granite'),
+        styleId: styleId || (targetSpace === 'ash-room' ? 'celadon-urn' : 'classic-granite'),
         locationCode: code,
         zoneName:
           targetSpace === 'ash-room'
