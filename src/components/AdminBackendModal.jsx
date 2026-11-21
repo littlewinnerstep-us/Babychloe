@@ -15,6 +15,7 @@ import {
 import AdminAssetStudio from './AdminAssetStudio';
 import AdminPlotManager from './AdminPlotManager';
 import AdminUsersTab from './AdminUsersTab';
+import AdminSiteSettingsTab from './AdminSiteSettingsTab';
 import { DEFAULT_PET_TRAITS, SPECIES_LIST } from '../data/memorialData';
 import {
   verifyAdminCredentials,
@@ -42,6 +43,7 @@ export default function AdminBackendModal({
   onDeleteAdminMemorial,
   onRestoreAdminMemorial,
   onBulkCreateBlankSlots,
+  onPreviewSplash,
   totalMemorials = 0,
   totalAccounts = 0,
   onClose,
@@ -269,6 +271,13 @@ export default function AdminBackendModal({
               </button>
               <button
                 type="button"
+                className={`modal-tab ${adminTab === 'site' ? 'active' : ''}`}
+                onClick={() => setAdminTab('site')}
+              >
+                🌐 Site Setting
+              </button>
+              <button
+                type="button"
                 className={`modal-tab ${adminTab === 'users' ? 'active' : ''}`}
                 onClick={() => setAdminTab('users')}
               >
@@ -289,6 +298,17 @@ export default function AdminBackendModal({
                 ✨ Custom Asset Studio ({adminAssets.length})
               </button>
             </div>
+
+            {adminTab === 'site' && (
+              <AdminSiteSettingsTab
+                adminConfig={adminConfig}
+                onFeedback={showNotice}
+                onPreviewSplash={() => {
+                  onClose?.();
+                  onPreviewSplash?.();
+                }}
+              />
+            )}
 
             {adminTab === 'users' && (
               <AdminUsersTab

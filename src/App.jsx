@@ -52,6 +52,7 @@ const AdminBackendModal = lazy(() => import('./components/AdminBackendModal'));
 import NotificationsModal from './components/NotificationsModal';
 import UpdateCheckModal, { APP_BUILD_VERSION } from './components/UpdateCheckModal';
 import FirstVisitGuide from './components/FirstVisitGuide';
+import SplashScreen, { DEFAULT_SPLASH_ICON } from './components/SplashScreen';
 import { loadTipsPrefs, saveTipsPrefs } from './utils/viewPrefs';
 import { isApkEnvironment, useIsMobileHud } from './utils/platform';
 import {
@@ -296,6 +297,7 @@ export default function App() {
   const [showFavoritesModal, setShowFavoritesModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [adminConfig, setAdminConfig] = useState(getAdminConfig);
+  const [showSplash, setShowSplash] = useState(() => adminConfig?.splashScreen?.enabled !== false);
   const [notifications, setNotifications] = useState(getAdminNotifications);
   const [adminAssets, setAdminAssets] = useState(() => getAdminAssets());
   const [customerHold, setCustomerHold] = useState(loadCustomerHoldPrefs);
@@ -1690,11 +1692,20 @@ export default function App() {
       <header className="top-bar">
         <div className="top-bar-inner">
           <div className="brand-group">
-            <div className="brand-crest">
-              <Trees size={20} />
+            <div className="brand-crest" style={{ padding: 0, overflow: 'hidden' }}>
+              <img
+                src={adminConfig?.splashScreen?.iconUrl || DEFAULT_SPLASH_ICON}
+                alt="Nevermore Garden"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+                onError={(e) => {
+                  if (e.currentTarget.src !== DEFAULT_SPLASH_ICON) {
+                    e.currentTarget.src = DEFAULT_SPLASH_ICON;
+                  }
+                }}
+              />
             </div>
             <div>
-              <h1 className="brand-title">Evergreen Paws</h1>
+              <h1 className="brand-title">Nevermore Garden</h1>
               <p className="brand-sub">Pet Memorial Park &amp; Ash Room</p>
             </div>
           </div>
@@ -2672,6 +2683,7 @@ export default function App() {
           onDeleteAdminMemorial={handleAdminDeleteMemorial}
           onRestoreAdminMemorial={handleAdminRestoreMemorial}
           onBulkCreateBlankSlots={handleBulkCreateBlankSlots}
+          onPreviewSplash={() => setShowSplash(true)}
           totalMemorials={visibleMemorials.length}
           totalAccounts={accountsList.length}
           onClose={() => setShowAdminModal(false)}
@@ -2728,6 +2740,13 @@ export default function App() {
           showGlobalNotice('🔕 Tips turned off. You can turn them back on anytime in Volume settings.');
         }}
       />
+
+      {showSplash && (
+        <SplashScreen
+          splashConfig={adminConfig?.splashScreen}
+          onFinish={() => setShowSplash(false)}
+        />
+      )}
     </div>
   );
 }

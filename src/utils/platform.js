@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 export const MOBILE_HUD_BREAKPOINT = 860;
 
 /**
- * Detects whether the app is running inside the Evergreen Paws Android APK WebView.
+ * Detects whether the app is running inside the Nevermore Garden Android APK WebView.
  * Never returns true on regular mobile or desktop web browsers.
  */
 export function isApkEnvironment() {

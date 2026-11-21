@@ -52,7 +52,7 @@ export default function NotificationsModal({
               <Bell size={20} /> Sanctuary Notifications
             </h2>
             <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-              Official News &amp; Update announcements from Evergreen Paws
+              Official News &amp; Update announcements from Nevermore Garden
             </p>
           </div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close notifications">

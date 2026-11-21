@@ -101,7 +101,7 @@ export default function UpdateCheckModal({ isApk = false, onClose }) {
               🔄 App Build &amp; Updates
             </h2>
             <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              {isApk ? 'Evergreen Paws Android APK' : 'Evergreen Paws Web Sanctuary'}
+              {isApk ? 'Nevermore Garden Android APK' : 'Nevermore Garden Web Sanctuary'}
             </p>
           </div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close update modal">

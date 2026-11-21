@@ -18,7 +18,7 @@ class SanctuaryErrorBoundary extends React.Component {
 
   componentDidCatch(error, info) {
     if (typeof console !== 'undefined' && console.error) {
-      console.error('Evergreen Paws recovered from render error:', error, info);
+      console.error('Nevermore Garden recovered from render error:', error, info);
     }
   }
 

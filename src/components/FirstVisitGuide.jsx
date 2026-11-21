@@ -18,7 +18,7 @@ const TOUR_STEPS = [
     selector: '[data-tour="update-btn"]',
     icon: '🔄',
     title: 'Check App Updates',
-    desc: 'View your current build version and refresh to get the latest Evergreen Paws release.',
+    desc: 'View your current build version and refresh to get the latest Nevermore Garden release.',
   },
   {
     selector: '[data-tour="env-controls"]',

@@ -244,13 +244,13 @@ export default function AuthModal({
         <div className="modal-header">
           <div>
             <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.65rem', margin: 0 }}>
-              Welcome to Evergreen Paws
+              Welcome to Nevermore Garden
             </h2>
             <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
               {mode === 'forgot'
                 ? 'Enter your account email to receive a password reset link'
                 : mode === 'reset'
-                  ? 'Set your new Evergreen Paws account password'
+                  ? 'Set your new Nevermore Garden account password'
                   : 'Sign in with username/email & password or create your visitor character'}
             </p>
           </div>

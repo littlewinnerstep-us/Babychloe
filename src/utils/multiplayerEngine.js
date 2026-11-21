@@ -193,6 +193,12 @@ let adminConfig = (() => {
     enabledViews: { world3d: true, world2d: true, grid: true },
     customSpecies: [],
     customTraits: [],
+    splashScreen: {
+      enabled: true,
+      durationMs: 2000,
+      iconUrl: './nevermore-garden-logo.jpg',
+      animation: 'breathing',
+    },
     updatedAt: 0,
   };
   try {
@@ -205,6 +211,7 @@ let adminConfig = (() => {
           ...parsed,
           customSpecies: Array.isArray(parsed?.customSpecies) ? parsed.customSpecies : [],
           customTraits: Array.isArray(parsed?.customTraits) ? parsed.customTraits : [],
+          splashScreen: { ...fallback.splashScreen, ...(parsed?.splashScreen || {}) },
           enabledViews: { ...fallback.enabledViews, ...(parsed?.enabledViews || {}) },
         };
         setCustomSpeciesRegistry(hydrated.customSpecies);
