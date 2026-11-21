@@ -571,10 +571,28 @@ select {
 }
 
 .memorial-grid.is-list .monument-stage.compact {
-  width: 148px;
-  min-width: 148px;
+  width: 176px;
+  min-width: 176px;
   height: auto;
-  min-height: 120px;
+  min-height: 196px;
+  padding: 12px 10px 0;
+}
+
+.memorial-grid.is-list .tombstone-stone {
+  width: 136px;
+  max-width: 100%;
+  min-height: 142px;
+  padding: 12px 10px 14px;
+}
+
+.memorial-grid.is-list .niche-alcove {
+  width: 90%;
+  height: 154px;
+  padding: 8px 8px 6px;
+}
+
+.memorial-grid.is-list .card-body {
+  min-width: 0;
 }
 
 @media (max-width: 640px) {
@@ -583,11 +601,64 @@ select {
     gap: 10px;
   }
   .memorial-grid:not(.is-list) .monument-stage.compact {
-    height: 138px;
+    min-height: 162px;
+    height: auto;
+    padding: 10px 8px 0;
+  }
+  .memorial-grid:not(.is-list) .tombstone-stone {
+    width: 118px;
+    max-width: 100%;
+    min-height: 120px;
+    padding: 10px 8px 12px;
+  }
+  .memorial-grid:not(.is-list) .stone-portrait {
+    width: 42px;
+    height: 42px;
+    border-width: 2px;
+    margin-bottom: 4px;
+  }
+  .memorial-grid:not(.is-list) .stone-name {
+    font-size: 0.9rem;
+  }
+  .memorial-grid:not(.is-list) .stone-years {
+    font-size: 0.6rem;
+  }
+  .memorial-grid:not(.is-list) .niche-alcove {
+    width: 90%;
+    height: 126px;
+    padding: 8px 6px 6px;
+    border-width: 3px;
+  }
+  .memorial-grid:not(.is-list) .niche-row {
+    gap: 4px;
+  }
+  .memorial-grid:not(.is-list) .niche-frame {
+    width: 40px;
+    height: 40px;
+  }
+  .memorial-grid:not(.is-list) .urn-svg {
+    width: 32px;
+    height: 44px;
+  }
+  .memorial-grid:not(.is-list) .niche-plaque {
+    font-size: 0.58rem;
+    padding: 2px 7px;
+    margin-top: 3px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .memorial-grid:not(.is-list) .meadow-base,
+  .memorial-grid:not(.is-list) .niche-shelf {
+    height: 26px;
+    gap: 6px;
+    padding: 0 6px;
   }
   .memorial-grid:not(.is-list) .card-body {
     padding: 10px 10px 12px;
     gap: 6px;
+    min-width: 0;
   }
   .memorial-grid:not(.is-list) .card-pet-name {
     font-size: 1.12rem;
@@ -600,13 +671,69 @@ select {
     font-size: 0.78rem;
   }
   .memorial-grid.is-list .monument-stage.compact {
-    width: 112px;
-    min-width: 112px;
-    min-height: 110px;
+    width: 132px;
+    min-width: 132px;
+    min-height: 156px;
+    height: auto;
+    padding: 10px 8px 0;
+  }
+  .memorial-grid.is-list .tombstone-stone {
+    width: 110px;
+    max-width: 100%;
+    min-height: 118px;
+    padding: 9px 7px 10px;
+  }
+  .memorial-grid.is-list .stone-portrait {
+    width: 38px;
+    height: 38px;
+    border-width: 2px;
+    margin-bottom: 4px;
+  }
+  .memorial-grid.is-list .stone-name {
+    font-size: 0.86rem;
+  }
+  .memorial-grid.is-list .stone-years {
+    font-size: 0.58rem;
+  }
+  .memorial-grid.is-list .niche-alcove {
+    width: 92%;
+    height: 120px;
+    padding: 7px 6px 5px;
+    border-width: 3px;
+  }
+  .memorial-grid.is-list .niche-row {
+    gap: 3px;
+  }
+  .memorial-grid.is-list .niche-frame {
+    width: 36px;
+    height: 36px;
+  }
+  .memorial-grid.is-list .urn-svg {
+    width: 28px;
+    height: 38px;
+  }
+  .memorial-grid.is-list .niche-plaque {
+    font-size: 0.54rem;
+    padding: 2px 6px;
+    margin-top: 2px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .memorial-grid.is-list .meadow-base,
+  .memorial-grid.is-list .niche-shelf {
+    height: 24px;
+    gap: 5px;
+    padding: 0 6px;
   }
   .memorial-grid.is-list .card-body {
     padding: 10px 12px;
     min-width: 0;
+  }
+  .card-footer {
+    flex-wrap: wrap;
+    gap: 6px;
   }
 }
 
@@ -659,12 +786,14 @@ select {
   font-weight: 700;
   margin: 0;
   line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 
 .card-meta {
   font-size: 0.78rem;
   color: var(--text-secondary);
   margin: 3px 0 0;
+  overflow-wrap: anywhere;
 }
 
 .location-badge {
@@ -757,7 +886,8 @@ select {
 }
 
 .monument-stage.compact {
-  height: 206px;
+  min-height: 214px;
+  height: auto;
   padding: 14px 12px 0;
 }
 
@@ -796,6 +926,7 @@ select {
   position: relative;
   z-index: 2;
   width: 148px;
+  max-width: 100%;
   min-height: 152px;
   padding: 14px 12px 18px;
   display: flex;
@@ -861,6 +992,7 @@ select {
   font-weight: 700;
   font-size: 1.05rem;
   line-height: 1.05;
+  overflow-wrap: anywhere;
 }
 
 .monument-stage.full .stone-name {
