@@ -216,6 +216,56 @@ export default function AdminSiteSettingsTab({
           </div>
         </div>
       </div>
+
+      {/* Default First-Visit View Mode */}
+      <div
+        style={{
+          padding: 14,
+          borderRadius: 12,
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border-soft)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        <div>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>
+            👁️ Default First-Visit View Mode
+          </div>
+          <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+            Choose which view opens first for new visitors. Once a visitor picks another mode, the app remembers their choice.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[
+            { id: 'world3d', label: '🧊 3D World' },
+            { id: 'world2d', label: '🗺️ 2D World' },
+            { id: 'grid', label: '🗂️ Cards (Grid / List)' },
+          ].map((opt) => {
+            const curDefault = adminConfig?.defaultViewMode || 'world3d';
+            const active = curDefault === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                aria-pressed={active}
+                className={`chip-btn ${active ? 'active' : ''}`}
+                onClick={() => {
+                  const curEnabled = adminConfig?.enabledViews || { world3d: true, world2d: true, grid: true };
+                  publishAdminConfig({
+                    defaultViewMode: opt.id,
+                    enabledViews: { ...curEnabled, [opt.id]: true },
+                  });
+                  onFeedback?.(`Default first-visit view set to ${opt.label}.`);
+                }}
+              >
+                {active ? '✓ ' : ''}{opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

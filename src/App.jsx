@@ -14,6 +14,8 @@ import {
   Lock,
   Footprints,
   LayoutGrid,
+  List,
+  Search,
   Box,
   Volume2,
   VolumeX,
@@ -236,14 +238,31 @@ function loadSavedUser() {
   return null;
 }
 
-function loadSavedViewMode() {
+function hasSavedUserViewMode() {
+  try {
+    const saved = localStorage.getItem(STORAGE_VIEWMODE_KEY);
+    return saved === 'world3d' || saved === 'world2d' || saved === 'grid';
+  } catch {
+    return false;
+  }
+}
+
+function loadSavedViewMode(fallbackDefault = 'world3d') {
   try {
     const saved = localStorage.getItem(STORAGE_VIEWMODE_KEY);
     if (saved === 'world3d' || saved === 'world2d' || saved === 'grid') return saved;
   } catch {
     // ignore storage errors
   }
-  return 'world3d';
+  return fallbackDefault === 'world2d' || fallbackDefault === 'grid' ? fallbackDefault : 'world3d';
+}
+
+function loadSavedCardLayout() {
+  try {
+    return localStorage.getItem('evergreen_paws_card_layout_v1') === 'list' ? 'list' : 'grid';
+  } catch {
+    return 'grid';
+  }
 }
 
 function loadSavedMusicUrl() {
@@ -298,6 +317,10 @@ export default function App() {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [adminConfig, setAdminConfig] = useState(getAdminConfig);
   const [showSplash, setShowSplash] = useState(() => adminConfig?.splashScreen?.enabled !== false);
+  const userSelectedViewRef = useRef(hasSavedUserViewMode());
+  const [viewMode, setViewMode] = useState(() => loadSavedViewMode(adminConfig?.defaultViewMode)); // 'world3d' | 'world2d' | 'grid'
+  const [cardLayout, setCardLayout] = useState(loadSavedCardLayout); // 'grid' | 'list'
+  const [cardSearch, setCardSearch] = useState('');
   const [notifications, setNotifications] = useState(getAdminNotifications);
   const [adminAssets, setAdminAssets] = useState(() => getAdminAssets());
   const [customerHold, setCustomerHold] = useState(loadCustomerHoldPrefs);
@@ -338,7 +361,6 @@ export default function App() {
     }
   });
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
-  const [viewMode, setViewMode] = useState(loadSavedViewMode); // 'world3d' | 'world2d' | 'grid'
   const [favorites, setFavorites] = useState(() => loadArrayPref(STORAGE_FAVORITES_KEY));
   const [visitedMemorialIds, setVisitedMemorialIds] = useState(() =>
     loadArrayPref(STORAGE_VISITED_KEY)
@@ -638,24 +660,44 @@ export default function App() {
     [adminConfig]
   );
 
-  useEffect(() => {
-    if (!enabledViews[viewMode]) {
-      const fallbackView = enabledViews.world3d
-        ? 'world3d'
-        : enabledViews.world2d
-          ? 'world2d'
-          : 'grid';
-      setViewMode(fallbackView);
-    }
-  }, [enabledViews, viewMode]);
-
-  useEffect(() => {
+  const handleSelectViewMode = (nextMode) => {
+    userSelectedViewRef.current = true;
     try {
-      localStorage.setItem(STORAGE_VIEWMODE_KEY, viewMode);
+      localStorage.setItem(STORAGE_VIEWMODE_KEY, nextMode);
     } catch {
       // ignore storage errors
     }
-  }, [viewMode]);
+    setViewMode(nextMode);
+  };
+
+  useEffect(() => {
+    const def = adminConfig?.defaultViewMode;
+    if (!userSelectedViewRef.current && (def === 'world3d' || def === 'world2d' || def === 'grid') && enabledViews[def]) {
+      setViewMode(def);
+    }
+  }, [adminConfig?.defaultViewMode, enabledViews]);
+
+  useEffect(() => {
+    if (!enabledViews[viewMode]) {
+      const def = adminConfig?.defaultViewMode;
+      const fallbackView = (def && enabledViews[def])
+        ? def
+        : enabledViews.world3d
+          ? 'world3d'
+          : enabledViews.world2d
+            ? 'world2d'
+            : 'grid';
+      setViewMode(fallbackView);
+    }
+  }, [enabledViews, viewMode, adminConfig?.defaultViewMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('evergreen_paws_card_layout_v1', cardLayout);
+    } catch {
+      // ignore storage errors
+    }
+  }, [cardLayout]);
 
   useEffect(() => {
     try {
@@ -2281,7 +2323,7 @@ export default function App() {
                   className={`view-mode-btn ${viewMode === 'world3d' && !showOnlyFavorites ? 'active' : ''}`}
                   onClick={() => {
                     setShowOnlyFavorites(false);
-                    setViewMode('world3d');
+                    handleSelectViewMode('world3d');
                   }}
                 >
                   <Box size={14} /> 3D World
@@ -2293,7 +2335,7 @@ export default function App() {
                   className={`view-mode-btn ${viewMode === 'world2d' && !showOnlyFavorites ? 'active' : ''}`}
                   onClick={() => {
                     setShowOnlyFavorites(false);
-                    setViewMode('world2d');
+                    handleSelectViewMode('world2d');
                   }}
                 >
                   <Footprints size={14} /> 2D World
@@ -2305,7 +2347,7 @@ export default function App() {
                   className={`view-mode-btn ${viewMode === 'grid' && !showOnlyFavorites ? 'active' : ''}`}
                   onClick={() => {
                     setShowOnlyFavorites(false);
-                    setViewMode('grid');
+                    handleSelectViewMode('grid');
                   }}
                 >
                   <LayoutGrid size={14} /> Cards
@@ -2508,8 +2550,51 @@ export default function App() {
             )}
           </div>
         ) : (
-          <section className="memorial-grid">
-            {filteredMemorials.map((m) => {
+          <>
+          <div className="card-directory-toolbar">
+            <div className="card-search-wrap">
+              <Search size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+              <input
+                type="search"
+                aria-label="Search memorials in card view"
+                className="input-control"
+                placeholder="Search pet name, breed, owner, or plot/niche..."
+                value={cardSearch}
+                onChange={(e) => setCardSearch(e.target.value)}
+                style={{ border: 'none', background: 'transparent', padding: '4px 0', fontSize: '0.86rem' }}
+              />
+            </div>
+            <div className="view-mode-switch" role="group" aria-label="Card layout">
+              <button
+                type="button"
+                className={`view-mode-btn ${cardLayout === 'grid' ? 'active' : ''}`}
+                onClick={() => setCardLayout('grid')}
+              >
+                <LayoutGrid size={14} /> Grid View
+              </button>
+              <button
+                type="button"
+                className={`view-mode-btn ${cardLayout === 'list' ? 'active' : ''}`}
+                onClick={() => setCardLayout('list')}
+              >
+                <List size={14} /> List View
+              </button>
+            </div>
+          </div>
+
+          <section className={`memorial-grid ${cardLayout === 'list' ? 'is-list' : ''}`}>
+            {filteredMemorials
+              .filter((m) => {
+                const q = cardSearch.trim().toLowerCase();
+                if (!q) return true;
+                return (
+                  (m.name || '').toLowerCase().includes(q) ||
+                  (m.breed || '').toLowerCase().includes(q) ||
+                  (m.ownerName || '').toLowerCase().includes(q) ||
+                  (m.locationCode || '').toLowerCase().includes(q)
+                );
+              })
+              .map((m) => {
               const isOwner = isMemorialOwner(m, currentUser);
               return (
                 <article
@@ -2561,6 +2646,7 @@ export default function App() {
               );
             })}
           </section>
+          </>
         )}
       </main>
 

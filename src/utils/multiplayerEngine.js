@@ -190,6 +190,7 @@ let adminConfig = (() => {
   const fallback = {
     globalMusicUrl: '',
     showDemoLogin: false,
+    defaultViewMode: 'world3d',
     enabledViews: { world3d: true, world2d: true, grid: true },
     customSpecies: [],
     customTraits: [],

@@ -533,10 +533,58 @@ select {
 /* ===========================
    MEMORIAL GRIDS (TOMBSTONE & ASH ROOM)
    =========================== */
+.card-directory-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.card-search-wrap {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 5px 12px;
+}
+
 .memorial-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
+}
+
+.memorial-grid.is-list {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.memorial-grid.is-list .memorial-card {
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.memorial-grid.is-list .monument-stage.compact {
+  width: 148px;
+  min-width: 148px;
+  height: auto;
+  min-height: 120px;
+}
+
+@media (max-width: 560px) {
+  .memorial-grid.is-list .memorial-card {
+    flex-direction: column;
+  }
+  .memorial-grid.is-list .monument-stage.compact {
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 .memorial-card {
