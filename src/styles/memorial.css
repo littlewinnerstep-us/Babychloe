@@ -556,7 +556,7 @@ select {
 
 .memorial-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 16px;
 }
 
@@ -577,12 +577,35 @@ select {
   min-height: 120px;
 }
 
-@media (max-width: 560px) {
-  .memorial-grid.is-list .memorial-card {
+@media (max-width: 640px) {
+  .memorial-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .memorial-grid:not(.is-list) .monument-stage.compact {
+    height: 138px;
+  }
+  .memorial-grid:not(.is-list) .card-body {
+    padding: 10px 10px 12px;
+    gap: 6px;
+  }
+  .memorial-grid:not(.is-list) .card-pet-name {
+    font-size: 1.12rem;
+  }
+  .memorial-grid:not(.is-list) .card-top-row {
     flex-direction: column;
+    gap: 4px;
+  }
+  .memorial-grid:not(.is-list) .card-epitaph {
+    font-size: 0.78rem;
   }
   .memorial-grid.is-list .monument-stage.compact {
-    width: 100%;
+    width: 112px;
+    min-width: 112px;
+    min-height: 110px;
+  }
+  .memorial-grid.is-list .card-body {
+    padding: 10px 12px;
     min-width: 0;
   }
 }
