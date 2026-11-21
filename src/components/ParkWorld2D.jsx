@@ -47,6 +47,7 @@ import {
   effectPhase,
   getCachedAssetImage,
   makeOfferingToken,
+  normalizeHex,
 } from '../utils/customAssets';
 import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
 import AvatarCustomizerDrawer from './AvatarCustomizerDrawer';
@@ -1643,7 +1644,7 @@ export default function ParkWorld2D({
           const ox = mx - 21 + ti * 14;
           const oy = my + 32 + ofx.bobY;
           if (tokMeta.emoji === '🕯️' || tokMeta.glowOn) {
-            const gCol = tokMeta.glowColor || tokMeta.color || '#ffd46c';
+            const gCol = normalizeHex(tokMeta.glowColor || tokMeta.color, '#ffd46c');
             const flicker = (8 + (tokMeta.glowStrength || 0.5) * 6) * ofx.glowMult;
             const cg = ctx.createRadialGradient(ox, oy - 4, 1, ox, oy - 4, flicker + 4);
             cg.addColorStop(0, `${gCol}bb`);
@@ -1657,6 +1658,7 @@ export default function ParkWorld2D({
           if (oImg) {
             ctx.drawImage(oImg, ox - 7, oy - 12, 14, 14);
           } else {
+            ctx.fillStyle = '#ffffff';
             ctx.font = `${Math.round(13 * ofx.scale)}px serif`;
             ctx.fillText(tokMeta.emoji, ox, oy);
           }

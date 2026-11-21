@@ -51,6 +51,7 @@ import {
   effectPhase,
   getCachedAssetImage,
   makeOfferingToken,
+  normalizeHex,
 } from '../utils/customAssets';
 import MultiplayerMeetupHUD from './MultiplayerMeetupHUD';
 import AvatarCustomizerDrawer from './AvatarCustomizerDrawer';
@@ -1952,7 +1953,7 @@ export default function ParkWorld3D({
               const ox = baseFront.sx + (oi - (otherOfferings.length - 1) / 2) * 15 * baseFront.scale;
               const oy = baseFront.sy + ofx.bobY * baseFront.scale;
               if (oMeta.glowOn) {
-                const gCol = oMeta.glowColor || oMeta.color || '#ffd46c';
+                const gCol = normalizeHex(oMeta.glowColor || oMeta.color, '#ffd46c');
                 const gr = Math.max(6, 12 * baseFront.scale * ofx.glowMult);
                 const cg = ctx.createRadialGradient(ox, oy, 1, ox, oy, gr);
                 cg.addColorStop(0, `${gCol}aa`);
@@ -1967,6 +1968,7 @@ export default function ParkWorld3D({
                 const sz = Math.max(10, 14 * baseFront.scale * ofx.scale);
                 ctx.drawImage(oImg, ox - sz / 2, oy - sz / 2, sz, sz);
               } else {
+                ctx.fillStyle = '#ffffff';
                 ctx.font = `${Math.max(11, Math.round(14 * baseFront.scale * ofx.scale))}px serif`;
                 ctx.textAlign = 'center';
                 ctx.fillText(oMeta.emoji, ox, oy);
